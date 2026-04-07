@@ -1,0 +1,69 @@
+{
+  "city": "Казань",
+  "timezone": "Europe/Moscow",
+  "sources": [
+    {
+      "id": "kuda-go-kazan",
+      "type": "telegram_public_channel",
+      "name": "KudaGo: Казань",
+      "channel": "kuda_go_kazan",
+      "enabled": true,
+      "categories": ["events", "places", "viewpoints", "hidden"]
+    },
+    {
+      "id": "kazan-kudago",
+      "type": "telegram_public_channel",
+      "name": "Куда пойти Казань",
+      "channel": "kazankudago",
+      "enabled": true,
+      "categories": ["events", "places", "restaurants", "bars"]
+    },
+    {
+      "id": "cool-kazan",
+      "type": "telegram_public_channel",
+      "name": "Интересная Казань",
+      "channel": "coolkazan",
+      "enabled": true,
+      "categories": ["events", "places", "viewpoints", "hidden"]
+    },
+    {
+      "id": "afisha-go-kazan",
+      "type": "telegram_public_channel",
+      "name": "Афиша GO Казань",
+      "channel": "afishagokazan",
+      "enabled": true,
+      "categories": ["events"]
+    },
+    {
+      "id": "kazan-mesta",
+      "type": "telegram_public_channel",
+      "name": "Казань места афиша",
+      "channel": "kazan_mesta",
+      "enabled": true,
+      "categories": ["events", "places", "restaurants", "bars", "hidden"]
+    },
+    {
+      "id": "sample-afisha-rss",
+      "type": "rss",
+      "name": "Пример RSS афиши",
+      "url": "https://example.com/feed",
+      "enabled": false,
+      "categories": ["events"]
+    },
+    {
+      "id": "sample-html-page",
+      "type": "html",
+      "name": "Пример HTML-страницы",
+      "url": "https://example.com/kazan",
+      "enabled": false,
+      "categories": ["events", "restaurants"],
+      "selectors": {
+        "item": "article",
+        "title": "h2, h3",
+        "url": "a",
+        "date": "time",
+        "summary": "p"
+      }
+    }
+  ]
+}

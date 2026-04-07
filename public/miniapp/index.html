@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Kazan Event Radar</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="./config.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Kazan Event Radar</p>
+          <h1>Казань без лишнего поиска</h1>
+          <p>Афиша, маршруты, парки, рестораны, отели, билеты и напоминания в одном месте.</p>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="Разделы">
+        <button class="tab is-active" data-tab="events">Афиша</button>
+        <button class="tab" data-tab="places">Места</button>
+        <button class="tab" data-tab="routes">Маршруты</button>
+        <button class="tab" data-tab="favorites">Избранное</button>
+      </nav>
+
+      <section id="status" class="status">Загружаю данные...</section>
+      <section id="content" class="content"></section>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,170 @@
+﻿{
+  "notes": [
+    "Add new public Telegram channels, RSS feeds, web pages, Instagram/TikTok API accounts and social exports here.",
+    "Set enabled=true only when the source is approved and ready to be scanned.",
+    "Do not store passwords here. Store API tokens in .env only."
+  ],
+  "telegramChannels": [
+    {
+      "id": "kuda-go-kazan",
+      "name": "KudaGo: РљР°Р·Р°РЅСЊ",
+      "channel": "kuda_go_kazan",
+      "enabled": true,
+      "categories": ["events", "places", "viewpoints", "hidden"]
+    },
+    {
+      "id": "kazan-kudago",
+      "name": "РљСѓРґР° РїРѕР№С‚Рё РљР°Р·Р°РЅСЊ",
+      "channel": "kazankudago",
+      "enabled": true,
+      "categories": ["events", "places", "restaurants", "bars"]
+    },
+    {
+      "id": "cool-kazan",
+      "name": "РРЅС‚РµСЂРµСЃРЅР°СЏ РљР°Р·Р°РЅСЊ",
+      "channel": "coolkazan",
+      "enabled": true,
+      "categories": ["events", "places", "viewpoints", "hidden"]
+    },
+    {
+      "id": "afisha-go-kazan",
+      "name": "РђС„РёС€Р° GO РљР°Р·Р°РЅСЊ",
+      "channel": "afishagokazan",
+      "enabled": true,
+      "categories": ["events"]
+    },
+    {
+      "id": "kazan-mesta",
+      "name": "РљР°Р·Р°РЅСЊ РјРµСЃС‚Р° Р°С„РёС€Р°",
+      "channel": "kazan_mesta",
+      "enabled": true,
+      "categories": ["events", "places", "restaurants", "bars", "hidden"]
+    },
+    {
+      "id": "kazanedu",
+      "name": "РљР°Р·Р°РЅСЊ | РђС„РёС€Р°. РљСѓРґР° СЃС…РѕРґРёС‚СЊ?",
+      "channel": "kazanedu",
+      "enabled": false,
+      "categories": ["events", "education", "places"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "kazani-afisha",
+      "name": "РђС„РёС€Р° РљР°Р·Р°РЅСЊ | РњРµСЂРѕРїСЂРёСЏС‚РёСЏ РљР°Р·Р°РЅРё",
+      "channel": "kazani_afisha",
+      "enabled": false,
+      "categories": ["events"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "kazan-excursions",
+      "name": "Р­РєСЃРєСѓСЂСЃРёРё РїРѕ РљР°Р·Р°РЅРё СЃРµРіРѕРґРЅСЏ",
+      "channel": "kazan_excursions",
+      "enabled": false,
+      "categories": ["events", "excursions", "routes"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "progulka-kzn",
+      "name": "РџСЂРѕРіСѓР»РєРё РїРѕ РљР°Р·Р°РЅРё",
+      "channel": "progulka_kzn",
+      "enabled": false,
+      "categories": ["routes", "sights", "hidden"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "kznjulia",
+      "name": "РљР°Р·Р°РЅСЊ: Р’РєСѓСЃРЅРѕ Рё РРЅС‚РµСЂРµСЃРЅРѕ",
+      "channel": "kznjulia",
+      "enabled": false,
+      "categories": ["restaurants", "bars", "events", "new_places"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "profit-kazan",
+      "name": "РџСЂРѕС„РёС‚ РљР°Р·Р°РЅСЊ СЃРєРёРґРєРё Рё Р°РєС†РёРё",
+      "channel": "profit_kazan",
+      "enabled": false,
+      "categories": ["restaurants", "bars", "events", "offers"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    },
+    {
+      "id": "nadvizhe-kazan",
+      "name": "РќРђ Р”Р’РР–Р• | РїРѕС…РѕРґС‹ РљР°Р·Р°РЅСЊ",
+      "channel": "nadvizh_e",
+      "enabled": false,
+      "categories": ["routes", "excursions", "events"],
+      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+    }
+  ],
+  "rssFeeds": [
+    {
+      "id": "custom-rss-example",
+      "name": "Custom RSS example",
+      "url": "https://example.com/feed",
+      "enabled": false,
+      "categories": ["events"]
+    }
+  ],
+  "webPages": [
+    {
+      "id": "goru-kazan-places",
+      "name": "GoRu РљР°Р·Р°РЅСЊ: РјРµСЃС‚Р°",
+      "url": "https://goru.travel/kazan/places",
+      "enabled": false,
+      "categories": ["places", "sights", "parks", "restaurants"],
+      "selectors": {
+        "item": "article, .card, .item",
+        "title": "h2, h3, a",
+        "url": "a",
+        "date": "time",
+        "summary": "p"
+      }
+    },
+    {
+      "id": "custom-html-example",
+      "name": "Custom HTML example",
+      "url": "https://example.com/kazan",
+      "enabled": false,
+      "categories": ["events"],
+      "selectors": {
+        "item": "article",
+        "title": "h2, h3",
+        "url": "a",
+        "date": "time",
+        "summary": "p"
+      }
+    }
+  ],
+  "socialAccounts": [
+    {
+      "id": "instagram-custom-example",
+      "type": "instagram_api",
+      "platform": "instagram",
+      "name": "Instagram account example",
+      "accountId": "",
+      "tokenEnv": "INSTAGRAM_ACCESS_TOKEN",
+      "enabled": false,
+      "categories": ["events", "places", "restaurants"]
+    },
+    {
+      "id": "tiktok-custom-example",
+      "type": "tiktok_api",
+      "platform": "tiktok",
+      "name": "TikTok account example",
+      "accountId": "",
+      "tokenEnv": "TIKTOK_ACCESS_TOKEN",
+      "enabled": false,
+      "categories": ["events", "places", "restaurants"]
+    },
+    {
+      "id": "social-export-example",
+      "type": "social_export",
+      "platform": "social_export",
+      "name": "JSON export example",
+      "path": "data/social-export.json",
+      "enabled": false,
+      "categories": ["events", "places"]
+    }
+  ]
+}
