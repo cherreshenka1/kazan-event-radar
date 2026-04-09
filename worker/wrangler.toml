@@ -6,7 +6,9 @@ workers_dev = true
 [vars]
 BOT_USERNAME = "kazanEventRadarBot"
 MINI_APP_URL = "https://cherreshenka1.github.io/kazan-event-radar/"
+TELEGRAM_MANAGER_CHAT_ID = "639905069"
 TELEGRAM_MANAGER_USERNAME = "cherreshenkaw"
+TELEGRAM_CHANNEL_ID = "-1003396784959"
 TELEGRAM_CHANNEL_INVITE_URL = "https://t.me/+a0lYD_lfF584YmI6"
 EVENT_TARGET_MONTH = "2026-04"
 DRAFTS_PER_DAY = "10"
@@ -15,8 +17,8 @@ ALLOW_DEV_AUTH = "false"
 
 [[kv_namespaces]]
 binding = "KAZAN_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+id = "62891bd49b134c4195c08667092e7871"
+preview_id = "4d6661c1404c4890970194494c72a38f"
 
 [triggers]
 crons = [
