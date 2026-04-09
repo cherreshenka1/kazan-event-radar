@@ -1,0 +1,25 @@
+name = "kazan-event-radar-api"
+main = "src/index.js"
+compatibility_date = "2026-04-07"
+workers_dev = true
+
+[vars]
+BOT_USERNAME = "kazanEventRadarBot"
+MINI_APP_URL = "https://cherreshenka1.github.io/kazan-event-radar/"
+TELEGRAM_MANAGER_USERNAME = "cherreshenkaw"
+TELEGRAM_CHANNEL_INVITE_URL = "https://t.me/+a0lYD_lfF584YmI6"
+EVENT_TARGET_MONTH = "2026-04"
+DRAFTS_PER_DAY = "10"
+ANALYTICS_USERNAME = "admin"
+ALLOW_DEV_AUTH = "false"
+
+[[kv_namespaces]]
+binding = "KAZAN_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+
+[triggers]
+crons = [
+  "0 6 * * *",
+  "*/5 * * * *"
+]
