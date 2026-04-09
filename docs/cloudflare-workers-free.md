@@ -16,26 +16,39 @@
 ## Что нужно сделать один раз
 
 1. Создать бесплатный аккаунт Cloudflare.
-2. Открыть терминал в папке проекта:
+2. Скопировать файл:
+
+```text
+.cloudflare.env.example -> .cloudflare.env
+```
+
+3. Вставить в `.cloudflare.env`:
+
+```env
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ACCOUNT_ID=...
+```
+
+4. Открыть терминал в папке проекта:
 
 ```powershell
 cd "C:\Users\User\Desktop\Все приложения\Documents\Playground\kazan-event-radar"
 ```
 
-3. Войти в Cloudflare:
+5. Проверить доступ:
 
 ```powershell
-npx wrangler login
+npm run worker:whoami
 ```
 
-4. Создать KV namespace:
+6. Создать KV namespace:
 
 ```powershell
-npx wrangler kv namespace create KAZAN_KV
-npx wrangler kv namespace create KAZAN_KV --preview
+npm run worker:kv:create
+npm run worker:kv:create:preview
 ```
 
-5. Скопировать выданные `id` и `preview_id` в файл:
+7. Скопировать выданные `id` и `preview_id` в файл:
 
 ```text
 worker/wrangler.toml
@@ -48,7 +61,7 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
 ```
 
-6. Сохранить секреты в Cloudflare:
+8. Сохранить секреты в Cloudflare:
 
 ```powershell
 npx wrangler secret put TELEGRAM_BOT_TOKEN
@@ -58,13 +71,13 @@ npx wrangler secret put ANALYTICS_SALT
 
 Если `ANALYTICS_SALT` не хотите задавать вручную, можно использовать любую длинную случайную строку.
 
-7. При необходимости добавить в `worker/wrangler.toml` обычные переменные:
+9. При необходимости добавить в `worker/wrangler.toml` обычные переменные:
 
 - `TELEGRAM_MANAGER_CHAT_ID`, если уже знаете numeric id менеджера;
 - `TELEGRAM_CHANNEL_ID`, если уже знаете numeric id канала;
 - `MINI_APP_URL`, если Mini App URL изменится.
 
-8. Развернуть Worker:
+10. Развернуть Worker:
 
 ```powershell
 npm run worker:deploy
@@ -76,19 +89,19 @@ npm run worker:deploy
 https://kazan-event-radar-api.<subdomain>.workers.dev
 ```
 
-9. Привязать Telegram webhook:
+11. Привязать Telegram webhook:
 
 ```powershell
 npm run worker:set-webhook -- https://kazan-event-radar-api.<subdomain>.workers.dev
 ```
 
-10. Прописать этот backend URL в Mini App:
+12. Прописать этот backend URL в Mini App:
 
 ```powershell
 npm run worker:set-miniapp-api -- https://kazan-event-radar-api.<subdomain>.workers.dev
 ```
 
-11. Закоммитить и запушить обновленный `public/miniapp/config.js` в GitHub.
+13. Закоммитить и запушить обновленный `public/miniapp/config.js` в GitHub.
 
 После этого GitHub Pages Mini App начнет ходить в Cloudflare Worker.
 

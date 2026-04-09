@@ -8,8 +8,11 @@
     "scan": "node src/scan.js",
     "set-token": "powershell -ExecutionPolicy Bypass -File scripts/set-telegram-token.ps1",
     "set-analytics-password": "powershell -ExecutionPolicy Bypass -File scripts/set-analytics-password.ps1",
-    "worker:dev": "npx wrangler dev --config worker/wrangler.toml",
-    "worker:deploy": "npx wrangler deploy --config worker/wrangler.toml",
+    "worker:whoami": "npx wrangler whoami --config worker/wrangler.toml --env-file .cloudflare.env",
+    "worker:kv:create": "npx wrangler kv namespace create KAZAN_KV --config worker/wrangler.toml --env-file .cloudflare.env",
+    "worker:kv:create:preview": "npx wrangler kv namespace create KAZAN_KV --preview --config worker/wrangler.toml --env-file .cloudflare.env",
+    "worker:dev": "npx wrangler dev --config worker/wrangler.toml --env-file .cloudflare.env",
+    "worker:deploy": "npx wrangler deploy --config worker/wrangler.toml --env-file .cloudflare.env",
     "worker:set-webhook": "node worker/scripts/set-webhook.js",
     "worker:set-miniapp-api": "node worker/scripts/set-miniapp-api.js",
     "check": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem src,public,worker -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }\""
