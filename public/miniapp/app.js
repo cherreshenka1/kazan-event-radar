@@ -15,13 +15,21 @@ const state = {
   selectedPlaceId: params.get("place") || null,
   selectedRouteId: params.get("route") || null,
   selectedEventId: params.get("event") || null,
+  dateFrom: params.get("dateFrom") || "",
+  dateTo: params.get("dateTo") || "",
   catalog: null,
   sections: [],
   events: [],
   favorites: [],
   config: null,
   periodLabel: "",
-  syncedAt: null
+  syncedAt: null,
+  totalEvents: 0,
+  allowedFrom: "",
+  allowedTo: "",
+  defaultFrom: "",
+  appliedFrom: "",
+  appliedTo: ""
 };
 
 const statusNode = document.querySelector("#status");
@@ -37,18 +45,15 @@ async function bootstrap() {
     const [runtimeConfig, catalog, events] = await Promise.all([
       api("/api/config").catch(() => ({ user: null })),
       api("/api/catalog"),
-      api("/api/events?period=april")
+      api(buildEventsPath())
     ]);
 
     state.config = runtimeConfig;
     state.catalog = catalog.catalog;
     state.sections = catalog.sections;
-    state.events = events.items || [];
-    state.periodLabel = events.periodLabel || "Апрель 2026";
-    state.syncedAt = events.syncedAt || null;
+    applyEventsPayload(events);
     state.favorites = await loadFavorites();
 
-    if (!state.selectedEventId && state.events[0]) state.selectedEventId = state.events[0].id;
     if (!state.selectedPlaceId) state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
     if (!state.selectedRouteId) state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
 
@@ -118,6 +123,34 @@ function bindEvents() {
       return;
     }
 
+    if (action === "event-range-preset") {
+      const range = getPresetRange(button.dataset.range);
+      state.dateFrom = range.from;
+      state.dateTo = range.to;
+      state.selectedEventId = null;
+      track("event_range_preset", button.dataset.range);
+      await refreshEvents();
+      return;
+    }
+
+    if (action === "event-range-apply") {
+      state.dateFrom = contentNode.querySelector('[name="dateFrom"]')?.value || "";
+      state.dateTo = contentNode.querySelector('[name="dateTo"]')?.value || "";
+      state.selectedEventId = null;
+      track("event_range_apply", `${state.dateFrom || "auto"}:${state.dateTo || "auto"}`);
+      await refreshEvents();
+      return;
+    }
+
+    if (action === "event-range-clear") {
+      state.dateFrom = "";
+      state.dateTo = "";
+      state.selectedEventId = null;
+      track("event_range_clear", "default");
+      await refreshEvents();
+      return;
+    }
+
     if (action === "open") {
       track("outbound_link", button.dataset.url, { label: button.textContent.trim() });
       openLink(button.dataset.url);
@@ -150,6 +183,45 @@ function bindEvents() {
   });
 }
 
+async function refreshEvents() {
+  try {
+    setStatus("Обновляю афишу...");
+    const previousId = state.selectedEventId;
+    const payload = await api(buildEventsPath());
+    applyEventsPayload(payload, previousId);
+    setStatus("");
+    render();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+function applyEventsPayload(events, previousSelectedId = null) {
+  state.events = events.items || [];
+  state.periodLabel = events.periodLabel || "Апрель 2026";
+  state.syncedAt = events.syncedAt || null;
+  state.totalEvents = events.totalItems || state.events.length;
+  state.allowedFrom = events.filters?.allowedFrom || "";
+  state.allowedTo = events.filters?.allowedTo || "";
+  state.defaultFrom = events.filters?.defaultFrom || "";
+  state.appliedFrom = events.filters?.appliedFrom || state.defaultFrom || "";
+  state.appliedTo = events.filters?.appliedTo || state.allowedTo || "";
+
+  if (previousSelectedId && state.events.some((item) => item.id === previousSelectedId)) {
+    state.selectedEventId = previousSelectedId;
+    return;
+  }
+
+  state.selectedEventId = state.events[0]?.id || null;
+}
+
+function buildEventsPath() {
+  const search = new URLSearchParams({ period: "april" });
+  if (state.dateFrom) search.set("dateFrom", state.dateFrom);
+  if (state.dateTo) search.set("dateTo", state.dateTo);
+  return `/api/events?${search.toString()}`;
+}
+
 async function loadFavorites() {
   try {
     const response = await api("/api/favorites");
@@ -175,17 +247,19 @@ function renderEvents() {
   contentNode.innerHTML = [
     sectionHeader(
       "Актуальная афиша",
-      `События на ${state.periodLabel}. Добавляйте мероприятия в избранное, переходите к билетам и ставьте напоминания за сутки и за час.`
+      "Только будущие события. Коротко, по делу и с быстрым переходом к источнику и билетам."
     ),
+    eventFilterPanel(),
     statBar([
-      state.periodLabel,
-      state.events.length ? `Событий: ${state.events.length}` : "Событий пока нет",
-      state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Источник обновится автоматически"
+      `Период: ${state.periodLabel}`,
+      state.events.length ? `Показано: ${state.events.length}` : "По фильтру пока пусто",
+      `Уникальных событий: ${state.totalEvents}`,
+      state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Обновление скоро"
     ]),
     selected ? eventDetailCard(selected) : empty("Пока не нашли событий под выбранный период."),
     state.events.length
       ? `<div class="list-grid">${state.events.map(eventPreviewCard).join("")}</div>`
-      : empty("Пока нет событий. Через время афиша обновится автоматически.")
+      : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты.")
   ].join("");
 }
 
@@ -225,22 +299,26 @@ function renderFavorites() {
 }
 
 function eventDetailCard(item) {
+  const sourceBadge = item.sourceCount > 1 ? badge(`В ${sourceCountLabel(item.sourceCount)}`) : badge("1 источник");
+  const sourceButtons = (item.sources || [])
+    .filter((source) => source?.url)
+    .slice(0, 2)
+    .map((source) => actionButton(source.name || "Источник", "open", { url: source.url }));
+
   return card([
     `<h2>${escapeHtml(item.title || "Событие")}</h2>`,
     `<div class="meta-badges">
       ${badge(formatDate(item.eventDate || item.publishedAt))}
+      ${sourceBadge}
       ${item.sourceName ? badge(item.sourceName) : ""}
-      ${badge("Афиша")}
     </div>`,
-    item.summary ? `<p class="card-copy">${escapeHtml(trim(item.summary, 700))}</p>` : "",
-    `<div class="fact-grid">
-      ${factBlock("Кратко", item.summary || item.title || "Описание уточняется.")}
-      ${factBlock("Где купить билет или проверить детали", "Собрали прямую ссылку на источник и быстрые переходы в билетные сервисы.", false)}
-    </div>`,
+    item.shortSummary ? `<p class="card-copy">${escapeHtml(trim(item.shortSummary, 180))}</p>` : "",
+    `<div class="inline-note">${escapeHtml(eventPriorityLine(item))}</div>`,
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
       `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
       item.url ? actionButton("Источник", "open", { url: item.url }, "primary") : "",
+      ...sourceButtons,
       ...(item.ticketLinks || []).slice(0, 4).map((link) => actionButton(link.name, "open", { url: link.url }))
     ])
   ], "active");
@@ -249,10 +327,10 @@ function eventDetailCard(item) {
 function eventPreviewCard(item) {
   return card([
     `<h3>${escapeHtml(item.title || "Событие")}</h3>`,
-    `<div class="meta">${escapeHtml(formatDate(item.eventDate || item.publishedAt))}${item.sourceName ? ` · ${escapeHtml(item.sourceName)}` : ""}</div>`,
-    item.summary ? `<p>${escapeHtml(trim(item.summary, 220))}</p>` : "",
+    `<div class="meta">${escapeHtml(formatDate(item.eventDate || item.publishedAt))}${item.sourceCount > 1 ? ` · ${escapeHtml(`в ${sourceCountLabel(item.sourceCount)}`)}` : ""}</div>`,
+    item.shortSummary ? `<p>${escapeHtml(trim(item.shortSummary, 110))}</p>` : "",
     actions([
-      actionButton("Подробнее", "event-item", { id: item.id }, item.id === state.selectedEventId ? "primary" : ""),
+      actionButton("Открыть", "event-item", { id: item.id }, item.id === state.selectedEventId ? "primary" : ""),
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : "")
     ])
   ], item.id === state.selectedEventId ? "active" : "");
@@ -265,6 +343,8 @@ function placeDetailCard(sectionId, item) {
     `<p class="card-copy">${escapeHtml(item.description)}</p>`,
     `<div class="fact-grid">
       ${item.highlights?.length ? factListBlock("Что посмотреть", item.highlights) : ""}
+      ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
+      ${item.reviewRating ? factBlock("Рейтинг", `${item.reviewRating} / 5 · ${item.reviewCount || "без числа отзывов"}`) : ""}
       ${item.foodNearby ? factBlock("Где перекусить", item.foodNearby) : ""}
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
       ${item.photoLinks?.length ? factButtonsBlock("Фотографии по сезонам", item.photoLinks) : ""}
@@ -272,6 +352,7 @@ function placeDetailCard(sectionId, item) {
     actions([
       actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
       item.mapUrl ? actionButton("Маршрут на карте", "open", { url: item.mapUrl }, "primary") : "",
+      item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
       item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
     ])
   ], "active");
@@ -425,7 +506,7 @@ function isFavorite(favoriteId) {
 }
 
 function favoriteToggleLabel(favoriteId) {
-  return isFavorite(favoriteId) ? "Убрать из избранного" : "В избранное";
+  return isFavorite(favoriteId) ? "В плане" : "В план";
 }
 
 function catalogFavoriteId(sectionId, itemId) {
@@ -477,6 +558,9 @@ function syncUrl() {
     next.set("event", state.selectedEventId);
   }
 
+  if (state.dateFrom) next.set("dateFrom", state.dateFrom);
+  if (state.dateTo) next.set("dateTo", state.dateTo);
+
   const suffix = next.toString();
   window.history.replaceState(null, "", `${window.location.pathname}${suffix ? `?${suffix}` : ""}`);
 }
@@ -487,6 +571,33 @@ function sectionHeader(title, description) {
 
 function statBar(items) {
   return `<div class="stat-row">${items.filter(Boolean).map((item) => `<span class="stat-pill">${escapeHtml(item)}</span>`).join("")}</div>`;
+}
+
+function eventFilterPanel() {
+  const presets = [
+    { id: "today", label: "Сегодня" },
+    { id: "3days", label: "3 дня" },
+    { id: "week", label: "Неделя" },
+    { id: "month", label: "Весь период" }
+  ];
+
+  return `
+    <article class="card filter-panel">
+      <div class="chips">${presets.map((preset) => chip(preset.label, "event-range-preset", { range: preset.id }, isPresetActive(preset.id))).join("")}</div>
+      <div class="date-filter-row">
+        <label class="date-field">
+          <span>С</span>
+          <input type="date" name="dateFrom" value="${escapeHtml(getEffectiveDateFrom())}" min="${escapeHtml(state.allowedFrom || "")}" max="${escapeHtml(state.allowedTo || "")}">
+        </label>
+        <label class="date-field">
+          <span>По</span>
+          <input type="date" name="dateTo" value="${escapeHtml(getEffectiveDateTo())}" min="${escapeHtml(state.allowedFrom || "")}" max="${escapeHtml(state.allowedTo || "")}">
+        </label>
+        ${actionButton("Показать", "event-range-apply", {}, "primary")}
+        ${actionButton("Сбросить", "event-range-clear")}
+      </div>
+    </article>
+  `;
 }
 
 function card(parts, extraClass = "") {
@@ -525,6 +636,14 @@ function badge(value) {
 
 function empty(text) {
   return `<div class="empty">${escapeHtml(text)}</div>`;
+}
+
+function eventPriorityLine(item) {
+  if ((item.sourceCount || 1) > 1) {
+    return `Событие подтвердилось в ${sourceCountLabel(item.sourceCount)} — поэтому оно выше в подборке.`;
+  }
+
+  return "Карточка короткая: за подробностями оставили прямой источник ниже.";
 }
 
 function sectionLabel(sectionId) {
@@ -585,6 +704,60 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short"
   });
+}
+
+function getPresetRange(rangeId) {
+  const from = state.defaultFrom || state.allowedFrom || "";
+  const to = state.allowedTo || "";
+
+  if (!from || !to) {
+    return { from: state.dateFrom || "", to: state.dateTo || "" };
+  }
+
+  if (rangeId === "today") {
+    return { from, to: from };
+  }
+
+  if (rangeId === "3days") {
+    return { from, to: addDays(from, 2, to) };
+  }
+
+  if (rangeId === "week") {
+    return { from, to: addDays(from, 6, to) };
+  }
+
+  return { from, to };
+}
+
+function isPresetActive(rangeId) {
+  const preset = getPresetRange(rangeId);
+  return preset.from === getEffectiveDateFrom() && preset.to === getEffectiveDateTo();
+}
+
+function addDays(dateString, days, maxDate) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const limit = maxDate ? new Date(`${maxDate}T00:00:00`) : null;
+  date.setDate(date.getDate() + days);
+  const formatted = date.toISOString().slice(0, 10);
+  if (!limit) return formatted;
+  return formatted > maxDate ? maxDate : formatted;
+}
+
+function getEffectiveDateFrom() {
+  return state.dateFrom || state.appliedFrom || state.defaultFrom || "";
+}
+
+function getEffectiveDateTo() {
+  return state.dateTo || state.appliedTo || state.allowedTo || "";
+}
+
+function sourceCountLabel(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return `${count} источнике`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} источниках`;
+  return `${count} источниках`;
 }
 
 function trim(text, maxLength) {

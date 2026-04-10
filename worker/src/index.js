@@ -22,6 +22,32 @@ const TICKET_PLATFORMS = (ticketPlatformsConfig.platforms || [])
     searchUrl: platform.searchUrl
   }));
 
+const EVENT_FINGERPRINT_STOP_WORDS = new Set([
+  "казань",
+  "казани",
+  "город",
+  "сегодня",
+  "завтра",
+  "апрель",
+  "апреля",
+  "афиша",
+  "мероприятие",
+  "событие",
+  "концерт",
+  "выставка",
+  "лекция",
+  "фестиваль",
+  "спектакль",
+  "билеты",
+  "билет",
+  "начало",
+  "клуб",
+  "центр",
+  "пространство",
+  "вечер",
+  "день"
+]);
+
 const CATEGORY_KEYWORDS = {
   events: ["афиша", "концерт", "выставка", "спектакль", "лекция", "маркет", "фестиваль", "вечеринка", "мастер-класс", "сегодня", "завтра", "выходные"],
   new_places: ["открыл", "открытие", "новое место", "новый ресторан", "новый бар", "запустил", "появил"],
@@ -107,6 +133,7 @@ async function handleRequest(request, env) {
 
   if (url.pathname === "/api/events") {
     const limit = Number(url.searchParams.get("limit") || 60);
+    const filters = buildEventFilters(url.searchParams, env);
     let items = await getJson(env, "events:items", []);
     let meta = await getEventMeta(env, items);
 
@@ -118,8 +145,8 @@ async function handleRequest(request, env) {
 
     const filtered = items
       .filter((item) => item.categories?.includes("events") || item.eventDate)
-      .filter((item) => isAllowedEventItem(item, env))
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .filter((item) => isAllowedEventItem(item, env, filters))
+      .sort(compareEventPriority)
       .slice(0, limit)
       .map(attachTicketLinks);
 
@@ -127,9 +154,17 @@ async function handleRequest(request, env) {
 
     return json({
       period: "april",
-      periodLabel: getAllowedEventWindowLabel(env),
+      periodLabel: formatEventFilterLabel(filters),
+      allowedPeriodLabel: getAllowedEventWindowLabel(env),
       syncedAt,
       totalItems: meta?.totalItems || items.length,
+      filters: {
+        allowedFrom: formatDateInput(filters.allowedFrom),
+        allowedTo: formatDateInput(filters.allowedTo),
+        defaultFrom: formatDateInput(filters.defaultFrom),
+        appliedFrom: formatDateInput(filters.from),
+        appliedTo: formatDateInput(filters.to)
+      },
       items: filtered
     }, 200, env);
   }
@@ -183,6 +218,12 @@ async function handleRequest(request, env) {
   if (url.pathname === "/admin/analytics.json") {
     await requireAdmin(request, env);
     return json(await analyticsSummary(env), 200, env);
+  }
+
+  if (url.pathname === "/admin/reindex-events" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const result = await scanSources(env, { reason: "admin_reindex" });
+    return json({ ok: true, meta: result.meta }, 200, env);
   }
 
   return json({ error: "Not found" }, 404, env);
@@ -351,7 +392,7 @@ async function prepareDraftBatch(env, limit, options = {}) {
   const candidates = (await getJson(env, "events:items", []))
     .filter((item) => item.categories?.includes("events") || item.eventDate)
     .filter((item) => isAllowedEventItem(item, env))
-    .sort((a, b) => (b.score || 0) - (a.score || 0));
+    .sort(compareEventPriority);
 
   const publishing = await getPublishing(env);
   const selected = [];
@@ -407,18 +448,10 @@ async function scanSources(env, options = {}) {
   }
 
   const existing = await getJson(env, "events:items", []);
-  const byId = new Map(existing.map((item) => [item.id, item]));
-
-  for (const item of collected) {
-    byId.set(item.id, {
-      ...byId.get(item.id),
-      ...item,
-      seenAt: byId.get(item.id)?.seenAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  const nextItems = [...byId.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const nextItems = await collapseDuplicateItems([
+    ...existing.map((item) => ({ ...item, _fromExisting: true })),
+    ...collected.map((item) => ({ ...item, _seenThisScan: true }))
+  ]);
   const meta = {
     lastScanAt: new Date().toISOString(),
     reason: options.reason || "manual",
@@ -479,11 +512,15 @@ function classifyItem(item) {
     .sort((a, b) => b[1] - a[1])
     .map(([category]) => category);
 
+  const keywordScore = Object.values(scores).reduce((sum, score) => sum + score, 0);
+
   return {
     ...item,
     categories: [...new Set([...(item.categories || []), ...categories])],
     eventDate: item.eventDate || extractEventDate(item),
-    score: Object.values(scores).reduce((sum, score) => sum + score, item.score || 0)
+    eventHasExplicitTime: item.eventHasExplicitTime ?? hasExplicitEventTime(item),
+    baseScore: item.baseScore ?? keywordScore,
+    score: item.score ?? item.baseScore ?? keywordScore
   };
 }
 
@@ -521,11 +558,12 @@ function inferYear(month, day, now) {
   return candidate < monthAgo ? year + 1 : year;
 }
 
-function isAllowedEventItem(item, env) {
+function isAllowedEventItem(item, env, filters = buildEventFilters(new URLSearchParams(), env)) {
   const date = item.eventDate ? new Date(item.eventDate) : null;
   if (!date || Number.isNaN(date.getTime())) return false;
-  const { from, to } = getAllowedEventWindow(env);
-  return date >= from && date <= to;
+  if (date < filters.from || date > filters.to) return false;
+  if (item.eventHasExplicitTime && date < new Date()) return false;
+  return true;
 }
 
 function getAllowedEventWindow(env) {
@@ -540,6 +578,26 @@ function getAllowedEventWindow(env) {
 function getAllowedEventWindowLabel(env) {
   const { from, to } = getAllowedEventWindow(env);
   return `${formatMoscowDate(from)} - ${formatMoscowDate(to)}`;
+}
+
+function buildEventFilters(searchParams, env) {
+  const allowed = getAllowedEventWindow(env);
+  const defaultFrom = maxDate(allowed.from, getStartOfCurrentMoscowDay());
+  const customFrom = parseDateInput(searchParams.get("dateFrom"));
+  const customTo = parseDateInput(searchParams.get("dateTo"), true);
+  const from = maxDate(defaultFrom, customFrom);
+  const to = minDate(allowed.to, customTo);
+  return {
+    allowedFrom: allowed.from,
+    allowedTo: allowed.to,
+    defaultFrom,
+    from,
+    to
+  };
+}
+
+function formatEventFilterLabel(filters) {
+  return `${formatMoscowDate(filters.from)} - ${formatMoscowDate(filters.to)}`;
 }
 
 function attachTicketLinks(item) {
@@ -686,9 +744,9 @@ function formatChannelPost(item) {
     `Казань: ${item.title || "интересное событие"}`,
     "",
     `Когда: ${when}`,
-    item.sourceName ? `Источник: ${item.sourceName}` : null,
+    item.sourceCount > 1 ? `Нашли в ${item.sourceCount} источниках` : (item.sourceName ? `Источник: ${item.sourceName}` : null),
     "",
-    trim(item.summary || item.title || "", 520),
+    trim(item.shortSummary || item.summary || item.title || "", 260),
     "",
     item.url ? `Билеты/подробнее: ${item.url}` : null,
     "",
@@ -902,6 +960,10 @@ async function itemId(item) {
   return (await sha256(item.url || `${item.sourceId}:${item.title}:${item.publishedAt || item.eventDate || ""}`)).slice(0, 24);
 }
 
+async function fingerprintId(fingerprint) {
+  return (await sha256(`event:${fingerprint}`)).slice(0, 24);
+}
+
 async function hashUser(env, userId) {
   return (await sha256(`${env.ANALYTICS_SALT || env.TELEGRAM_BOT_TOKEN || "kazan-event-radar"}:${userId}`)).slice(0, 16);
 }
@@ -952,6 +1014,316 @@ function normalizeText(value) {
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
     .trim();
+}
+
+function hasExplicitEventTime(item) {
+  const text = `${item.title || ""}\n${item.summary || ""}`;
+  return /(?:^|\D)([01]?\d|2[0-3])[:.](\d{2})(?:\D|$)/.test(text);
+}
+
+async function collapseDuplicateItems(items) {
+  const nowIso = new Date().toISOString();
+  const grouped = new Map();
+
+  for (const raw of items) {
+    const prepared = ensureEventAggregate(raw);
+    const directFingerprint = prepared.fingerprint || buildItemFingerprint(prepared);
+    const matchedFingerprint = grouped.has(directFingerprint)
+      ? directFingerprint
+      : findMatchingFingerprint(grouped, prepared);
+    const fingerprint = matchedFingerprint || directFingerprint;
+    const current = grouped.get(fingerprint);
+    grouped.set(fingerprint, mergeDuplicateItems(current, { ...prepared, fingerprint }, nowIso));
+  }
+
+  const nextItems = [];
+  for (const item of grouped.values()) {
+    const finalized = finalizeMergedItem(item);
+    finalized.id = finalized.id || await fingerprintId(finalized.fingerprint);
+    nextItems.push(finalized);
+  }
+
+  return nextItems.sort((a, b) => {
+    const updatedDiff = String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    if (updatedDiff) return updatedDiff;
+    return compareEventPriority(a, b);
+  });
+}
+
+function ensureEventAggregate(item) {
+  const normalized = classifyItem(item);
+  const sources = normalizeSourceEntries(item.sources?.length ? item.sources : [item]);
+  return {
+    ...normalized,
+    fingerprint: item.fingerprint || buildItemFingerprint(normalized),
+    sourceCount: item.sourceCount || sources.length || 1,
+    sourceIds: uniqueStrings([...(item.sourceIds || []), ...sources.map((source) => source.id).filter(Boolean)]),
+    sourceNames: uniqueStrings([...(item.sourceNames || []), ...sources.map((source) => source.name).filter(Boolean)]),
+    sources,
+    duplicateUrls: uniqueStrings([...(item.duplicateUrls || []), item.url, ...sources.map((source) => source.url)]),
+    shortSummary: item.shortSummary || buildCompactSummary(normalized.summary || normalized.title || ""),
+    priorityScore: item.priorityScore || 0
+  };
+}
+
+function mergeDuplicateItems(current, candidate, nowIso) {
+  if (!current) {
+    return {
+      ...candidate,
+      seenAt: candidate.seenAt || nowIso,
+      updatedAt: candidate._seenThisScan ? nowIso : (candidate.updatedAt || nowIso)
+    };
+  }
+
+  const mergedSources = normalizeSourceEntries([...(current.sources || []), ...(candidate.sources || [])]);
+  const candidateUpdatedAt = candidate._seenThisScan ? nowIso : (candidate.updatedAt || current.updatedAt || nowIso);
+  const keepCandidateTitle = titleQuality(candidate.title) > titleQuality(current.title);
+  const keepCandidateSummary = summaryQuality(candidate.summary) > summaryQuality(current.summary);
+
+  return {
+    ...current,
+    ...candidate,
+    id: current.id || candidate.id,
+    title: keepCandidateTitle ? candidate.title : current.title,
+    summary: keepCandidateSummary ? candidate.summary : current.summary,
+    url: keepCandidateSummary ? (candidate.url || current.url) : (current.url || candidate.url),
+    sourceName: keepCandidateTitle ? (candidate.sourceName || current.sourceName) : (current.sourceName || candidate.sourceName),
+    categories: uniqueStrings([...(current.categories || []), ...(candidate.categories || [])]),
+    sourceIds: uniqueStrings([...(current.sourceIds || []), ...(candidate.sourceIds || []), ...mergedSources.map((source) => source.id)]),
+    sourceNames: uniqueStrings([...(current.sourceNames || []), ...(candidate.sourceNames || []), ...mergedSources.map((source) => source.name)]),
+    sources: mergedSources,
+    duplicateUrls: uniqueStrings([...(current.duplicateUrls || []), ...(candidate.duplicateUrls || []), current.url, candidate.url]),
+    sourceCount: mergedSources.length || Math.max(current.sourceCount || 1, candidate.sourceCount || 1),
+    eventDate: chooseEventDate(current, candidate),
+    eventHasExplicitTime: Boolean(current.eventHasExplicitTime || candidate.eventHasExplicitTime),
+    baseScore: Math.max(current.baseScore || 0, candidate.baseScore || 0),
+    score: Math.max(current.score || 0, candidate.score || 0),
+    shortSummary: buildCompactSummary(keepCandidateSummary ? candidate.summary : current.summary),
+    seenAt: current.seenAt || candidate.seenAt || nowIso,
+    updatedAt: candidate._seenThisScan ? candidateUpdatedAt : (current.updatedAt || candidateUpdatedAt)
+  };
+}
+
+function finalizeMergedItem(item) {
+  const sourceCount = item.sourceCount || item.sources?.length || 1;
+  const priorityScore = (item.baseScore || item.score || 0) + (sourceCount - 1) * 6;
+  return {
+    ...item,
+    sourceCount,
+    sourceIds: uniqueStrings([...(item.sourceIds || []), ...normalizeSourceEntries(item.sources || []).map((source) => source.id)]),
+    sourceNames: uniqueStrings([...(item.sourceNames || []), ...normalizeSourceEntries(item.sources || []).map((source) => source.name)]),
+    sources: normalizeSourceEntries(item.sources || []),
+    duplicateUrls: uniqueStrings([...(item.duplicateUrls || []), item.url]),
+    shortSummary: buildCompactSummary(item.shortSummary || item.summary || item.title || ""),
+    priorityScore
+  };
+}
+
+function normalizeSourceEntries(sources) {
+  const map = new Map();
+
+  for (const source of sources || []) {
+    const id = source?.sourceId || source?.id || null;
+    const name = source?.sourceName || source?.name || null;
+    const url = source?.url || null;
+    const key = id || url || name;
+    if (!key) continue;
+    map.set(key, {
+      id,
+      name,
+      url
+    });
+  }
+
+  return [...map.values()];
+}
+
+function buildItemFingerprint(item) {
+  const dateKey = item.eventDate ? formatDateInput(item.eventDate) : "undated";
+  const quotedTokens = extractQuotedTokens(item.title || item.summary || "");
+  const titleTokens = quotedTokens.length ? quotedTokens : tokenizeFingerprint(item.title || firstLine(item.summary) || "");
+  const fallbackTokens = titleTokens.length ? titleTokens : tokenizeFingerprint(item.summary || item.url || item.id || "");
+  return `${dateKey}:${fallbackTokens.slice(0, 7).sort().join("-") || "event"}`;
+}
+
+function tokenizeFingerprint(value) {
+  return [...new Set(
+    normalizeFingerprintText(value)
+      .split(" ")
+      .filter((token) => token.length >= 3 && !EVENT_FINGERPRINT_STOP_WORDS.has(token))
+  )];
+}
+
+function normalizeFingerprintText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findMatchingFingerprint(grouped, candidate) {
+  for (const [fingerprint, current] of grouped.entries()) {
+    if (areLikelySameEvent(current, candidate)) {
+      return fingerprint;
+    }
+  }
+
+  return null;
+}
+
+function areLikelySameEvent(current, candidate) {
+  if (!current?.eventDate || !candidate?.eventDate) return false;
+  if (formatDateInput(current.eventDate) !== formatDateInput(candidate.eventDate)) return false;
+
+  const quotedCurrent = extractQuotedTokens(`${current.title || ""} ${current.summary || ""}`);
+  const quotedCandidate = extractQuotedTokens(`${candidate.title || ""} ${candidate.summary || ""}`);
+  if (countTokenOverlap(quotedCurrent, quotedCandidate) >= 2) {
+    return true;
+  }
+
+  const currentTokens = buildComparableTokens(current);
+  const candidateTokens = buildComparableTokens(candidate);
+  const overlap = countTokenOverlap(currentTokens, candidateTokens);
+  const shortest = Math.max(1, Math.min(currentTokens.length, candidateTokens.length));
+
+  return overlap >= 5 || (overlap >= 4 && overlap / shortest >= 0.55);
+}
+
+function buildComparableTokens(item) {
+  const text = [
+    item.title || "",
+    trim(item.summary || "", 220)
+  ].join(" ");
+
+  return tokenizeFingerprint(text);
+}
+
+function extractQuotedTokens(value) {
+  const matches = [...String(value || "").matchAll(/[«"]([^»"]{2,80})[»"]/g)];
+  return matches.flatMap((match) => tokenizeFingerprint(match[1]));
+}
+
+function countTokenOverlap(left, right) {
+  const rightSet = new Set(right);
+  return left.reduce((count, token) => count + (rightSet.has(token) ? 1 : 0), 0);
+}
+
+function chooseEventDate(current, candidate) {
+  if (!current?.eventDate) return candidate?.eventDate || null;
+  if (!candidate?.eventDate) return current.eventDate;
+  if (candidate.eventHasExplicitTime && !current.eventHasExplicitTime) return candidate.eventDate;
+  if (!candidate.eventHasExplicitTime && current.eventHasExplicitTime) return current.eventDate;
+  return new Date(candidate.eventDate) < new Date(current.eventDate) ? candidate.eventDate : current.eventDate;
+}
+
+function compareEventPriority(a, b) {
+  const sourceDiff = (b.sourceCount || 1) - (a.sourceCount || 1);
+  if (sourceDiff) return sourceDiff;
+
+  const dateDiff = compareDates(a.eventDate, b.eventDate);
+  if (dateDiff) return dateDiff;
+
+  const priorityDiff = (b.priorityScore || b.score || 0) - (a.priorityScore || a.score || 0);
+  if (priorityDiff) return priorityDiff;
+
+  return String(a.title || "").localeCompare(String(b.title || ""), "ru");
+}
+
+function compareDates(a, b) {
+  const left = a ? new Date(a).getTime() : Number.POSITIVE_INFINITY;
+  const right = b ? new Date(b).getTime() : Number.POSITIVE_INFINITY;
+  return left - right;
+}
+
+function buildCompactSummary(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+
+  const sentences = normalized
+    .replace(/\n+/g, " ")
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean) || [];
+
+  const candidate = sentences.slice(0, 2).join(" ").trim() || normalized;
+  return trim(candidate, 180);
+}
+
+function titleQuality(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return 0;
+  return normalized.length + (/\d/.test(normalized) ? 20 : 0);
+}
+
+function summaryQuality(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return 0;
+  return Math.min(normalized.length, 260) + (/[.!?]/.test(normalized) ? 15 : 0) + (/\d/.test(normalized) ? 10 : 0);
+}
+
+function uniqueStrings(values) {
+  return [...new Set((values || []).filter(Boolean))];
+}
+
+function getStartOfCurrentMoscowDay(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+
+  return new Date(Date.UTC(year, month - 1, day, -3, 0, 0));
+}
+
+function parseDateInput(value, endOfDay = false) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (endOfDay) {
+    return new Date(Date.UTC(year, month - 1, day + 1, -3, 0, 0) - 1);
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, -3, 0, 0));
+}
+
+function formatDateInput(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function maxDate(...dates) {
+  const valid = dates.filter(Boolean);
+  return valid.reduce((latest, current) => current > latest ? current : latest);
+}
+
+function minDate(...dates) {
+  const valid = dates.filter(Boolean);
+  return valid.reduce((earliest, current) => current < earliest ? current : earliest);
 }
 
 function firstLine(value) {
