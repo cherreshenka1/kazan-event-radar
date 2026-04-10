@@ -1,19 +1,26 @@
+import sourceConfig from "../../config/sources.json" with { type: "json" };
+import ticketPlatformsConfig from "../../config/ticket-platforms.json" with { type: "json" };
 import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
 
-const TELEGRAM_SOURCES = [
-  { id: "kuda-go-kazan", name: "KudaGo: Казань", channel: "kuda_go_kazan", categories: ["events", "places", "viewpoints", "hidden"] },
-  { id: "kazan-kudago", name: "Куда пойти Казань", channel: "kazankudago", categories: ["events", "places", "restaurants", "bars"] },
-  { id: "cool-kazan", name: "Интересная Казань", channel: "coolkazan", categories: ["events", "places", "viewpoints", "hidden"] },
-  { id: "afisha-go-kazan", name: "Афиша GO Казань", channel: "afishagokazan", categories: ["events"] },
-  { id: "kazan-mesta", name: "Казань места афиша", channel: "kazan_mesta", categories: ["events", "places", "restaurants", "bars", "hidden"] }
-];
+const DAILY_DRAFTS_CRON = "0 6 * * *";
+const HOURLY_SCAN_CRON = "15 * * * *";
 
-const TICKET_PLATFORMS = [
-  { id: "yandex-afisha", name: "Яндекс Афиша", searchUrl: "https://afisha.yandex.ru/kazan?text={query}" },
-  { id: "afisha-ru", name: "Афиша", searchUrl: "https://www.afisha.ru/kazan/?q={query}" },
-  { id: "kassir-kzn", name: "Kassir.ru Казань", searchUrl: "https://kzn.kassir.ru/?search={query}" },
-  { id: "mts-live", name: "МТС Live Казань", searchUrl: "https://live.mts.ru/kazan/search?query={query}" }
-];
+const TELEGRAM_SOURCES = (sourceConfig.sources || [])
+  .filter((source) => source.enabled && source.type === "telegram_public_channel")
+  .map((source) => ({
+    id: source.id,
+    name: source.name,
+    channel: source.channel,
+    categories: source.categories || []
+  }));
+
+const TICKET_PLATFORMS = (ticketPlatformsConfig.platforms || [])
+  .filter((platform) => platform.enabled && platform.searchUrl)
+  .map((platform) => ({
+    id: platform.id,
+    name: platform.name,
+    searchUrl: platform.searchUrl
+  }));
 
 const CATEGORY_KEYWORDS = {
   events: ["афиша", "концерт", "выставка", "спектакль", "лекция", "маркет", "фестиваль", "вечеринка", "мастер-класс", "сегодня", "завтра", "выходные"],
@@ -49,8 +56,14 @@ export default {
   },
 
   async scheduled(event, env) {
-    if (event.cron === "0 6 * * *") {
-      await prepareDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10));
+    if (event.cron === DAILY_DRAFTS_CRON) {
+      await scanSources(env, { reason: "daily_drafts" });
+      await prepareDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), { refresh: false });
+      return;
+    }
+
+    if (event.cron === HOURLY_SCAN_CRON) {
+      await scanSources(env, { reason: "scheduled_refresh" });
       return;
     }
 
@@ -66,7 +79,13 @@ async function handleRequest(request, env) {
   }
 
   if (url.pathname === "/health") {
-    return json({ ok: true, service: "kazan-event-radar-worker" }, 200, env);
+    const meta = await getEventMeta(env);
+    return json({
+      ok: true,
+      service: "kazan-event-radar-worker",
+      enabledSources: TELEGRAM_SOURCES.length,
+      lastScanAt: meta?.lastScanAt || null
+    }, 200, env);
   }
 
   if (url.pathname === "/telegram/webhook" && request.method === "POST") {
@@ -89,9 +108,12 @@ async function handleRequest(request, env) {
   if (url.pathname === "/api/events") {
     const limit = Number(url.searchParams.get("limit") || 60);
     let items = await getJson(env, "events:items", []);
+    let meta = await getEventMeta(env, items);
 
     if (items.length === 0) {
-      items = await scanSources(env);
+      const scanResult = await scanSources(env, { reason: "api_cache_miss" });
+      items = scanResult.items;
+      meta = scanResult.meta;
     }
 
     const filtered = items
@@ -101,9 +123,13 @@ async function handleRequest(request, env) {
       .slice(0, limit)
       .map(attachTicketLinks);
 
+    const syncedAt = meta?.lastScanAt || items.find((item) => item.updatedAt)?.updatedAt || null;
+
     return json({
       period: "april",
       periodLabel: getAllowedEventWindowLabel(env),
+      syncedAt,
+      totalItems: meta?.totalItems || items.length,
       items: filtered
     }, 200, env);
   }
@@ -170,6 +196,7 @@ async function handleTelegramUpdate(update, env) {
 
 async function handleTelegramMessage(message, env) {
   const text = message.text || "";
+  const command = text.split(/\s+/)[0].toLowerCase();
   const user = message.from;
   const chat = message.chat;
 
@@ -187,22 +214,43 @@ async function handleTelegramMessage(message, env) {
     await putJson(env, "runtime", runtime);
   }
 
-  if (text.startsWith("/start")) {
+  if (command === "/start" || command === "/app" || command === "/menu") {
+    await sendMiniAppEntry(chat.id, env, [
+      "Я Kazan Event Radar: афиша, маршруты, места, избранное и напоминания по Казани.",
+      "",
+      "Откройте Mini App, чтобы собрать личный план по апрелю 2026."
+    ].join("\n"));
+    return;
+  }
+
+  if (command === "/status") {
+    const meta = await getEventMeta(env);
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
-      text: [
-        "Я Kazan Event Radar: афиша, маршруты, места, избранное и напоминания по Казани.",
-        "",
-        "Откройте Mini App, чтобы собрать личный план."
-      ].join("\n"),
-      reply_markup: {
-        inline_keyboard: [[{ text: "Открыть афишу", web_app: { url: env.MINI_APP_URL } }]]
-      }
+      text: formatScanSummary(meta, env)
     });
     return;
   }
 
-  if (text.startsWith("/id")) {
+  if (command === "/scan") {
+    if (!isManagerIdentity(user, env)) {
+      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру публикаций." });
+      return;
+    }
+
+    const result = await scanSources(env, { reason: "manager_command" });
+    await telegramApi(env, "sendMessage", {
+      chat_id: chat.id,
+      text: [
+        "Сканирование завершено.",
+        "",
+        formatScanSummary(result.meta, env)
+      ].join("\n")
+    });
+    return;
+  }
+
+  if (command === "/id") {
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
       text: `Chat ID: ${chat.id}`
@@ -210,18 +258,23 @@ async function handleTelegramMessage(message, env) {
     return;
   }
 
-  if (text.startsWith("/drafts") || text.startsWith("/draft")) {
+  if (command === "/drafts" || command === "/draft") {
     if (!isManagerIdentity(user, env)) {
       await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру публикаций." });
       return;
     }
 
-    const limit = text.startsWith("/drafts") ? Number(text.split(/\s+/)[1] || env.DRAFTS_PER_DAY || 10) : 1;
+    const limit = command === "/drafts" ? Number(text.split(/\s+/)[1] || env.DRAFTS_PER_DAY || 10) : 1;
     const drafts = await prepareDraftBatch(env, limit);
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
       text: drafts.length ? `Отправил черновики: ${drafts.length}.` : "Пока не нашел подходящие события для черновиков."
     });
+    return;
+  }
+
+  if (chat?.type === "private") {
+    await sendMiniAppEntry(chat.id, env, "Откройте Mini App, чтобы посмотреть афишу, маршруты, места и избранное.");
   }
 }
 
@@ -236,7 +289,7 @@ async function handleChannelPost(post, env) {
 
   await telegramApi(env, "sendMessage", {
     chat_id: post.chat.id,
-    text: `Channel ID saved: ${post.chat.id}`
+    text: `ID канала сохранен: ${post.chat.id}`
   });
 }
 
@@ -285,14 +338,16 @@ async function handleCallback(callback, env) {
   await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Пост опубликован в канал." });
 }
 
-async function prepareDraftBatch(env, limit) {
+async function prepareDraftBatch(env, limit, options = {}) {
   const managerId = await resolveManagerChatId(env);
   if (!managerId) {
     console.log("Skipping drafts: manager chat id is not known yet.");
     return [];
   }
 
-  await scanSources(env);
+  if (options.refresh !== false) {
+    await scanSources(env, { reason: options.reason || "draft_batch" });
+  }
   const candidates = (await getJson(env, "events:items", []))
     .filter((item) => item.categories?.includes("events") || item.eventDate)
     .filter((item) => isAllowedEventItem(item, env))
@@ -336,13 +391,17 @@ async function prepareDraftBatch(env, limit) {
   return drafts;
 }
 
-async function scanSources(env) {
+async function scanSources(env, options = {}) {
   const collected = [];
+  const sourceStats = [];
 
   for (const source of TELEGRAM_SOURCES) {
     try {
-      collected.push(...await fetchTelegramSource(source));
+      const items = await fetchTelegramSource(source);
+      collected.push(...items);
+      sourceStats.push({ id: source.id, name: source.name, status: "ok", count: items.length });
     } catch (error) {
+      sourceStats.push({ id: source.id, name: source.name, status: "error", count: 0, error: error.message });
       console.warn(`Source ${source.id} failed: ${error.message}`);
     }
   }
@@ -360,8 +419,19 @@ async function scanSources(env) {
   }
 
   const nextItems = [...byId.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const meta = {
+    lastScanAt: new Date().toISOString(),
+    reason: options.reason || "manual",
+    enabledSources: TELEGRAM_SOURCES.length,
+    collectedItems: collected.length,
+    totalItems: nextItems.length,
+    eventItems: nextItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
+    sources: sourceStats
+  };
+
   await putJson(env, "events:items", nextItems);
-  return nextItems;
+  await putJson(env, "events:meta", meta);
+  return { items: nextItems, meta };
 }
 
 async function fetchTelegramSource(source) {
@@ -626,6 +696,40 @@ function formatChannelPost(item) {
   ].filter(Boolean).join("\n");
 }
 
+async function sendMiniAppEntry(chatId, env, text) {
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    text,
+    reply_markup: {
+      inline_keyboard: [[{ text: "Открыть афишу", web_app: { url: env.MINI_APP_URL } }]]
+    }
+  });
+}
+
+function formatScanSummary(meta, env) {
+  if (!meta) {
+    return [
+      "Сканирование еще не запускалось.",
+      `Период событий: ${getAllowedEventWindowLabel(env)}.`,
+      `Активных Telegram-источников: ${TELEGRAM_SOURCES.length}.`
+    ].join("\n");
+  }
+
+  const sourceLines = (meta.sources || [])
+    .map((source) => `${source.status === "ok" ? "•" : "×"} ${source.name}: ${source.count}`)
+    .join("\n");
+
+  return [
+    `Последнее обновление: ${meta.lastScanAt ? formatMoscowDateTime(new Date(meta.lastScanAt)) : "неизвестно"}`,
+    `Причина запуска: ${meta.reason || "manual"}`,
+    `Активных источников: ${meta.enabledSources ?? TELEGRAM_SOURCES.length}`,
+    `Материалов в базе: ${meta.totalItems ?? 0}`,
+    `Событий на период ${getAllowedEventWindowLabel(env)}: ${meta.eventItems ?? 0}`,
+    sourceLines ? "" : null,
+    sourceLines
+  ].filter(Boolean).join("\n");
+}
+
 async function optionalTelegramUser(request, env) {
   const initData = readInitData(request);
   if (!initData) return env.ALLOW_DEV_AUTH === "true" ? { id: "dev-user" } : null;
@@ -714,6 +818,24 @@ async function analyticsSummary(env) {
 function renderAnalyticsPage(summary) {
   const rows = summary.recentEvents.map((event) => `<tr><td>${escapeHtml(event.ts)}</td><td>${escapeHtml(event.type)}</td><td>${escapeHtml(event.action)}</td><td>${escapeHtml(event.label || "")}</td><td>${escapeHtml(event.userHash || "")}</td></tr>`).join("");
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kazan Analytics</title><style>body{font-family:Segoe UI,sans-serif;background:#07111f;color:#f8fafc;margin:0}main{max-width:1100px;margin:auto;padding:24px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card,table{background:#101f33;border:1px solid rgba(255,255,255,.12);border-radius:16px}.card{padding:16px}.metric{font-size:36px;color:#86efac;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}</style></head><body><main><h1>Kazan Event Radar Analytics</h1><div class="cards"><div class="card">Events<div class="metric">${summary.totalEvents}</div></div><div class="card">Users<div class="metric">${summary.uniqueUsers}</div></div><div class="card">Types<pre>${escapeHtml(JSON.stringify(summary.byType, null, 2))}</pre></div><div class="card">Actions<pre>${escapeHtml(JSON.stringify(summary.byAction, null, 2))}</pre></div></div><table><thead><tr><th>Time</th><th>Type</th><th>Action</th><th>Label</th><th>User hash</th></tr></thead><tbody>${rows}</tbody></table></main></body></html>`;
+}
+
+async function getEventMeta(env, items = null) {
+  const storedMeta = await getJson(env, "events:meta", null);
+  if (storedMeta) return storedMeta;
+
+  const cachedItems = items || await getJson(env, "events:items", []);
+  if (!cachedItems.length) return null;
+
+  return {
+    lastScanAt: cachedItems.find((item) => item.updatedAt)?.updatedAt || null,
+    reason: "legacy_cache",
+    enabledSources: TELEGRAM_SOURCES.length,
+    collectedItems: cachedItems.length,
+    totalItems: cachedItems.length,
+    eventItems: cachedItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
+    sources: []
+  };
 }
 
 async function getUser(env, userId) {

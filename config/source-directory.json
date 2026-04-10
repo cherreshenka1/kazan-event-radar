@@ -1,106 +1,106 @@
-﻿{
+{
   "notes": [
-    "Add new public Telegram channels, RSS feeds, web pages, Instagram/TikTok API accounts and social exports here.",
-    "Set enabled=true only when the source is approved and ready to be scanned.",
-    "Do not store passwords here. Store API tokens in .env only."
+    "Это реестр идей и будущих подключений для Kazan Event Radar.",
+    "Для реального сканирования и публикации включайте нужные источники в config/sources.json.",
+    "Не храните здесь пароли. API-токены и ключи доступа держите только в .env."
   ],
   "telegramChannels": [
     {
       "id": "kuda-go-kazan",
-      "name": "KudaGo: РљР°Р·Р°РЅСЊ",
+      "name": "KudaGo: Казань",
       "channel": "kuda_go_kazan",
       "enabled": true,
       "categories": ["events", "places", "viewpoints", "hidden"]
     },
     {
       "id": "kazan-kudago",
-      "name": "РљСѓРґР° РїРѕР№С‚Рё РљР°Р·Р°РЅСЊ",
+      "name": "Куда пойти Казань",
       "channel": "kazankudago",
       "enabled": true,
       "categories": ["events", "places", "restaurants", "bars"]
     },
     {
       "id": "cool-kazan",
-      "name": "РРЅС‚РµСЂРµСЃРЅР°СЏ РљР°Р·Р°РЅСЊ",
+      "name": "Интересная Казань",
       "channel": "coolkazan",
       "enabled": true,
       "categories": ["events", "places", "viewpoints", "hidden"]
     },
     {
       "id": "afisha-go-kazan",
-      "name": "РђС„РёС€Р° GO РљР°Р·Р°РЅСЊ",
+      "name": "Афиша GO Казань",
       "channel": "afishagokazan",
       "enabled": true,
       "categories": ["events"]
     },
     {
       "id": "kazan-mesta",
-      "name": "РљР°Р·Р°РЅСЊ РјРµСЃС‚Р° Р°С„РёС€Р°",
+      "name": "Казань места афиша",
       "channel": "kazan_mesta",
       "enabled": true,
       "categories": ["events", "places", "restaurants", "bars", "hidden"]
     },
     {
       "id": "kazanedu",
-      "name": "РљР°Р·Р°РЅСЊ | РђС„РёС€Р°. РљСѓРґР° СЃС…РѕРґРёС‚СЊ?",
+      "name": "Казань | Афиша. Куда сходить?",
       "channel": "kazanedu",
       "enabled": false,
       "categories": ["events", "education", "places"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "kazani-afisha",
-      "name": "РђС„РёС€Р° РљР°Р·Р°РЅСЊ | РњРµСЂРѕРїСЂРёСЏС‚РёСЏ РљР°Р·Р°РЅРё",
+      "name": "Афиша Казань | Мероприятия Казани",
       "channel": "kazani_afisha",
       "enabled": false,
       "categories": ["events"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "kazan-excursions",
-      "name": "Р­РєСЃРєСѓСЂСЃРёРё РїРѕ РљР°Р·Р°РЅРё СЃРµРіРѕРґРЅСЏ",
+      "name": "Экскурсии по Казани сегодня",
       "channel": "kazan_excursions",
       "enabled": false,
       "categories": ["events", "excursions", "routes"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "progulka-kzn",
-      "name": "РџСЂРѕРіСѓР»РєРё РїРѕ РљР°Р·Р°РЅРё",
+      "name": "Прогулки по Казани",
       "channel": "progulka_kzn",
       "enabled": false,
       "categories": ["routes", "sights", "hidden"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "kznjulia",
-      "name": "РљР°Р·Р°РЅСЊ: Р’РєСѓСЃРЅРѕ Рё РРЅС‚РµСЂРµСЃРЅРѕ",
+      "name": "Казань: вкусно и интересно",
       "channel": "kznjulia",
       "enabled": false,
       "categories": ["restaurants", "bars", "events", "new_places"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "profit-kazan",
-      "name": "РџСЂРѕС„РёС‚ РљР°Р·Р°РЅСЊ СЃРєРёРґРєРё Рё Р°РєС†РёРё",
+      "name": "Профит Казань: скидки и акции",
       "channel": "profit_kazan",
       "enabled": false,
       "categories": ["restaurants", "bars", "events", "offers"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     },
     {
       "id": "nadvizhe-kazan",
-      "name": "РќРђ Р”Р’РР–Р• | РїРѕС…РѕРґС‹ РљР°Р·Р°РЅСЊ",
+      "name": "НА ДВИЖЕ | походы Казань",
       "channel": "nadvizh_e",
       "enabled": false,
       "categories": ["routes", "excursions", "events"],
-      "notes": "Candidate placeholder. Enable only after manual review in Telegram."
+      "notes": "Кандидат в источник. Включать только после ручной проверки в Telegram."
     }
   ],
   "rssFeeds": [
     {
       "id": "custom-rss-example",
-      "name": "Custom RSS example",
+      "name": "Пример RSS-ленты",
       "url": "https://example.com/feed",
       "enabled": false,
       "categories": ["events"]
@@ -109,7 +109,7 @@
   "webPages": [
     {
       "id": "goru-kazan-places",
-      "name": "GoRu РљР°Р·Р°РЅСЊ: РјРµСЃС‚Р°",
+      "name": "GoRu Казань: места",
       "url": "https://goru.travel/kazan/places",
       "enabled": false,
       "categories": ["places", "sights", "parks", "restaurants"],
@@ -123,7 +123,7 @@
     },
     {
       "id": "custom-html-example",
-      "name": "Custom HTML example",
+      "name": "Пример HTML-страницы",
       "url": "https://example.com/kazan",
       "enabled": false,
       "categories": ["events"],
@@ -141,7 +141,7 @@
       "id": "instagram-custom-example",
       "type": "instagram_api",
       "platform": "instagram",
-      "name": "Instagram account example",
+      "name": "Instagram-аккаунт проекта",
       "accountId": "",
       "tokenEnv": "INSTAGRAM_ACCESS_TOKEN",
       "enabled": false,
@@ -151,7 +151,7 @@
       "id": "tiktok-custom-example",
       "type": "tiktok_api",
       "platform": "tiktok",
-      "name": "TikTok account example",
+      "name": "TikTok-аккаунт проекта",
       "accountId": "",
       "tokenEnv": "TIKTOK_ACCESS_TOKEN",
       "enabled": false,
@@ -161,7 +161,7 @@
       "id": "social-export-example",
       "type": "social_export",
       "platform": "social_export",
-      "name": "JSON export example",
+      "name": "Пример JSON-экспорта из соцсетей",
       "path": "data/social-export.json",
       "enabled": false,
       "categories": ["events", "places"]
