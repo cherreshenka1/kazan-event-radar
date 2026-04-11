@@ -333,7 +333,7 @@ export const CATALOG = {
   },
   parks: {
     title: "Парки",
-    intro: "Выберите парк. В карточке будут фото-ссылки по сезонам, что посмотреть, где перекусить рядом и как добраться.",
+    intro: "Выберите парк. В карточке будут короткое описание, подборка фото, что посмотреть рядом и как добраться.",
     items: [
       {
         id: "black_lake",
@@ -441,10 +441,10 @@ function maps(query) {
 
 function photos(query) {
   return [
-    { label: "Фото: весна", url: photoSearch(`${query} весна`) },
-    { label: "Фото: лето", url: photoSearch(`${query} лето`) },
-    { label: "Фото: осень", url: photoSearch(`${query} осень`) },
-    { label: "Фото: зима", url: photoSearch(`${query} зима`) }
+    { label: "Фото 1", url: photoSearch(`${query} панорама`) },
+    { label: "Фото 2", url: photoSearch(`${query} прогулка`) },
+    { label: "Фото 3", url: photoSearch(`${query} виды`) },
+    { label: "Фото 4", url: photoSearch(`${query} фото`) }
   ];
 }
 

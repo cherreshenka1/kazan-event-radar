@@ -312,7 +312,7 @@ function eventDetailCard(item) {
       ${sourceBadge}
       ${item.sourceName ? badge(item.sourceName) : ""}
     </div>`,
-    item.shortSummary ? `<p class="card-copy">${escapeHtml(trim(item.shortSummary, 180))}</p>` : "",
+    item.shortSummary ? richTextBlock(item.shortSummary) : "",
     `<div class="inline-note">${escapeHtml(eventPriorityLine(item))}</div>`,
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
@@ -328,7 +328,7 @@ function eventPreviewCard(item) {
   return card([
     `<h3>${escapeHtml(item.title || "Событие")}</h3>`,
     `<div class="meta">${escapeHtml(formatDate(item.eventDate || item.publishedAt))}${item.sourceCount > 1 ? ` · ${escapeHtml(`в ${sourceCountLabel(item.sourceCount)}`)}` : ""}</div>`,
-    item.shortSummary ? `<p>${escapeHtml(trim(item.shortSummary, 110))}</p>` : "",
+    item.shortSummary ? richTextBlock(trim(item.shortSummary, 110)) : "",
     actions([
       actionButton("Открыть", "event-item", { id: item.id }, item.id === state.selectedEventId ? "primary" : ""),
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : "")
@@ -340,14 +340,14 @@ function placeDetailCard(sectionId, item) {
   return card([
     `<h2>${escapeHtml(item.title)}</h2>`,
     item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
-    `<p class="card-copy">${escapeHtml(item.description)}</p>`,
+    richTextBlock(item.description),
     `<div class="fact-grid">
       ${item.highlights?.length ? factListBlock("Что посмотреть", item.highlights) : ""}
       ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
       ${item.reviewRating ? factBlock("Рейтинг", `${item.reviewRating} / 5 · ${item.reviewCount || "без числа отзывов"}`) : ""}
       ${item.foodNearby ? factBlock("Где перекусить", item.foodNearby) : ""}
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
-      ${item.photoLinks?.length ? factButtonsBlock("Фотографии по сезонам", item.photoLinks) : ""}
+      ${item.photoLinks?.length ? factButtonsBlock("Подборка фото", item.photoLinks) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
@@ -362,12 +362,12 @@ function routeDetailCard(route) {
   return card([
     `<h2>${escapeHtml(route.title)}</h2>`,
     `<div class="meta-badges">${route.subtitle ? badge(route.subtitle) : ""}${route.duration ? badge(route.duration) : ""}${badge(routeLevelLabel(route.level))}</div>`,
-    `<p class="card-copy">${escapeHtml(route.description)}</p>`,
+    richTextBlock(route.description),
     `<div class="fact-grid">
       ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
       ${route.foodNearby ? factBlock("Где сделать остановку на еду", route.foodNearby) : ""}
       ${route.howToGet ? factBlock("Старт и логистика", route.howToGet) : ""}
-      ${route.photoLinks?.length ? factButtonsBlock("Фотографии и настроение маршрута", route.photoLinks) : ""}
+      ${route.photoLinks?.length ? factButtonsBlock("Подборка фото", route.photoLinks) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(routeFavoriteId(route.id)), "favorite-route", { id: route.id }, isFavorite(routeFavoriteId(route.id)) ? "primary" : ""),
@@ -627,7 +627,7 @@ function factListBlock(title, items) {
 }
 
 function factButtonsBlock(title, links) {
-  return `<section class="fact"><p class="subtle-title">${escapeHtml(title)}</p><div class="actions">${links.map((link) => actionButton(link.label, "open", { url: link.url })).join("")}</div></section>`;
+  return `<section class="fact"><p class="subtle-title">${escapeHtml(title)}</p><div class="photo-grid">${links.map((link) => `<a class="photo-tile" href="${escapeHtml(link.url)}" target="_blank" rel="noopener"><span>${escapeHtml(link.label)}</span></a>`).join("")}</div></section>`;
 }
 
 function badge(value) {
@@ -636,6 +636,17 @@ function badge(value) {
 
 function empty(text) {
   return `<div class="empty">${escapeHtml(text)}</div>`;
+}
+
+function richTextBlock(text) {
+  const paragraphs = String(text || "")
+    .split(/\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) return "";
+
+  return `<div class="card-copy">${paragraphs.map((part) => `<p>${escapeHtml(part)}</p>`).join("")}</div>`;
 }
 
 function eventPriorityLine(item) {

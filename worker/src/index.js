@@ -569,9 +569,11 @@ function isAllowedEventItem(item, env, filters = buildEventFilters(new URLSearch
 function getAllowedEventWindow(env) {
   const [year, monthNumber] = (env.EVENT_TARGET_MONTH || "2026-04").split("-").map(Number);
   const monthIndex = monthNumber - 1;
+  const fallbackFrom = new Date(Date.UTC(year, monthIndex, 1, -3, 0, 0));
+  const fallbackTo = new Date(Date.UTC(2027, 11, 31, 20, 59, 59, 999));
   return {
-    from: new Date(env.EVENTS_ALLOWED_FROM || Date.UTC(year, monthIndex, 1, -3, 0, 0)),
-    to: new Date(env.EVENTS_ALLOWED_TO || (Date.UTC(year, monthIndex + 1, 1, -3, 0, 0) - 1))
+    from: new Date(env.EVENTS_ALLOWED_FROM || fallbackFrom),
+    to: new Date(env.EVENTS_ALLOWED_TO || fallbackTo)
   };
 }
 
@@ -740,18 +742,39 @@ async function markDraft(env, draftId, status) {
 function formatChannelPost(item) {
   const eventDate = item.eventDate ? new Date(item.eventDate) : null;
   const when = eventDate && !Number.isNaN(eventDate.getTime()) ? formatMoscowDateTime(eventDate) : "дату уточняйте у организатора";
+  const summary = trim(item.shortSummary || item.summary || item.title || "", 220);
+  const paragraphs = splitDraftParagraphs(summary);
+  const sourceLine = item.sourceCount > 1
+    ? `Событие встретилось в ${item.sourceCount} источниках.`
+    : (item.sourceName ? `Источник: ${item.sourceName}.` : null);
+
   return [
-    `Казань: ${item.title || "интересное событие"}`,
+    item.title || "Событие в Казани",
     "",
     `Когда: ${when}`,
-    item.sourceCount > 1 ? `Нашли в ${item.sourceCount} источниках` : (item.sourceName ? `Источник: ${item.sourceName}` : null),
     "",
-    trim(item.shortSummary || item.summary || item.title || "", 260),
+    ...paragraphs,
+    sourceLine,
     "",
-    item.url ? `Билеты/подробнее: ${item.url}` : null,
-    "",
-    "#Казань #афиша #кудапойти"
+    item.url ? `Подробнее: ${item.url}` : null
   ].filter(Boolean).join("\n");
+}
+
+function splitDraftParagraphs(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return [];
+
+  const sentences = normalized
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean) || [];
+
+  if (sentences.length <= 1) return [normalized];
+
+  return [
+    sentences[0],
+    sentences.slice(1, 3).join(" ").trim()
+  ].filter(Boolean);
 }
 
 async function sendMiniAppEntry(chatId, env, text) {
