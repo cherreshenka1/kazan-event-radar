@@ -395,13 +395,7 @@ async function prepareDraftBatch(env, limit, options = {}) {
     .sort(compareEventPriority);
 
   const publishing = await getPublishing(env);
-  const selected = [];
-
-  for (const item of candidates) {
-    const alreadyUsed = publishing.postedItemIds.includes(item.id) || publishing.drafts.some((draft) => draft.itemId === item.id && draft.status === "pending");
-    if (!alreadyUsed) selected.push(item);
-    if (selected.length >= limit) break;
-  }
+  const selected = selectDraftCandidates(candidates, publishing, limit, env);
 
   if (selected.length === 0) {
     await telegramApi(env, "sendMessage", { chat_id: managerId, text: "Не нашел новых подходящих событий для черновиков." });
@@ -478,6 +472,7 @@ async function fetchTelegramSource(source) {
     const textHtml = match(chunk, /<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/);
     const publishedAt = match(chunk, /<time datetime="([^"]+)"/);
     const summary = normalizeText(stripHtml(textHtml || ""));
+    const imageUrl = extractTelegramImageUrl(chunk);
 
     if (!dataPost || !summary) continue;
 
@@ -489,6 +484,7 @@ async function fetchTelegramSource(source) {
       summary,
       url: `https://t.me/${dataPost}`,
       publishedAt,
+      imageUrl,
       categories: source.categories || []
     });
 
@@ -732,8 +728,16 @@ async function markDraft(env, draftId, status) {
   if (!draft) return null;
   draft.status = status;
   draft.updatedAt = new Date().toISOString();
-  if (status === "published" && draft.itemId && !publishing.postedItemIds.includes(draft.itemId)) {
-    publishing.postedItemIds.push(draft.itemId);
+  if (status === "published" && draft.itemId) {
+    if (!publishing.postedItemIds.includes(draft.itemId)) {
+      publishing.postedItemIds.push(draft.itemId);
+    }
+    publishing.postedItems = (publishing.postedItems || []).filter((item) => item.itemId !== draft.itemId);
+    publishing.postedItems.unshift({
+      itemId: draft.itemId,
+      draftId,
+      postedAt: draft.updatedAt
+    });
   }
   await putJson(env, "publishing", publishing);
   return draft;
@@ -760,6 +764,51 @@ function formatChannelPost(item) {
   ].filter(Boolean).join("\n");
 }
 
+function normalizePublishingState(publishing) {
+  return {
+    drafts: Array.isArray(publishing?.drafts) ? publishing.drafts : [],
+    postedItemIds: Array.isArray(publishing?.postedItemIds) ? publishing.postedItemIds : [],
+    postedItems: Array.isArray(publishing?.postedItems) ? publishing.postedItems : []
+  };
+}
+
+function selectDraftCandidates(candidates, publishing, limit, env) {
+  const selected = [];
+  const selectedIds = new Set();
+  const tiers = [
+    (item) => !hasPendingDraft(publishing, item.id) && !wasRecentlyPosted(publishing, item.id, env),
+    (item) => !hasPendingDraft(publishing, item.id) && !wasRecentlyPosted(publishing, item.id, env, 3),
+    (item) => !hasPendingDraft(publishing, item.id)
+  ];
+
+  for (const tier of tiers) {
+    for (const item of candidates) {
+      if (selectedIds.has(item.id)) continue;
+      if (!tier(item)) continue;
+      selected.push(item);
+      selectedIds.add(item.id);
+      if (selected.length >= limit) return selected;
+    }
+  }
+
+  return selected;
+}
+
+function hasPendingDraft(publishing, itemId) {
+  return publishing.drafts.some((draft) => draft.itemId === itemId && draft.status === "pending");
+}
+
+function wasRecentlyPosted(publishing, itemId, env, overrideDays = null) {
+  const cooldownDays = overrideDays ?? Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14);
+  const posted = (publishing.postedItems || []).find((item) => item.itemId === itemId);
+  if (!posted?.postedAt) return false;
+
+  const postedTime = new Date(posted.postedAt).getTime();
+  if (Number.isNaN(postedTime)) return false;
+
+  return (Date.now() - postedTime) < (cooldownDays * 24 * 60 * 60 * 1000);
+}
+
 function splitDraftParagraphs(value) {
   const normalized = normalizeText(value);
   if (!normalized) return [];
@@ -775,6 +824,16 @@ function splitDraftParagraphs(value) {
     sentences[0],
     sentences.slice(1, 3).join(" ").trim()
   ].filter(Boolean);
+}
+
+function extractTelegramImageUrl(chunk) {
+  const style = match(chunk, /tgme_widget_message_photo_wrap[^>]+style="([^"]+)"/)
+    || match(chunk, /tgme_widget_message_link_preview[^>]+style="([^"]+)"/);
+
+  if (!style) return null;
+
+  const urlMatch = style.match(/url\(['"]?([^'")]+)['"]?\)/);
+  return urlMatch?.[1] || null;
 }
 
 async function sendMiniAppEntry(chatId, env, text) {
@@ -933,7 +992,7 @@ async function getRuntime(env) {
 }
 
 async function getPublishing(env) {
-  return await getJson(env, "publishing", { drafts: [], postedItemIds: [] });
+  return normalizePublishingState(await getJson(env, "publishing", { drafts: [], postedItemIds: [], postedItems: [] }));
 }
 
 async function resolveManagerChatId(env) {

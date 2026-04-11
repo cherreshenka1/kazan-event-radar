@@ -266,6 +266,29 @@ h1 {
   letter-spacing: -0.015em;
 }
 
+.media-frame {
+  margin: -4px -4px 14px;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.media-frame.compact {
+  margin-bottom: 12px;
+}
+
+.media-frame img {
+  display: block;
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+}
+
+.media-frame.compact img {
+  height: 160px;
+}
+
 .subtle-title {
   margin: 0 0 8px;
   color: #dbeafe;

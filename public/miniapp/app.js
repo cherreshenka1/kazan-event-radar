@@ -306,6 +306,7 @@ function eventDetailCard(item) {
     .map((source) => actionButton(source.name || "Источник", "open", { url: source.url }));
 
   return card([
+    item.imageUrl ? mediaImage(item.imageUrl, item.title || "Событие") : "",
     `<h2>${escapeHtml(item.title || "Событие")}</h2>`,
     `<div class="meta-badges">
       ${badge(formatDate(item.eventDate || item.publishedAt))}
@@ -326,6 +327,7 @@ function eventDetailCard(item) {
 
 function eventPreviewCard(item) {
   return card([
+    item.imageUrl ? mediaImage(item.imageUrl, item.title || "Событие", "compact") : "",
     `<h3>${escapeHtml(item.title || "Событие")}</h3>`,
     `<div class="meta">${escapeHtml(formatDate(item.eventDate || item.publishedAt))}${item.sourceCount > 1 ? ` · ${escapeHtml(`в ${sourceCountLabel(item.sourceCount)}`)}` : ""}</div>`,
     item.shortSummary ? richTextBlock(trim(item.shortSummary, 110)) : "",
@@ -636,6 +638,10 @@ function badge(value) {
 
 function empty(text) {
   return `<div class="empty">${escapeHtml(text)}</div>`;
+}
+
+function mediaImage(url, alt, extraClass = "") {
+  return `<div class="media-frame ${extraClass}"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer"></div>`;
 }
 
 function richTextBlock(text) {
