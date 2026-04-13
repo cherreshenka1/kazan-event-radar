@@ -1051,7 +1051,7 @@ async function hashUser(env, userId) {
 }
 
 async function sha256(value) {
-  return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 }
 
 async function hmac(key, data) {
@@ -1066,7 +1066,8 @@ async function hmac(key, data) {
 }
 
 function bytesToHex(bytes) {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const normalized = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return [...normalized].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function stripHtml(value) {

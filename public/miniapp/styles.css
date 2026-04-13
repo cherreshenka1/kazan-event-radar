@@ -1,14 +1,14 @@
 :root {
-  color-scheme: dark;
-  --bg: var(--tg-theme-bg-color, #07111f);
-  --text: var(--tg-theme-text-color, #f8fafc);
-  --hint: var(--tg-theme-hint-color, #9fb0c7);
-  --card: var(--tg-theme-secondary-bg-color, #101f33);
-  --accent: var(--tg-theme-button-color, #68d391);
-  --accent-text: var(--tg-theme-button-text-color, #06101e);
-  --border: rgba(255, 255, 255, 0.1);
-  --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  --card-hover: rgba(255, 255, 255, 0.06);
+  color-scheme: light;
+  --bg: #eef3f9;
+  --text: #162438;
+  --hint: #617086;
+  --card: #ffffff;
+  --accent: #2f80f7;
+  --accent-text: #ffffff;
+  --border: rgba(22, 36, 56, 0.12);
+  --shadow: 0 18px 48px rgba(22, 36, 56, 0.12);
+  --card-hover: rgba(47, 128, 247, 0.08);
   --content-width: min(1120px, 100%);
 }
 
@@ -25,8 +25,8 @@ body {
 body {
   font-family: "Segoe UI", "SF Pro Text", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   background:
-    radial-gradient(circle at top right, rgba(104, 211, 145, 0.22), transparent 34rem),
-    linear-gradient(180deg, #081525 0%, var(--bg) 48%);
+    radial-gradient(circle at top right, rgba(47, 128, 247, 0.14), transparent 34rem),
+    linear-gradient(180deg, #f7faff 0%, var(--bg) 48%);
   color: var(--text);
   line-height: 1.58;
 }
@@ -73,8 +73,8 @@ a {
   border: 1px solid var(--border);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, rgba(5, 12, 24, 0.94), rgba(18, 54, 88, 0.84)),
-    url("./brand/welcome-kazan-event-radar-640x360.png");
+    linear-gradient(135deg, rgba(7, 18, 34, 0.82), rgba(24, 72, 120, 0.7)),
+    var(--hero-image, url("./brand/welcome-kazan-event-radar-640x360.png"));
   background-size: cover;
   background-position: center;
   box-shadow: var(--shadow);
@@ -83,6 +83,10 @@ a {
 
 .hero-copy {
   max-width: 680px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgba(7, 18, 34, 0.42);
+  backdrop-filter: blur(10px);
 }
 
 .eyebrow {
@@ -129,9 +133,14 @@ h1 {
 .meta-badge {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 18, 32, 0.48);
-  color: #dbeafe;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  color: #18314d;
+}
+
+.hero-badge-button {
+  cursor: pointer;
+  font: inherit;
 }
 
 .tabs,
@@ -147,7 +156,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
@@ -243,20 +252,20 @@ h1 {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 24px;
-  background: rgba(16, 31, 51, 0.86);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  background: var(--card);
+  box-shadow: 0 12px 30px rgba(22, 36, 56, 0.08);
   animation: fade-up 0.35s ease;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
 }
 
 .card.active {
-  border-color: rgba(104, 211, 145, 0.5);
-  box-shadow: 0 14px 36px rgba(104, 211, 145, 0.12);
+  border-color: rgba(47, 128, 247, 0.34);
+  box-shadow: 0 14px 36px rgba(47, 128, 247, 0.12);
 }
 
 .card:hover {
   transform: translateY(-2px);
-  background: color-mix(in srgb, rgba(16, 31, 51, 0.86) 92%, var(--card-hover));
+  background: color-mix(in srgb, #ffffff 92%, var(--card-hover));
 }
 
 .card h2,
@@ -264,6 +273,16 @@ h1 {
   margin: 0 0 10px;
   font-weight: 650;
   letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.section-hero {
+  overflow: hidden;
+}
+
+.section-title,
+.detail-title {
+  color: var(--text);
 }
 
 .media-frame {
@@ -285,13 +304,17 @@ h1 {
   object-fit: cover;
 }
 
+.section-hero .media-frame img {
+  height: 220px;
+}
+
 .media-frame.compact img {
   height: 160px;
 }
 
 .subtle-title {
   margin: 0 0 8px;
-  color: #dbeafe;
+  color: #355070;
   font-size: 0.92rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -303,6 +326,20 @@ h1 {
 .list,
 .card-copy {
   color: var(--hint);
+}
+
+.preview-label {
+  margin-bottom: 8px;
+  color: #355070;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.summary-short {
+  margin: 0;
+  color: #405066;
 }
 
 .meta {

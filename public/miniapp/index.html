@@ -10,26 +10,24 @@
   </head>
   <body>
     <main class="app">
-      <section class="hero">
+      <section class="hero" id="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Kazan Event Radar</p>
-          <h1>Казань без лишнего поиска</h1>
-          <p class="hero-text">
-            Афиша, маршруты, парки, рестораны, отели, билеты и напоминания в одном мини-приложении.
+          <p class="eyebrow" id="heroEyebrow">Kazan Event Radar</p>
+          <h1 id="heroTitle">Казань без лишнего поиска</h1>
+          <p class="hero-text" id="heroText">
+            Афиша, места, еда, пешие маршруты, активный отдых, поездки на машине, билеты и напоминания в одном мини-приложении.
           </p>
-          <div class="hero-badges">
-            <span class="hero-badge">Апрель 2026</span>
-            <span class="hero-badge">Избранное</span>
-            <span class="hero-badge">Напоминания</span>
-          </div>
+          <div class="hero-badges" id="heroBadges"></div>
         </div>
       </section>
 
       <nav class="tabs" aria-label="Разделы">
         <button class="tab is-active" data-tab="events">Афиша</button>
         <button class="tab" data-tab="places">Места</button>
-        <button class="tab" data-tab="routes">Маршруты</button>
-        <button class="tab" data-tab="favorites">Избранное</button>
+        <button class="tab" data-tab="food">Еда</button>
+        <button class="tab" data-tab="routes">Пешие маршруты</button>
+        <button class="tab" data-tab="active">Активный отдых</button>
+        <button class="tab" data-tab="roadtrip">На машине</button>
       </nav>
 
       <section id="status" class="status">Загружаю данные...</section>

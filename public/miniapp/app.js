@@ -15,6 +15,9 @@ const state = {
   selectedPlaceId: params.get("place") || null,
   selectedRouteId: params.get("route") || null,
   selectedEventId: params.get("event") || null,
+  selectedFoodId: params.get("food") || null,
+  selectedActiveId: params.get("active") || null,
+  selectedRoadtripId: params.get("roadtrip") || null,
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
   catalog: null,
@@ -35,6 +38,23 @@ const state = {
 const statusNode = document.querySelector("#status");
 const contentNode = document.querySelector("#content");
 const tabNodes = [...document.querySelectorAll(".tab")];
+const heroEyebrowNode = document.querySelector("#heroEyebrow");
+const heroTitleNode = document.querySelector("#heroTitle");
+const heroTextNode = document.querySelector("#heroText");
+const heroBadgesNode = document.querySelector("#heroBadges");
+const SECTION_VISUALS = {
+  events: "./brand/section-events.png",
+  places: "./brand/section-parks.png",
+  food: "./brand/section-food.png",
+  routes: "./brand/section-routes.png",
+  active: "./brand/section-events.png",
+  roadtrip: "./brand/section-routes.png",
+  favorites: "./brand/welcome-kazan-event-radar-640x360.png",
+  parks: "./brand/section-parks.png",
+  sights: "./brand/section-events.png",
+  hotels: "./brand/welcome-kazan-event-radar-640x360.png",
+  excursions: "./brand/section-routes.png"
+};
 
 bootstrap();
 
@@ -56,6 +76,9 @@ async function bootstrap() {
 
     if (!state.selectedPlaceId) state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
     if (!state.selectedRouteId) state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
+    if (!state.selectedFoodId) state.selectedFoodId = getSectionItems("food")[0]?.id || null;
+    if (!state.selectedActiveId) state.selectedActiveId = getSectionItems("active")[0]?.id || null;
+    if (!state.selectedRoadtripId) state.selectedRoadtripId = getSectionItems("roadtrip")[0]?.id || null;
 
     setStatus("");
     track("page_view", "miniapp_home");
@@ -73,6 +96,16 @@ function bindEvents() {
       syncUrl();
       render();
     });
+  });
+
+  heroBadgesNode?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action='hero-favorites']");
+    if (!button) return;
+
+    state.activeTab = "favorites";
+    track("hero_favorites_open", "favorites");
+    syncUrl();
+    render();
   });
 
   contentNode.addEventListener("click", async (event) => {
@@ -93,6 +126,20 @@ function bindEvents() {
     if (action === "place-item") {
       state.selectedPlaceId = button.dataset.id;
       track("place_item_click", state.selectedPlaceId, { section: state.placeSection });
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (action === "section-item") {
+      const section = button.dataset.section;
+      const itemId = button.dataset.id;
+
+      if (section === "food") state.selectedFoodId = itemId;
+      if (section === "active") state.selectedActiveId = itemId;
+      if (section === "roadtrip") state.selectedRoadtripId = itemId;
+
+      track("section_item_click", itemId, { section });
       syncUrl();
       render();
       return;
@@ -179,6 +226,11 @@ function bindEvents() {
 
     if (action === "favorite-open") {
       openFavorite(button.dataset.id);
+      return;
+    }
+
+    if (action === "favorite-remove") {
+      await removeFavorite(button.dataset.id);
     }
   });
 }
@@ -233,12 +285,81 @@ async function loadFavorites() {
 
 function render() {
   tabNodes.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === state.activeTab));
+  renderHero();
   syncUrl();
 
   if (state.activeTab === "events") renderEvents();
   if (state.activeTab === "places") renderPlaces();
+  if (state.activeTab === "food") renderFood();
   if (state.activeTab === "routes") renderRoutes();
+  if (state.activeTab === "active") renderActive();
+  if (state.activeTab === "roadtrip") renderRoadtrip();
   if (state.activeTab === "favorites") renderFavorites();
+}
+
+function renderHero() {
+  if (!heroTitleNode || !heroTextNode || !heroEyebrowNode || !heroBadgesNode) return;
+
+  const content = {
+    events: {
+      eyebrow: "Kazan Event Radar",
+      title: "Казань без лишнего поиска",
+      text: "Актуальная афиша, фильтр по датам, билеты и короткие карточки с самой важной информацией.",
+      badges: [
+        state.periodLabel || "Будущие события",
+        state.events.length ? `${state.events.length} карточек` : "Афиша обновляется"
+      ]
+    },
+    places: {
+      eyebrow: "Места города",
+      title: "Культовые точки, парки и видовые места",
+      text: "Быстрый гид по городу: что посмотреть, где пройтись и как удобнее добраться.",
+      badges: [sectionLabel(state.placeSection), `${getActivePlaceItems().length || 0} мест`]
+    },
+    food: {
+      eyebrow: "Еда",
+      title: "Рестораны с понятным описанием",
+      text: "Кухня, блюда, атмосфера, отзывы и логистика без туристической перегрузки.",
+      badges: ["Кухня и интерьер", `${getSectionItems("food").length || 0} мест`]
+    },
+    routes: {
+      eyebrow: "Пешие маршруты",
+      title: "Гулять по Казани по длине и темпу",
+      text: "Легкие, средние и длинные прогулки с понятным стартом, остановками и финишем.",
+      badges: [routeLevelLabel(state.routeLevel), `${getActiveRouteItems().length || 0} маршрутов`]
+    },
+    active: {
+      eyebrow: "Активный отдых",
+      title: "Когда хочется не только гулять",
+      text: "Собрала варианты для активного дня: акваформат, развлечения и места для компании.",
+      badges: ["Для семьи и друзей", `${getSectionItems("active").length || 0} идей`]
+    },
+    roadtrip: {
+      eyebrow: "На машине",
+      title: "Точки, куда удобнее ехать с авто",
+      text: "Эти направления быстрее и комфортнее посещать на машине, но часть из них доступна и автобусом или экскурсией.",
+      badges: ["За пределами центра", `${getSectionItems("roadtrip").length || 0} направлений`]
+    },
+    favorites: {
+      eyebrow: "Мой план",
+      title: "Сохраненные события и места",
+      text: "Здесь можно быстро открыть сохраненную карточку или убрать ее из избранного.",
+      badges: [state.favorites.length ? `${state.favorites.length} в плане` : "План пока пуст"]
+    }
+  }[state.activeTab] || {
+    eyebrow: "Kazan Event Radar",
+    title: "Казань без лишнего поиска",
+    text: "Афиша, места и готовые сценарии для города.",
+    badges: []
+  };
+
+  heroEyebrowNode.textContent = content.eyebrow;
+  heroTitleNode.textContent = content.title;
+  heroTextNode.textContent = content.text;
+  heroBadgesNode.innerHTML = [
+    ...content.badges.map((item) => `<span class="hero-badge">${escapeHtml(item)}</span>`),
+    `<button class="hero-badge hero-badge-button" data-action="hero-favorites">Мой план${state.favorites.length ? ` · ${state.favorites.length}` : ""}</button>`
+  ].join("");
 }
 
 function renderEvents() {
@@ -247,7 +368,8 @@ function renderEvents() {
   contentNode.innerHTML = [
     sectionHeader(
       "Актуальная афиша",
-      "Только будущие события. Коротко, по делу и с быстрым переходом к источнику и билетам."
+      "Только будущие события. Коротко, по делу и с быстрым переходом к источнику и билетам.",
+      SECTION_VISUALS.events
     ),
     eventFilterPanel(),
     statBar([
@@ -269,10 +391,43 @@ function renderPlaces() {
   const selected = items.find((item) => item.id === state.selectedPlaceId) || items[0] || null;
 
   contentNode.innerHTML = [
-    `<div class="chips">${["parks", "sights", "food", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
-    sectionHeader(section.title, section.intro),
+    `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
+    sectionHeader(section.title, section.intro, SECTION_VISUALS[state.placeSection] || SECTION_VISUALS.places),
     `<div class="chip-grid">${items.map((item) => chip(item.title, "place-item", { id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
     selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
+  ].join("");
+}
+
+function renderFood() {
+  const section = state.catalog.food;
+  const items = getSectionItems("food");
+  const selected = items.find((item) => item.id === state.selectedFoodId) || items[0] || null;
+
+  contentNode.innerHTML = [
+    sectionHeader(section.title, section.intro, SECTION_VISUALS.food),
+    `<div class="chip-grid">${items.map((item) => chip(item.title, "section-item", { section: "food", id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
+    selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
+  ].join("");
+}
+
+function renderActive() {
+  renderSectionExplorer("active", "Выберите место для активного отдыха.");
+}
+
+function renderRoadtrip() {
+  renderSectionExplorer("roadtrip", "Выберите направление для поездки.");
+}
+
+function renderSectionExplorer(sectionId, emptyText) {
+  const section = state.catalog[sectionId];
+  const items = getSectionItems(sectionId);
+  const selectedId = getSelectedSectionId(sectionId);
+  const selected = items.find((item) => item.id === selectedId) || items[0] || null;
+
+  contentNode.innerHTML = [
+    sectionHeader(section.title, section.intro, SECTION_VISUALS[sectionId]),
+    `<div class="chip-grid">${items.map((item) => chip(item.title, "section-item", { section: sectionId, id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
+    selected ? placeDetailCard(sectionId, selected) : empty(emptyText)
   ].join("");
 }
 
@@ -283,7 +438,7 @@ function renderRoutes() {
 
   contentNode.innerHTML = [
     `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
-    sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro),
+    sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro, SECTION_VISUALS.routes),
     `<div class="chip-grid">${items.map((route) => chip(route.title, "route-item", { id: route.id }, route.id === selected?.id, "wide")).join("")}</div>`,
     selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
   ].join("");
@@ -291,7 +446,7 @@ function renderRoutes() {
 
 function renderFavorites() {
   contentNode.innerHTML = [
-    sectionHeader("Избранное и личный план", "Сохраняйте события, парки, маршруты и места, чтобы быстро вернуться к ним позже."),
+    sectionHeader("Избранное и личный план", "Сохраняйте события, парки, маршруты и места, чтобы быстро вернуться к ним позже и при необходимости сразу убрать их из плана.", SECTION_VISUALS.favorites),
     state.favorites.length
       ? `<div class="grid">${state.favorites.map(favoriteCard).join("")}</div>`
       : empty("Пока пусто. Добавьте в избранное хотя бы одно событие или место.")
@@ -299,22 +454,26 @@ function renderFavorites() {
 }
 
 function eventDetailCard(item) {
-  const sourceBadge = item.sourceCount > 1 ? badge(`В ${sourceCountLabel(item.sourceCount)}`) : badge("1 источник");
   const sourceButtons = (item.sources || [])
     .filter((source) => source?.url)
-    .slice(0, 2)
+    .slice(0, 1)
     .map((source) => actionButton(source.name || "Источник", "open", { url: source.url }));
+  const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
+  const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
+  const venueLabel = eventVenueText(item);
+  const sourceLabel = item.sourceName || item.sources?.[0]?.name || "Прямой источник";
 
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, item.title || "Событие") : "",
-    `<h2>${escapeHtml(item.title || "Событие")}</h2>`,
-    `<div class="meta-badges">
-      ${badge(formatDate(item.eventDate || item.publishedAt))}
-      ${sourceBadge}
-      ${item.sourceName ? badge(item.sourceName) : ""}
+    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие") : "",
+    `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
+    `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
+    eventCardSummary(item) ? richTextBlock(splitSummaryParagraphs(eventCardSummary(item), 4)) : "",
+    `<div class="fact-grid">
+      ${dateLabel ? factBlock("Дата", dateLabel) : ""}
+      ${timeLabel ? factBlock("Время", timeLabel) : ""}
+      ${venueLabel ? factBlock("Место", venueLabel) : ""}
+      ${sourceLabel ? factBlock("Источник", sourceLabel) : ""}
     </div>`,
-    item.shortSummary ? richTextBlock(item.shortSummary) : "",
-    `<div class="inline-note">${escapeHtml(eventPriorityLine(item))}</div>`,
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
       `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
@@ -326,11 +485,13 @@ function eventDetailCard(item) {
 }
 
 function eventPreviewCard(item) {
+  const meta = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)].filter(Boolean).join(" · ");
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, item.title || "Событие", "compact") : "",
-    `<h3>${escapeHtml(item.title || "Событие")}</h3>`,
-    `<div class="meta">${escapeHtml(formatDate(item.eventDate || item.publishedAt))}${item.sourceCount > 1 ? ` · ${escapeHtml(`в ${sourceCountLabel(item.sourceCount)}`)}` : ""}</div>`,
-    item.shortSummary ? richTextBlock(trim(item.shortSummary, 110)) : "",
+    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "compact") : "",
+    `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
+    `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
+    meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
+    `<p class="summary-short">${escapeHtml(trim(eventCardSummary(item), 150))}</p>`,
     actions([
       actionButton("Открыть", "event-item", { id: item.id }, item.id === state.selectedEventId ? "primary" : ""),
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : "")
@@ -339,12 +500,17 @@ function eventPreviewCard(item) {
 }
 
 function placeDetailCard(sectionId, item) {
+  const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
+  const highlightsTitle = sectionId === "active" ? "Что внутри" : "Что посмотреть";
   return card([
+    (item.imageUrl || fallbackImage) ? mediaImage(item.imageUrl || fallbackImage, item.title) : "",
     `<h2>${escapeHtml(item.title)}</h2>`,
     item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
     richTextBlock(item.description),
     `<div class="fact-grid">
-      ${item.highlights?.length ? factListBlock("Что посмотреть", item.highlights) : ""}
+      ${item.highlights?.length ? factListBlock(highlightsTitle, item.highlights) : ""}
+      ${item.bestFor ? factBlock(sectionId === "roadtrip" ? "Зачем ехать" : "Кому подойдет", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше", item.timing) : ""}
       ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
       ${item.reviewRating ? factBlock("Рейтинг", `${item.reviewRating} / 5 · ${item.reviewCount || "без числа отзывов"}`) : ""}
       ${item.foodNearby ? factBlock("Где перекусить", item.foodNearby) : ""}
@@ -360,8 +526,32 @@ function placeDetailCard(sectionId, item) {
   ], "active");
 }
 
+function foodDetailCard(item) {
+  return card([
+    mediaImage(item.imageUrl || SECTION_VISUALS.food, item.title),
+    `<h2>${escapeHtml(item.title)}</h2>`,
+    item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    richTextBlock(item.description),
+    `<div class="fact-grid">
+      ${item.cuisine ? factBlock("Кухня", item.cuisine) : ""}
+      ${item.signatureDishes?.length ? factListBlock("Ключевые блюда", item.signatureDishes) : ""}
+      ${item.interior ? factBlock("Интерьер", item.interior) : ""}
+      ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
+      ${item.features?.length ? factListBlock("Главные фишки", item.features) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+    </div>`,
+    actions([
+      actionButton(favoriteToggleLabel(catalogFavoriteId("food", item.id)), "favorite-catalog", { section: "food", id: item.id }, isFavorite(catalogFavoriteId("food", item.id)) ? "primary" : ""),
+      item.mapUrl ? actionButton("Открыть карту", "open", { url: item.mapUrl }, "primary") : "",
+      item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
+      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
+    ])
+  ], "active");
+}
+
 function routeDetailCard(route) {
   return card([
+    (route.imageUrl || SECTION_VISUALS.routes) ? mediaImage(route.imageUrl || SECTION_VISUALS.routes, route.title) : "",
     `<h2>${escapeHtml(route.title)}</h2>`,
     `<div class="meta-badges">${route.subtitle ? badge(route.subtitle) : ""}${route.duration ? badge(route.duration) : ""}${badge(routeLevelLabel(route.level))}</div>`,
     richTextBlock(route.description),
@@ -383,9 +573,10 @@ function favoriteCard(item) {
   return card([
     `<h3>${escapeHtml(item.title)}</h3>`,
     item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
-    item.eventDate ? `<p>${escapeHtml(formatDate(item.eventDate))}</p>` : `<p>${escapeHtml(favoriteTypeLabel(item.type))}</p>`,
+    item.eventDate ? `<p>${escapeHtml(formatDate(item.eventDate))}</p>` : `<p>${escapeHtml(favoriteTypeLabel(item.type, item.sectionId))}</p>`,
     actions([
       actionButton("Открыть карточку", "favorite-open", { id: item.id }, "primary"),
+      actionButton("Убрать", "favorite-remove", { id: item.id }),
       item.mapUrl ? actionButton("Карта", "open", { url: item.mapUrl }) : "",
       item.url ? actionButton("Источник", "open", { url: item.url }) : ""
     ])
@@ -420,6 +611,12 @@ async function createReminder(eventId) {
   }
 }
 
+async function removeFavorite(favoriteId) {
+  const favorite = state.favorites.find((item) => item.id === favoriteId);
+  if (!favorite) return;
+  await toggleFavorite(favorite);
+}
+
 function openFavorite(favoriteId) {
   const favorite = state.favorites.find((item) => item.id === favoriteId);
   if (!favorite) return;
@@ -430,9 +627,20 @@ function openFavorite(favoriteId) {
   }
 
   if (favorite.type === "catalog") {
-    state.activeTab = "places";
-    state.placeSection = favorite.sectionId || state.placeSection;
-    state.selectedPlaceId = favorite.itemId;
+    if (favorite.sectionId === "food") {
+      state.activeTab = "food";
+      state.selectedFoodId = favorite.itemId;
+    } else if (favorite.sectionId === "active") {
+      state.activeTab = "active";
+      state.selectedActiveId = favorite.itemId;
+    } else if (favorite.sectionId === "roadtrip") {
+      state.activeTab = "roadtrip";
+      state.selectedRoadtripId = favorite.itemId;
+    } else {
+      state.activeTab = "places";
+      state.placeSection = favorite.sectionId || state.placeSection;
+      state.selectedPlaceId = favorite.itemId;
+    }
   }
 
   if (favorite.type === "route") {
@@ -495,6 +703,17 @@ function getActivePlaceItems() {
   return state.catalog?.[state.placeSection]?.items || [];
 }
 
+function getSectionItems(sectionId) {
+  return state.catalog?.[sectionId]?.items || [];
+}
+
+function getSelectedSectionId(sectionId) {
+  if (sectionId === "food") return state.selectedFoodId;
+  if (sectionId === "active") return state.selectedActiveId;
+  if (sectionId === "roadtrip") return state.selectedRoadtripId;
+  return null;
+}
+
 function getActiveRouteItems() {
   return state.catalog?.routes?.items?.filter((route) => route.level === state.routeLevel) || [];
 }
@@ -508,7 +727,7 @@ function isFavorite(favoriteId) {
 }
 
 function favoriteToggleLabel(favoriteId) {
-  return isFavorite(favoriteId) ? "В плане" : "В план";
+  return isFavorite(favoriteId) ? "Убрать из плана" : "В план";
 }
 
 function catalogFavoriteId(sectionId, itemId) {
@@ -551,6 +770,18 @@ function syncUrl() {
     if (state.selectedPlaceId) next.set("place", state.selectedPlaceId);
   }
 
+  if (state.activeTab === "food" && state.selectedFoodId) {
+    next.set("food", state.selectedFoodId);
+  }
+
+  if (state.activeTab === "active" && state.selectedActiveId) {
+    next.set("active", state.selectedActiveId);
+  }
+
+  if (state.activeTab === "roadtrip" && state.selectedRoadtripId) {
+    next.set("roadtrip", state.selectedRoadtripId);
+  }
+
   if (state.activeTab === "routes") {
     next.set("level", state.routeLevel);
     if (state.selectedRouteId) next.set("route", state.selectedRouteId);
@@ -567,8 +798,8 @@ function syncUrl() {
   window.history.replaceState(null, "", `${window.location.pathname}${suffix ? `?${suffix}` : ""}`);
 }
 
-function sectionHeader(title, description) {
-  return `<article class="card"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(description || "")}</p></article>`;
+function sectionHeader(title, description, imageUrl = "") {
+  return `<article class="card section-hero">${imageUrl ? mediaImage(imageUrl, title) : ""}<h2>${escapeHtml(title)}</h2>${richTextBlock(description || "")}</article>`;
 }
 
 function statBar(items) {
@@ -655,12 +886,80 @@ function richTextBlock(text) {
   return `<div class="card-copy">${paragraphs.map((part) => `<p>${escapeHtml(part)}</p>`).join("")}</div>`;
 }
 
-function eventPriorityLine(item) {
-  if ((item.sourceCount || 1) > 1) {
-    return `Событие подтвердилось в ${sourceCountLabel(item.sourceCount)} — поэтому оно выше в подборке.`;
+function eventTypeLabel(item) {
+  const text = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
+  if (text.includes("мастер-класс")) return "Мастер-класс";
+  if (text.includes("спектак")) return "Спектакль";
+  if (text.includes("выстав")) return "Выставка";
+  if (text.includes("лекц")) return "Лекция";
+  if (text.includes("экскурс")) return "Экскурсия";
+  if (text.includes("стендап")) return "Стендап";
+  if (text.includes("фестив")) return "Фестиваль";
+  if (text.includes("шоу")) return "Шоу";
+  return "Концерт";
+}
+
+function eventCardTitle(item) {
+  const base = trim(firstMeaningfulLine(item.title || item.summary || "Событие"), 84)
+    .replace(/^\d{1,2}[.:]\d{2}\s*/u, "")
+    .replace(/^\d{1,2}\s+[а-яё]+\s*/iu, "")
+    .replace(/^(концерт|спектакль|мастер-класс|выставка|лекция|экскурсия|стендап|фестиваль|шоу)\s*/iu, "")
+    .trim();
+
+  if (!base) return item.title || "Событие";
+
+  if (/^[«"].+[»"]$/u.test(base)) return `${eventTypeLabel(item)} ${base}`;
+  return `${eventTypeLabel(item)} ${base}`;
+}
+
+function eventCardSummary(item) {
+  return trim((item.shortSummary || item.summary || item.title || "").replace(/\s+/g, " "), 280);
+}
+
+function splitSummaryParagraphs(text, limit = 4) {
+  return String(text || "")
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, limit) || [];
+}
+
+function firstMeaningfulLine(value) {
+  return String(value || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .find(Boolean) || "";
+}
+
+function eventVenueText(item) {
+  const text = `${item.title || ""}\n${item.summary || ""}`;
+  const patterns = [
+    /(?:место|площадка|адрес)\s*[:\-]\s*([^\n.;]{3,90})/iu,
+    /(?:в|во|на)\s+(МВЦ\s+[«"][^»"]+[»"]|КРК\s+[«"][^»"]+[»"]|Казань Экспо|Пирамида|Уникс|Корстон|MOÑ|Ак Барс Арена|ЦСКА Арена|Театр[^.,\n;]{1,80}|клуб[^.,\n;]{1,80}|парке?\s+[^.,\n;]{1,80})/iu
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
   }
 
-  return "Карточка короткая: за подробностями оставили прямой источник ниже.";
+  return "";
+}
+
+function formatEventDateOnly(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long"
+  });
+}
+
+function formatEventTimeOnly(value, hasExplicitTime = true) {
+  if (!value || !hasExplicitTime) return "";
+  return new Date(value).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function sectionLabel(sectionId) {
@@ -669,7 +968,9 @@ function sectionLabel(sectionId) {
     sights: "Достопримечательности",
     food: "Еда",
     hotels: "Отели",
-    excursions: "Экскурсии"
+    excursions: "Экскурсии",
+    active: "Активный отдых",
+    roadtrip: "На машине"
   }[sectionId] || sectionId;
 }
 
@@ -681,7 +982,8 @@ function routeLevelLabel(levelId) {
   }[levelId] || levelId;
 }
 
-function favoriteTypeLabel(type) {
+function favoriteTypeLabel(type, sectionId = "") {
+  if (type === "catalog" && sectionId) return sectionLabel(sectionId);
   return {
     event: "Событие",
     catalog: "Место",
