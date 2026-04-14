@@ -31,6 +31,7 @@ const state = {
   allowedFrom: "",
   allowedTo: "",
   defaultFrom: "",
+  defaultTo: "",
   appliedFrom: "",
   appliedTo: ""
 };
@@ -256,8 +257,9 @@ function applyEventsPayload(events, previousSelectedId = null) {
   state.allowedFrom = events.filters?.allowedFrom || "";
   state.allowedTo = events.filters?.allowedTo || "";
   state.defaultFrom = events.filters?.defaultFrom || "";
+  state.defaultTo = events.filters?.defaultTo || state.allowedTo || "";
   state.appliedFrom = events.filters?.appliedFrom || state.defaultFrom || "";
-  state.appliedTo = events.filters?.appliedTo || state.allowedTo || "";
+  state.appliedTo = events.filters?.appliedTo || state.defaultTo || state.allowedTo || "";
 
   if (previousSelectedId && state.events.some((item) => item.id === previousSelectedId)) {
     state.selectedEventId = previousSelectedId;
@@ -268,10 +270,11 @@ function applyEventsPayload(events, previousSelectedId = null) {
 }
 
 function buildEventsPath() {
-  const search = new URLSearchParams({ period: "april" });
+  const search = new URLSearchParams();
   if (state.dateFrom) search.set("dateFrom", state.dateFrom);
   if (state.dateTo) search.set("dateTo", state.dateTo);
-  return `/api/events?${search.toString()}`;
+  const suffix = search.toString();
+  return `/api/events${suffix ? `?${suffix}` : ""}`;
 }
 
 async function loadFavorites() {
@@ -304,7 +307,7 @@ function renderHero() {
     events: {
       eyebrow: "Kazan Event Radar",
       title: "Казань без лишнего поиска",
-      text: "Актуальная афиша, фильтр по датам, билеты и короткие карточки с самой важной информацией.",
+      text: "Только будущие события из Яндекс Афиши и MTS Live. Короткие карточки, фильтр по датам и быстрый переход к источнику без лишнего шума.",
       badges: [
         state.periodLabel || "Будущие события",
         state.events.length ? `${state.events.length} карточек` : "Афиша обновляется"
@@ -887,6 +890,15 @@ function richTextBlock(text) {
 }
 
 function eventTypeLabel(item) {
+  if (item.kind === "concert") return "Концерт";
+  if (item.kind === "theatre") return "Спектакль";
+  if (item.kind === "show") return "Шоу";
+  if (item.kind === "standup") return "Стендап";
+  if (item.kind === "exhibition") return "Выставка";
+  if (item.kind === "excursion") return "Экскурсия";
+  if (item.kind === "musical") return "Мюзикл";
+  if (item.kind === "kids") return "Детям";
+
   const text = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
   if (text.includes("мастер-класс")) return "Мастер-класс";
   if (text.includes("спектак")) return "Спектакль";
@@ -907,9 +919,7 @@ function eventCardTitle(item) {
     .trim();
 
   if (!base) return item.title || "Событие";
-
-  if (/^[«"].+[»"]$/u.test(base)) return `${eventTypeLabel(item)} ${base}`;
-  return `${eventTypeLabel(item)} ${base}`;
+  return base;
 }
 
 function eventCardSummary(item) {
@@ -932,6 +942,8 @@ function firstMeaningfulLine(value) {
 }
 
 function eventVenueText(item) {
+  if (item.venueTitle) return item.venueTitle;
+
   const text = `${item.title || ""}\n${item.summary || ""}`;
   const patterns = [
     /(?:место|площадка|адрес)\s*[:\-]\s*([^\n.;]{3,90})/iu,
@@ -1027,7 +1039,7 @@ function formatDate(value) {
 
 function getPresetRange(rangeId) {
   const from = state.defaultFrom || state.allowedFrom || "";
-  const to = state.allowedTo || "";
+  const to = state.defaultTo || state.allowedTo || "";
 
   if (!from || !to) {
     return { from: state.dateFrom || "", to: state.dateTo || "" };
@@ -1067,7 +1079,7 @@ function getEffectiveDateFrom() {
 }
 
 function getEffectiveDateTo() {
-  return state.dateTo || state.appliedTo || state.allowedTo || "";
+  return state.dateTo || state.appliedTo || state.defaultTo || state.allowedTo || "";
 }
 
 function sourceCountLabel(count) {

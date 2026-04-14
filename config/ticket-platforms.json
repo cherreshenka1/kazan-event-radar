@@ -2,28 +2,14 @@
   "platforms": [
     {
       "id": "yandex-afisha",
-      "name": "Яндекс Афиша",
+      "name": "Yandex Afisha",
       "baseUrl": "https://afisha.yandex.ru/kazan",
       "searchUrl": "https://afisha.yandex.ru/kazan?text={query}",
       "enabled": true
     },
     {
-      "id": "afisha-ru",
-      "name": "Афиша",
-      "baseUrl": "https://www.afisha.ru/",
-      "searchUrl": "https://www.afisha.ru/kazan/?q={query}",
-      "enabled": true
-    },
-    {
-      "id": "kassir-kzn",
-      "name": "Kassir.ru Казань",
-      "baseUrl": "https://kzn.kassir.ru/",
-      "searchUrl": "https://kzn.kassir.ru/?search={query}",
-      "enabled": true
-    },
-    {
       "id": "mts-live",
-      "name": "МТС Live Казань",
+      "name": "MTS Live",
       "baseUrl": "https://live.mts.ru/kazan",
       "searchUrl": "https://live.mts.ru/kazan/search?query={query}",
       "enabled": true

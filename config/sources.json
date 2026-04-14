@@ -1,69 +1,140 @@
 {
-  "city": "Казань",
+  "city": "Kazan",
   "timezone": "Europe/Moscow",
   "sources": [
     {
-      "id": "kuda-go-kazan",
-      "type": "telegram_public_channel",
-      "name": "KudaGo: Казань",
-      "channel": "kuda_go_kazan",
+      "id": "yandex-concert",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Concerts",
+      "url": "https://afisha.yandex.ru/kazan/concert",
+      "section": "concert",
       "enabled": true,
-      "categories": ["events", "places", "viewpoints", "hidden"]
+      "limit": 1
     },
     {
-      "id": "kazan-kudago",
-      "type": "telegram_public_channel",
-      "name": "Куда пойти Казань",
-      "channel": "kazankudago",
+      "id": "yandex-theatre",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Theatre",
+      "url": "https://afisha.yandex.ru/kazan/theatre_show",
+      "section": "theatre",
       "enabled": true,
-      "categories": ["events", "places", "restaurants", "bars"]
+      "limit": 1
     },
     {
-      "id": "cool-kazan",
-      "type": "telegram_public_channel",
-      "name": "Интересная Казань",
-      "channel": "coolkazan",
+      "id": "yandex-show",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Shows",
+      "url": "https://afisha.yandex.ru/kazan/show",
+      "section": "show",
       "enabled": true,
-      "categories": ["events", "places", "viewpoints", "hidden"]
+      "limit": 1
     },
     {
-      "id": "afisha-go-kazan",
-      "type": "telegram_public_channel",
-      "name": "Афиша GO Казань",
-      "channel": "afishagokazan",
+      "id": "yandex-standup",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Standup",
+      "url": "https://afisha.yandex.ru/kazan/selections/standup",
+      "section": "standup",
       "enabled": true,
-      "categories": ["events"]
+      "limit": 1
     },
     {
-      "id": "kazan-mesta",
-      "type": "telegram_public_channel",
-      "name": "Казань места афиша",
-      "channel": "kazan_mesta",
+      "id": "yandex-exhibition",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Exhibitions",
+      "url": "https://afisha.yandex.ru/kazan/exhibition",
+      "section": "exhibition",
       "enabled": true,
-      "categories": ["events", "places", "restaurants", "bars", "hidden"]
+      "limit": 1
     },
     {
-      "id": "sample-afisha-rss",
-      "type": "rss",
-      "name": "Пример RSS афиши",
-      "url": "https://example.com/feed",
-      "enabled": false,
-      "categories": ["events"]
+      "id": "yandex-excursion",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Excursions",
+      "url": "https://afisha.yandex.ru/kazan/excursion",
+      "section": "excursion",
+      "enabled": true,
+      "limit": 1
     },
     {
-      "id": "sample-html-page",
-      "type": "html",
-      "name": "Пример HTML-страницы",
-      "url": "https://example.com/kazan",
-      "enabled": false,
-      "categories": ["events", "restaurants"],
-      "selectors": {
-        "item": "article",
-        "title": "h2, h3",
-        "url": "a",
-        "date": "time",
-        "summary": "p"
-      }
+      "id": "mts-concerts",
+      "type": "mts_live_collection",
+      "name": "MTS Live Concerts",
+      "url": "https://live.mts.ru/kazan/collections/concerts",
+      "section": "concert",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-theatre",
+      "type": "mts_live_collection",
+      "name": "MTS Live Theatre",
+      "url": "https://live.mts.ru/kazan/collections/theater",
+      "section": "theatre",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-show",
+      "type": "mts_live_collection",
+      "name": "MTS Live Shows",
+      "url": "https://live.mts.ru/kazan/collections/show",
+      "section": "show",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-standup",
+      "type": "mts_live_collection",
+      "name": "MTS Live Standup",
+      "url": "https://live.mts.ru/kazan/collections/standup",
+      "section": "standup",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-exhibitions",
+      "type": "mts_live_collection",
+      "name": "MTS Live Exhibitions",
+      "url": "https://live.mts.ru/kazan/collections/exhibitions",
+      "section": "exhibition",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-excursions",
+      "type": "mts_live_collection",
+      "name": "MTS Live Excursions",
+      "url": "https://live.mts.ru/kazan/collections/excursions",
+      "section": "excursion",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-musicals",
+      "type": "mts_live_collection",
+      "name": "MTS Live Musicals",
+      "url": "https://live.mts.ru/kazan/collections/musicals",
+      "section": "musical",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
+    },
+    {
+      "id": "mts-children",
+      "type": "mts_live_collection",
+      "name": "MTS Live Kids",
+      "url": "https://live.mts.ru/kazan/collections/children",
+      "section": "kids",
+      "enabled": true,
+      "limit": 3,
+      "pages": 1
     }
   ]
 }

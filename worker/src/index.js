@@ -5,13 +5,16 @@ import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
 const DAILY_DRAFTS_CRON = "0 6 * * *";
 const HOURLY_SCAN_CRON = "15 * * * *";
 
-const TELEGRAM_SOURCES = (sourceConfig.sources || [])
-  .filter((source) => source.enabled && source.type === "telegram_public_channel")
+const EVENT_SOURCES = (sourceConfig.sources || [])
+  .filter((source) => source.enabled && ["yandex_afisha_listing", "mts_live_collection"].includes(source.type))
   .map((source) => ({
     id: source.id,
     name: source.name,
-    channel: source.channel,
-    categories: source.categories || []
+    type: source.type,
+    url: source.url,
+    section: source.section || "events",
+    limit: Number(source.limit || 20),
+    pages: Number(source.pages || 1)
   }));
 
 const TICKET_PLATFORMS = (ticketPlatformsConfig.platforms || [])
@@ -21,6 +24,14 @@ const TICKET_PLATFORMS = (ticketPlatformsConfig.platforms || [])
     name: platform.name,
     searchUrl: platform.searchUrl
   }));
+
+const EXCLUDED_EVENT_KEYWORDS = [
+  "розыгрыш",
+  "авиабилет",
+  "авиабилеты",
+  "самолет",
+  "самолёт"
+];
 
 const EVENT_FINGERPRINT_STOP_WORDS = new Set([
   "казань",
@@ -109,7 +120,7 @@ async function handleRequest(request, env) {
     return json({
       ok: true,
       service: "kazan-event-radar-worker",
-      enabledSources: TELEGRAM_SOURCES.length,
+      enabledSources: EVENT_SOURCES.length,
       lastScanAt: meta?.lastScanAt || null
     }, 200, env);
   }
@@ -153,7 +164,7 @@ async function handleRequest(request, env) {
     const syncedAt = meta?.lastScanAt || items.find((item) => item.updatedAt)?.updatedAt || null;
 
     return json({
-      period: "april",
+      period: "rolling",
       periodLabel: formatEventFilterLabel(filters),
       allowedPeriodLabel: getAllowedEventWindowLabel(env),
       syncedAt,
@@ -162,6 +173,7 @@ async function handleRequest(request, env) {
         allowedFrom: formatDateInput(filters.allowedFrom),
         allowedTo: formatDateInput(filters.allowedTo),
         defaultFrom: formatDateInput(filters.defaultFrom),
+        defaultTo: formatDateInput(filters.defaultTo),
         appliedFrom: formatDateInput(filters.from),
         appliedTo: formatDateInput(filters.to)
       },
@@ -430,9 +442,9 @@ async function scanSources(env, options = {}) {
   const collected = [];
   const sourceStats = [];
 
-  for (const source of TELEGRAM_SOURCES) {
+  for (const source of EVENT_SOURCES) {
     try {
-      const items = await fetchTelegramSource(source);
+      const items = await fetchEventSource(source);
       collected.push(...items);
       sourceStats.push({ id: source.id, name: source.name, status: "ok", count: items.length });
     } catch (error) {
@@ -441,7 +453,8 @@ async function scanSources(env, options = {}) {
     }
   }
 
-  const existing = await getJson(env, "events:items", []);
+  const existing = (await getJson(env, "events:items", []))
+    .filter((item) => ["yandex_afisha_listing", "mts_live_collection"].includes(item.type));
   const nextItems = await collapseDuplicateItems([
     ...existing.map((item) => ({ ...item, _fromExisting: true })),
     ...collected.map((item) => ({ ...item, _seenThisScan: true }))
@@ -449,7 +462,7 @@ async function scanSources(env, options = {}) {
   const meta = {
     lastScanAt: new Date().toISOString(),
     reason: options.reason || "manual",
-    enabledSources: TELEGRAM_SOURCES.length,
+    enabledSources: EVENT_SOURCES.length,
     collectedItems: collected.length,
     totalItems: nextItems.length,
     eventItems: nextItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
@@ -461,38 +474,239 @@ async function scanSources(env, options = {}) {
   return { items: nextItems, meta };
 }
 
-async function fetchTelegramSource(source) {
-  const channel = source.channel.replace(/^@/, "");
-  const html = await fetchText(`https://t.me/s/${channel}`);
-  const chunks = html.split("tgme_widget_message").slice(1);
+async function fetchEventSource(source) {
+  if (source.type === "mts_live_collection") {
+    return fetchMtsLiveSource(source);
+  }
+
+  if (source.type === "yandex_afisha_listing") {
+    return fetchYandexAfishaSource(source);
+  }
+
+  throw new Error(`Unsupported source type: ${source.type}`);
+}
+
+async function fetchMtsLiveSource(source) {
+  const links = [];
+
+  for (let page = 1; page <= Math.max(1, source.pages || 1); page += 1) {
+    const pageUrl = page === 1 ? source.url : `${source.url}?page=${page}`;
+    const html = await fetchText(pageUrl, { referer: "https://live.mts.ru/kazan" });
+    links.push(...extractMtsAnnouncementLinks(html));
+  }
+
+  const uniqueLinks = uniqueStrings(links).slice(0, source.limit || 20);
   const items = [];
 
-  for (const chunk of chunks) {
-    const dataPost = match(chunk, /data-post="([^"]+)"/);
-    const textHtml = match(chunk, /<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/);
-    const publishedAt = match(chunk, /<time datetime="([^"]+)"/);
-    const summary = normalizeText(stripHtml(textHtml || ""));
-    const imageUrl = extractTelegramImageUrl(chunk);
-
-    if (!dataPost || !summary) continue;
-
-    const item = classifyItem({
-      sourceId: source.id,
-      sourceName: source.name,
-      type: "telegram_public_channel",
-      title: firstLine(summary) || source.name,
-      summary,
-      url: `https://t.me/${dataPost}`,
-      publishedAt,
-      imageUrl,
-      categories: source.categories || []
-    });
-
+  for (const link of uniqueLinks) {
+    const html = await fetchText(link, { referer: source.url });
+    const item = parseMtsAnnouncementPage(html, link, source);
+    if (!item || shouldRejectEventItem(item)) continue;
     item.id = await itemId(item);
     items.push(item);
   }
 
   return items;
+}
+
+async function fetchYandexAfishaSource(source) {
+  const html = await fetchText(source.url, { referer: "https://afisha.yandex.ru/kazan" });
+  if (isCaptchaPage(html)) {
+    throw new Error("Yandex Afisha returned an anti-bot page.");
+  }
+
+  const uniqueLinks = uniqueStrings(extractYandexAnnouncementLinks(html)).slice(0, source.limit || 20);
+  const items = [];
+
+  for (const link of uniqueLinks) {
+    const detailsHtml = await fetchText(link, { referer: source.url });
+    if (isCaptchaPage(detailsHtml)) continue;
+    const item = parseYandexAnnouncementPage(detailsHtml, link, source);
+    if (!item || shouldRejectEventItem(item)) continue;
+    item.id = await itemId(item);
+    items.push(item);
+  }
+
+  return items;
+}
+
+function extractMtsAnnouncementLinks(html) {
+  return [...new Set(
+    [...String(html || "").matchAll(/href="(\/kazan\/announcements\/[^"]+?eventId=\d+)"/g)]
+      .map((match) => toAbsoluteUrl("https://live.mts.ru", decodeHtml(match[1])))
+  )];
+}
+
+function extractYandexAnnouncementLinks(html) {
+  const links = [...String(html || "").matchAll(/href="(\/kazan\/(?:concert|theatre(?:_show)?|standup|show|exhibition|excursion|excursions|musical|art|kids|circus_show)\/[^"#\s]+)"/gi)]
+    .map((match) => decodeHtml(match[1]))
+    .filter((link) => !/[?&]source=menu/i.test(link))
+    .map((link) => link.replace(/#schedule.*$/i, ""))
+    .map((link) => toAbsoluteUrl("https://afisha.yandex.ru", link));
+
+  return [...new Set(links)];
+}
+
+function parseMtsAnnouncementPage(html, url, source) {
+  const data = extractNextDataJson(html);
+  const details = data?.props?.pageProps?.initialState?.Announcements?.announcementDetails;
+  if (!details?.title) return null;
+
+  return classifyItem({
+    sourceId: source.id,
+    sourceName: source.name,
+    type: source.type,
+    kind: normalizeEventKind(source.section),
+    title: normalizeText(details.title),
+    summary: cleanEventSummary(stripHtml(details.description || details.shortDescription || details.title || "")),
+    url,
+    imageUrl: extractMetaContent(html, "og:image"),
+    eventDate: toMoscowIsoFromLocalString(details.eventClosestDateTime || details.lastEventDateTime),
+    eventHasExplicitTime: Boolean(details.eventClosestDateTime || details.lastEventDateTime),
+    venueTitle: normalizeText(details.venue?.title || ""),
+    publishedAt: null,
+    categories: ["events", normalizeEventKind(source.section)],
+    baseScore: 50,
+    score: 50
+  });
+}
+
+function parseYandexAnnouncementPage(html, url, source) {
+  const titleTag = normalizeText(match(html, /<title[^>]*>([^<]+)<\/title>/i));
+  const description = cleanEventSummary(extractMetaContent(html, "description"));
+  const imageUrl = extractMetaContent(html, "og:image");
+  const parsed = parseYandexTitle(titleTag, description, source.section);
+
+  if (!parsed.title) return null;
+
+  return classifyItem({
+    sourceId: source.id,
+    sourceName: source.name,
+    type: source.type,
+    kind: normalizeEventKind(source.section),
+    title: parsed.title,
+    summary: description || parsed.summary || parsed.title,
+    url,
+    imageUrl,
+    eventDate: parsed.eventDate,
+    eventHasExplicitTime: parsed.eventHasExplicitTime,
+    venueTitle: parsed.venueTitle,
+    publishedAt: null,
+    categories: ["events", normalizeEventKind(source.section)],
+    baseScore: 48,
+    score: 48
+  });
+}
+
+function parseYandexTitle(titleTag, description, section) {
+  const cleaned = normalizeText(
+    String(titleTag || "")
+      .replace(/\s+—\s+Яндекс.*$/iu, "")
+      .replace(/^Билеты на\s+/iu, "")
+      .trim()
+  );
+
+  const dateText = match(cleaned, /(\d{2}\.\d{2}\.\d{4})/);
+  const timeText = match(description || "", /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d)(?:\D|$)/);
+  const summaryVenue = match(description || "", /в Казани,\s*([^.,]+)(?:[.,]|$)/iu);
+  let rawTitle = cleaned;
+
+  if (dateText) {
+    rawTitle = cleaned.split(dateText)[0] || cleaned;
+  }
+
+  rawTitle = normalizeText(rawTitle.replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер-класс)\b/giu, "").trim());
+
+  const venueTitle = normalizeText(
+    match(cleaned, /\d{2}\.\d{2}\.\d{4}\s+(.+?)\s+(?:концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер-класс)\b/iu)
+      || summaryVenue
+      || ""
+  );
+
+  return {
+    title: rawTitle || cleaned,
+    summary: description,
+    venueTitle,
+    eventHasExplicitTime: Boolean(timeText),
+    eventDate: dateText ? toMoscowIsoFromDateText(dateText, timeText) : null
+  };
+}
+
+function extractNextDataJson(html) {
+  const raw = match(html, /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function extractMetaContent(html, name) {
+  return normalizeText(
+    decodeHtml(
+      match(html, new RegExp(`<meta[^>]+property=["']${escapeRegExp(name)}["'][^>]+content=["']([^"']+)["']`, "i"))
+      || match(html, new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${escapeRegExp(name)}["']`, "i"))
+      || match(html, new RegExp(`<meta[^>]+name=["']${escapeRegExp(name)}["'][^>]+content=["']([^"']+)["']`, "i"))
+      || match(html, new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${escapeRegExp(name)}["']`, "i"))
+      || ""
+    )
+  );
+}
+
+function shouldRejectEventItem(item) {
+  const haystack = normalizeFingerprintText(`${item.title || ""} ${item.summary || ""}`);
+  return EXCLUDED_EVENT_KEYWORDS.some((keyword) => haystack.includes(normalizeFingerprintText(keyword)));
+}
+
+function cleanEventSummary(value) {
+  return trim(
+    normalizeText(String(value || ""))
+      .replace(/Описание, даты проведения и фотографии[^.]*\./giu, "")
+      .replace(/Купить билеты[^.]*\./giu, "")
+      .replace(/на Яндекс Афише\.*$/giu, "")
+      .replace(/на МТС Live\.*$/giu, ""),
+    320
+  );
+}
+
+function normalizeEventKind(section) {
+  return {
+    concert: "concert",
+    theatre: "theatre",
+    show: "show",
+    standup: "standup",
+    exhibition: "exhibition",
+    excursion: "excursion",
+    musical: "musical",
+    kids: "kids"
+  }[section] || "events";
+}
+
+function toAbsoluteUrl(origin, value) {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return new URL(value, origin).toString();
+}
+
+function toMoscowIsoFromLocalString(value) {
+  if (!value) return null;
+  if (/Z$/i.test(value) || /[+-]\d{2}:\d{2}$/i.test(value)) return new Date(value).toISOString();
+  return new Date(`${value}+03:00`).toISOString();
+}
+
+function toMoscowIsoFromDateText(dateText, timeText = "") {
+  const matchDate = String(dateText || "").match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!matchDate) return null;
+
+  const day = Number(matchDate[1]);
+  const month = Number(matchDate[2]) - 1;
+  const year = Number(matchDate[3]);
+  const timeMatch = String(timeText || "").match(/^(\d{1,2}):(\d{2})$/);
+  const hour = timeMatch ? Number(timeMatch[1]) : 12;
+  const minute = timeMatch ? Number(timeMatch[2]) : 0;
+  return toMoscowIso(year, month, day, hour, minute);
 }
 
 function classifyItem(item) {
@@ -563,10 +777,9 @@ function isAllowedEventItem(item, env, filters = buildEventFilters(new URLSearch
 }
 
 function getAllowedEventWindow(env) {
-  const [year, monthNumber] = (env.EVENT_TARGET_MONTH || "2026-04").split("-").map(Number);
-  const monthIndex = monthNumber - 1;
-  const fallbackFrom = new Date(Date.UTC(year, monthIndex, 1, -3, 0, 0));
-  const fallbackTo = new Date(Date.UTC(2027, 11, 31, 20, 59, 59, 999));
+  const today = getStartOfCurrentMoscowDay();
+  const fallbackFrom = today;
+  const fallbackTo = getEndOfMoscowDay(addMoscowMonths(today, 5));
   return {
     from: new Date(env.EVENTS_ALLOWED_FROM || fallbackFrom),
     to: new Date(env.EVENTS_ALLOWED_TO || fallbackTo)
@@ -581,14 +794,17 @@ function getAllowedEventWindowLabel(env) {
 function buildEventFilters(searchParams, env) {
   const allowed = getAllowedEventWindow(env);
   const defaultFrom = maxDate(allowed.from, getStartOfCurrentMoscowDay());
+  const defaultTo = minDate(allowed.to, getEndOfMoscowDay(addMoscowMonths(defaultFrom, 4)));
   const customFrom = parseDateInput(searchParams.get("dateFrom"));
   const customTo = parseDateInput(searchParams.get("dateTo"), true);
-  const from = maxDate(defaultFrom, customFrom);
-  const to = minDate(allowed.to, customTo);
+  const from = maxDate(defaultFrom, customFrom || defaultFrom);
+  let to = minDate(allowed.to, customTo || defaultTo);
+  if (to < from) to = from;
   return {
     allowedFrom: allowed.from,
     allowedTo: allowed.to,
     defaultFrom,
+    defaultTo,
     from,
     to
   };
@@ -851,7 +1067,7 @@ function formatScanSummary(meta, env) {
     return [
       "Сканирование еще не запускалось.",
       `Период событий: ${getAllowedEventWindowLabel(env)}.`,
-      `Активных Telegram-источников: ${TELEGRAM_SOURCES.length}.`
+      `Активных источников афиши: ${EVENT_SOURCES.length}.`
     ].join("\n");
   }
 
@@ -862,7 +1078,7 @@ function formatScanSummary(meta, env) {
   return [
     `Последнее обновление: ${meta.lastScanAt ? formatMoscowDateTime(new Date(meta.lastScanAt)) : "неизвестно"}`,
     `Причина запуска: ${meta.reason || "manual"}`,
-    `Активных источников: ${meta.enabledSources ?? TELEGRAM_SOURCES.length}`,
+    `Активных источников: ${meta.enabledSources ?? EVENT_SOURCES.length}`,
     `Материалов в базе: ${meta.totalItems ?? 0}`,
     `Событий на период ${getAllowedEventWindowLabel(env)}: ${meta.eventItems ?? 0}`,
     sourceLines ? "" : null,
@@ -970,7 +1186,7 @@ async function getEventMeta(env, items = null) {
   return {
     lastScanAt: cachedItems.find((item) => item.updatedAt)?.updatedAt || null,
     reason: "legacy_cache",
-    enabledSources: TELEGRAM_SOURCES.length,
+    enabledSources: EVENT_SOURCES.length,
     collectedItems: cachedItems.length,
     totalItems: cachedItems.length,
     eventItems: cachedItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
@@ -1023,8 +1239,18 @@ async function telegramApi(env, method, payload) {
   return response.json();
 }
 
-async function fetchText(url) {
-  const response = await fetch(url, { headers: { "user-agent": "KazanEventRadarWorker/0.1" } });
+async function fetchText(url, options = {}) {
+  const headers = {
+    "user-agent": options.userAgent || "Mozilla/5.0 (compatible; KazanEventRadarBot/1.0; +https://t.me/kazanEventRadarBot)",
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "ru-RU,ru;q=0.9,en;q=0.8"
+  };
+
+  if (options.referer) {
+    headers.referer = options.referer;
+  }
+
+  const response = await fetch(url, { headers, redirect: "follow" });
   if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
   return response.text();
 }
@@ -1222,6 +1448,9 @@ function normalizeSourceEntries(sources) {
 }
 
 function buildItemFingerprint(item) {
+  const exactSignature = buildExactEventSignature(item);
+  if (exactSignature) return exactSignature;
+
   const dateKey = item.eventDate ? formatDateInput(item.eventDate) : "undated";
   const quotedTokens = extractQuotedTokens(item.title || item.summary || "");
   const titleTokens = quotedTokens.length ? quotedTokens : tokenizeFingerprint(item.title || firstLine(item.summary) || "");
@@ -1260,6 +1489,12 @@ function areLikelySameEvent(current, candidate) {
   if (!current?.eventDate || !candidate?.eventDate) return false;
   if (formatDateInput(current.eventDate) !== formatDateInput(candidate.eventDate)) return false;
 
+  const currentExact = buildExactEventSignature(current);
+  const candidateExact = buildExactEventSignature(candidate);
+  if (currentExact && candidateExact && currentExact === candidateExact) {
+    return true;
+  }
+
   const quotedCurrent = extractQuotedTokens(`${current.title || ""} ${current.summary || ""}`);
   const quotedCandidate = extractQuotedTokens(`${candidate.title || ""} ${candidate.summary || ""}`);
   if (countTokenOverlap(quotedCurrent, quotedCandidate) >= 2) {
@@ -1277,10 +1512,37 @@ function areLikelySameEvent(current, candidate) {
 function buildComparableTokens(item) {
   const text = [
     item.title || "",
+    item.venueTitle || "",
     trim(item.summary || "", 220)
   ].join(" ");
 
   return tokenizeFingerprint(text);
+}
+
+function buildExactEventSignature(item) {
+  const dateKey = formatDateInput(item?.eventDate);
+  const titleKey = normalizeComparableEntity(item?.title);
+  const venueKey = normalizeComparableEntity(item?.venueTitle);
+  if (!dateKey || !titleKey || !venueKey) return "";
+
+  const timeKey = item?.eventHasExplicitTime ? formatTimeKey(item.eventDate) : "no-time";
+  return `exact:${dateKey}:${timeKey}:${titleKey}:${venueKey}`;
+}
+
+function normalizeComparableEntity(value) {
+  return normalizeFingerprintText(value).replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс)\b/giu, "").trim();
+}
+
+function formatTimeKey(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
 }
 
 function extractQuotedTokens(value) {
@@ -1365,6 +1627,19 @@ function getStartOfCurrentMoscowDay(now = new Date()) {
   return new Date(Date.UTC(year, month - 1, day, -3, 0, 0));
 }
 
+function getEndOfMoscowDay(value) {
+  const start = value instanceof Date ? value : new Date(value);
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+}
+
+function addMoscowMonths(value, months) {
+  const base = value instanceof Date ? value : new Date(value);
+  const year = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric" }).format(base));
+  const month = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", month: "2-digit" }).format(base));
+  const day = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", day: "2-digit" }).format(base));
+  return new Date(Date.UTC(year, month - 1 + months, day, -3, 0, 0));
+}
+
 function parseDateInput(value, endOfDay = false) {
   const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -1421,6 +1696,10 @@ function match(value, pattern) {
   return String(value || "").match(pattern)?.[1] || null;
 }
 
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function trim(value, maxLength) {
   const normalized = normalizeText(value);
   if (!maxLength || normalized.length <= maxLength) return normalized;
@@ -1429,6 +1708,11 @@ function trim(value, maxLength) {
 
 function cryptoRandomId() {
   return crypto.randomUUID().replace(/-/g, "");
+}
+
+function isCaptchaPage(html) {
+  const text = String(html || "");
+  return /showcaptcha/i.test(text) || /Вы не робот\?/i.test(text);
 }
 
 function toMoscowIso(year, month, day, hour = 12, minute = 0) {
