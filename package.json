@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "scan": "node src/scan.js",
+    "browser": "powershell -ExecutionPolicy Bypass -File scripts/playwright-cli.ps1",
+    "yandex:browser:sync": "node scripts/sync-yandex-browser-events.mjs",
     "set-token": "powershell -ExecutionPolicy Bypass -File scripts/set-telegram-token.ps1",
     "set-analytics-password": "powershell -ExecutionPolicy Bypass -File scripts/set-analytics-password.ps1",
     "worker:whoami": "npx wrangler whoami --config worker/wrangler.toml --env-file .cloudflare.env",

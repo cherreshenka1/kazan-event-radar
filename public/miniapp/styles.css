@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
-  --bg: #dbe3ec;
-  --text: #122033;
-  --hint: #445569;
-  --card: #f4f7fb;
+  --bg: #d2dbe6;
+  --text: #102033;
+  --hint: #4a5b70;
+  --card: #edf2f7;
   --accent: #2563eb;
   --accent-text: #ffffff;
-  --border: rgba(18, 32, 51, 0.14);
-  --shadow: 0 18px 44px rgba(18, 32, 51, 0.14);
-  --card-hover: rgba(37, 99, 235, 0.1);
+  --border: rgba(16, 32, 51, 0.12);
+  --shadow: 0 18px 44px rgba(16, 32, 51, 0.12);
+  --card-hover: rgba(37, 99, 235, 0.08);
   --content-width: min(1120px, 100%);
 }
 
@@ -25,10 +25,14 @@ body {
 body {
   font-family: "Segoe UI", "SF Pro Text", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 32rem),
-    linear-gradient(180deg, #e7edf4 0%, var(--bg) 52%);
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 32rem),
+    linear-gradient(180deg, #e2e8f0 0%, var(--bg) 52%);
   color: var(--text);
   line-height: 1.58;
+}
+
+body.modal-open {
+  overflow: hidden;
 }
 
 @keyframes fade-up {
@@ -85,7 +89,7 @@ a {
   max-width: 680px;
   padding: 18px 20px;
   border-radius: 22px;
-  background: rgba(5, 12, 24, 0.58);
+  background: rgba(5, 12, 24, 0.64);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(14px);
 }
@@ -274,8 +278,9 @@ h1 {
 .card h2,
 .card h3 {
   margin: 0 0 10px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-weight: 620;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
@@ -288,12 +293,16 @@ h1 {
   color: var(--text);
 }
 
+.detail-title {
+  font-size: clamp(1.45rem, 3.2vw, 2.2rem);
+}
+
 .media-frame {
   margin: -4px -4px 14px;
   overflow: hidden;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.04);
 }
 
 .media-frame.compact {
@@ -333,16 +342,17 @@ h1 {
 
 .preview-label {
   margin-bottom: 8px;
-  color: #355070;
-  font-size: 0.8rem;
+  color: #5a6b81;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .summary-short {
   margin: 0;
-  color: #405066;
+  color: #36475d;
+  line-height: 1.55;
 }
 
 .meta {
@@ -375,6 +385,81 @@ h1 {
   margin-top: 14px;
 }
 
+.detail-source-note {
+  margin: 12px 0 0;
+  color: var(--hint);
+  font-size: 0.93rem;
+}
+
+.detail-source-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.event-modal-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 18px 12px;
+}
+
+.event-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(9, 18, 31, 0.56);
+  backdrop-filter: blur(8px);
+}
+
+.event-modal-window {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 16px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(226, 234, 242, 0.98);
+  box-shadow: 0 30px 80px rgba(12, 20, 34, 0.28);
+  animation: fade-up 0.22s ease;
+}
+
+.event-modal-window .card.active {
+  margin: 0;
+}
+
+.event-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.event-modal-header h3 {
+  margin: 4px 0 0;
+  font-size: 1.3rem;
+}
+
+.event-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .button {
   cursor: pointer;
 }
@@ -397,8 +482,8 @@ h1 {
 .fact {
   padding: 14px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.44);
 }
 
 .fact p,
@@ -489,5 +574,24 @@ h1 {
 
   .date-field {
     min-width: 100%;
+  }
+
+  .event-modal-shell {
+    padding: 10px 8px;
+    align-items: flex-end;
+  }
+
+  .event-modal-window {
+    max-height: calc(100vh - 20px);
+    padding: 12px;
+    border-radius: 22px;
+  }
+
+  .event-modal-header {
+    align-items: center;
+  }
+
+  .event-modal-header h3 {
+    font-size: 1.1rem;
   }
 }

@@ -1,4 +1,4 @@
-const PLACES_SOURCE = "https://goru.travel/kazan/places";
+﻿const PLACES_SOURCE = "https://goru.travel/kazan/places";
 const EXCURSIONS_SOURCE = "https://goru.travel/kazan/excursions";
 
 export const MAIN_SECTIONS = [
@@ -14,7 +14,7 @@ export const MAIN_SECTIONS = [
   },
   {
     id: "food",
-    label: "Еда",
+    label: "Р•РґР°",
     description: "Рестораны и бистро с понятным описанием кухни, атмосферы и отзывов."
   },
   {
@@ -49,7 +49,7 @@ export const CATALOG = {
         duration: "2-3 часа",
         mapUrl: maps("Казанский Кремль"),
         sourceUrl: EXCURSIONS_SOURCE,
-        photoLinks: photos("обзорная экскурсия Казань Кремль")
+        photoLinks: photos("excursions", "classic")
       },
       {
         id: "evening",
@@ -61,19 +61,19 @@ export const CATALOG = {
         duration: "2-2,5 часа",
         mapUrl: maps("Дворец земледельцев Казань"),
         sourceUrl: EXCURSIONS_SOURCE,
-        photoLinks: photos("вечерняя Казань набережная")
+        photoLinks: photos("excursions", "evening")
       },
       {
         id: "old_tatar",
         title: "Старая Татарская слобода",
-        subtitle: "История, озеро Кабан и татарская архитектура",
+        subtitle: "�?стория, озеро Кабан и татарская архитектура",
         description: "Спокойная историческая прогулка по улочкам у озера Кабан: мечети, деревянные дома, музейные пространства и татарская кухня рядом.",
         highlights: ["Много локального колорита", "Удобно совместить с обедом", "Хорошо для фото без спешки"],
         howToGet: "Стартуйте от метро «Площадь Тукая» и идите в сторону улицы Каюма Насыри и набережной Кабана.",
         duration: "2-3 часа",
         mapUrl: maps("Старая Татарская слобода Казань"),
         sourceUrl: EXCURSIONS_SOURCE,
-        photoLinks: photos("Старая Татарская слобода Казань")
+        photoLinks: photos("excursions", "old_tatar")
       },
       {
         id: "food_walk",
@@ -85,7 +85,7 @@ export const CATALOG = {
         duration: "2-4 часа",
         mapUrl: maps("улица Баумана Казань кафе"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("татарская кухня Казань")
+        photoLinks: photos("excursions", "food_walk")
       }
     ]
   },
@@ -110,7 +110,7 @@ export const CATALOG = {
         duration: "1,5-2 часа",
         mapUrl: maps("Казанский Кремль улица Баумана протока Булак"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Казань Кремль Баумана Булак")
+        photoLinks: photos("routes", "first_day")
       },
       {
         id: "old_tatar_kaban",
@@ -119,12 +119,12 @@ export const CATALOG = {
         subtitle: "примерно 4,5 км",
         description: "Маршрут для тех, кто хочет увидеть более атмосферную Казань: татарские дома, мечети, набережную Кабана и места для национальной кухни.",
         stops: ["Метро «Площадь Тукая»", "Петербургская улица", "Туган Авылым", "Улица Каюма Насыри", "Мечеть Марджани", "Набережная озера Кабан"],
-        foodNearby: "Ищите татарскую кухню в районе улиц Марджани и Каюма Насыри.",
+        foodNearby: "�?щите татарскую кухню в районе улиц Марджани и Каюма Насыри.",
         howToGet: "Старт: метро «Площадь Тукая». Финиш: у театра Камала или на набережной Кабана.",
         duration: "2,5-3 часа",
         mapUrl: maps("Старая Татарская слобода озеро Кабан Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Старая Татарская слобода озеро Кабан")
+        photoLinks: photos("routes", "old_tatar_kaban")
       },
       {
         id: "green_city",
@@ -138,7 +138,7 @@ export const CATALOG = {
         duration: "4-5 часов",
         mapUrl: maps("Черное озеро Лядской сад Фуксовский сад парк Горького Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("зеленая Казань парки панорамы")
+        photoLinks: photos("routes", "green_city")
       }
     ]
   },
@@ -155,18 +155,18 @@ export const CATALOG = {
         howToGet: "Метро «Кремлевская», дальше пешком к Спасской башне.",
         mapUrl: maps("Казанский Кремль"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Казанский Кремль")
+        photoLinks: photos("sights", "kremlin")
       },
       {
         id: "kul_sharif",
         title: "Мечеть Кул Шариф",
         subtitle: "символ современного Кремля",
         description: "Одна из самых узнаваемых точек Казани. Подходит для дневной прогулки и вечерних фото с подсветкой.",
-        highlights: ["Архитектура", "Интерьер", "Видовые точки рядом"],
+        highlights: ["Архитектура", "�?нтерьер", "Видовые точки рядом"],
         howToGet: "Зайдите на территорию Кремля от метро «Кремлевская» и следуйте указателям.",
         mapUrl: maps("мечеть Кул Шариф Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("мечеть Кул Шариф Казань")
+        photoLinks: photos("sights", "kul_sharif")
       },
       {
         id: "bauman",
@@ -178,7 +178,7 @@ export const CATALOG = {
         howToGet: "Метро «Кремлевская» или «Площадь Тукая».",
         mapUrl: maps("улица Баумана Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("улица Баумана Казань")
+        photoLinks: photos("sights", "bauman")
       },
       {
         id: "old_sloboda",
@@ -189,7 +189,7 @@ export const CATALOG = {
         howToGet: "От метро «Площадь Тукая» пешком 10-15 минут в сторону озера Кабан.",
         mapUrl: maps("Старая Татарская слобода Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Старая Татарская слобода Казань")
+        photoLinks: photos("sights", "old_sloboda")
       },
       {
         id: "family_center",
@@ -200,7 +200,7 @@ export const CATALOG = {
         howToGet: "Метро «Козья слобода», затем пешком к центру семьи.",
         mapUrl: maps("центр семьи Казан"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("центр семьи Казан")
+        photoLinks: photos("sights", "family_center")
       },
       {
         id: "farmers_palace",
@@ -211,7 +211,7 @@ export const CATALOG = {
         howToGet: "От Кремля пешком в сторону Кремлевской набережной.",
         mapUrl: maps("Дворец земледельцев Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Дворец земледельцев Казань")
+        photoLinks: photos("sights", "farmers_palace")
       }
     ]
   },
@@ -225,21 +225,21 @@ export const CATALOG = {
         subtitle: "центр, рядом с Баумана",
         description: "Удобный вариант для первого визита: легко ходить пешком до Кремля, Баумана, кафе и метро.",
         highlights: ["Центр", "Пешеходные маршруты", "Метро рядом"],
-        howToGet: "Ищите по названию «Ногай Казань» на карте; ориентир - район улицы Баумана.",
+        howToGet: "�?щите по названию «Ногай Казань» на карте; ориентир - район улицы Баумана.",
         mapUrl: maps("отель Ногай Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("отель Ногай Казань")
+        photoLinks: photos("hotels", "nogai")
       },
       {
         id: "kazan_palace",
         title: "Kazan Palace by TASIGO",
         subtitle: "премиальный вариант в историческом здании",
         description: "Подходит, если хочется красивый отель с сильной визуальной частью и удобным доступом к центру.",
-        highlights: ["Историческое здание", "Спа-формат", "Красивые интерьеры"],
-        howToGet: "Ищите «Kazan Palace by TASIGO»; удобно добираться на такси или от метро «Суконная слобода».",
+        highlights: ["�?сторическое здание", "Спа-формат", "Красивые интерьеры"],
+        howToGet: "�?щите «Kazan Palace by TASIGO»; удобно добираться на такси или от метро «Суконная слобода».",
         mapUrl: maps("Kazan Palace by TASIGO"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Kazan Palace by TASIGO")
+        photoLinks: photos("hotels", "kazan_palace")
       },
       {
         id: "luciano",
@@ -247,10 +247,10 @@ export const CATALOG = {
         subtitle: "центр и spa",
         description: "Вариант для тех, кто хочет жить в центре и совместить поездку с spa/relax-форматом.",
         highlights: ["Центр", "SPA", "Удобно для прогулок"],
-        howToGet: "Ищите «LUCIANO Hotel & SPA Казань»; ориентир - район улицы Островского.",
+        howToGet: "�?щите «LUCIANO Hotel & SPA Казань»; ориентир - район улицы Островского.",
         mapUrl: maps("LUCIANO Hotel SPA Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("LUCIANO Hotel SPA Казань")
+        photoLinks: photos("hotels", "luciano")
       },
       {
         id: "courtyard",
@@ -258,15 +258,15 @@ export const CATALOG = {
         subtitle: "рядом с Кремлем",
         description: "Практичный вариант, если важна близость к Кремлю, Баумана и центру без длинных переездов.",
         highlights: ["Кремль рядом", "Деловой формат", "Удобно для короткой поездки"],
-        howToGet: "Ищите «Courtyard Kazan Kremlin»; ближайшая станция - «Кремлевская».",
+        howToGet: "�?щите «Courtyard Kazan Kremlin»; ближайшая станция - «Кремлевская».",
         mapUrl: maps("Courtyard Kazan Kremlin"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Courtyard Kazan Kremlin")
+        photoLinks: photos("hotels", "courtyard")
       }
     ]
   },
   food: {
-    title: "Еда",
+    title: "Р•РґР°",
     intro: "Выберите ресторан или бистро. Внутри карточки только то, что важно: кухня, ключевые блюда, атмосфера, отзывы и как туда добраться.",
     items: [
       {
@@ -277,11 +277,12 @@ export const CATALOG = {
         cuisine: "Татарская кухня и блюда для первого знакомства с местной гастрономией.",
         signatureDishes: ["Эчпочмак", "Кыстыбый", "Чак-чак", "Домашняя выпечка"],
         interior: "Комплекс в национальном стиле, много дерева, декоративных деталей и ощущение туристической открытки.",
-        reviewSummary: "Чаще всего хвалят атмосферу и понятную татарскую классику. Из типичных замечаний — лучше приходить не в самый час пик, если хочется спокойно посидеть.",
+        reviewSummary: "Чаще всего хвалят атмосферу и понятную татарскую классику. �?з типичных замечаний — лучше приходить не в самый час пик, если хочется спокойно посидеть.",
         features: ["Хорошо для первого визита в Казань", "Подходит семьям и гостям города", "Удобно совместить с прогулкой по центру"],
         howToGet: "Метро «Площадь Тукая» или «Суконная слобода», дальше пешком/такси до Петербургской улицы.",
         mapUrl: maps("Туган Авылым Казань"),
         sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("food", "tugan_avylym"),
         reviewUrl: maps("Туган Авылым Казань отзывы"),
         reviewSource: "Яндекс"
       },
@@ -295,9 +296,10 @@ export const CATALOG = {
         interior: "Ресторанный формат с опорой на исторический район и национальные акценты в оформлении.",
         reviewSummary: "Обычно отмечают удобное расположение и атмосферу района. Лучше заранее смотреть загрузку, особенно вечером и в выходные.",
         features: ["Удобно после прогулки по Кабану", "Подходит для спокойного обеда или ужина", "Район с сильной атмосферой"],
-        howToGet: "Ищите по названию у улиц Марджани/Каюма Насыри.",
+        howToGet: "�?щите по названию у улиц Марджани/Каюма Насыри.",
         mapUrl: maps("Татарская усадьба Казань"),
         sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("food", "tatarskaya_usadba"),
         reviewUrl: maps("Татарская усадьба Казань отзывы"),
         reviewSource: "Яндекс"
       },
@@ -311,9 +313,10 @@ export const CATALOG = {
         interior: "Современный ресторан с продуманной сервировкой и спокойной вечерней атмосферой.",
         reviewSummary: "Чаще всего хвалят подачу, кухню и общий уровень сервиса. По опыту гостей, бронь лучше проверять заранее.",
         features: ["Подходит для ужина", "Более современный ресторанный формат", "Удобен для гастро-маршрута по центру"],
-        howToGet: "Ищите «Чирэм Казань» на карте и сверяйте актуальный адрес перед визитом.",
+        howToGet: "�?щите «Чирэм Казань» на карте и сверяйте актуальный адрес перед визитом.",
         mapUrl: maps("Чирэм Казань ресторан"),
         sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("food", "chirem"),
         reviewUrl: maps("Чирэм Казань ресторан отзывы"),
         reviewSource: "Яндекс"
       },
@@ -327,9 +330,10 @@ export const CATALOG = {
         interior: "Спокойное пространство, которое лучше воспринимается как часть прогулки по району, а не как парадный туристический зал.",
         reviewSummary: "Обычно ценят атмосферу района и удобство локации. Перед визитом лучше перепроверять часы работы.",
         features: ["Удобно во время прогулки", "Рядом с Кабаном", "Хорошо для неспешной остановки"],
-        howToGet: "Ищите «Гусь Казань ресторан» у Старо-Татарской слободы.",
+        howToGet: "�?щите «Гусь Казань ресторан» у Старо-Татарской слободы.",
         mapUrl: maps("Гусь Казань ресторан"),
         sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("food", "gus"),
         reviewUrl: maps("Гусь Казань ресторан отзывы"),
         reviewSource: "Яндекс"
       },
@@ -343,9 +347,10 @@ export const CATALOG = {
         interior: "Более современный, лаконичный и визуально аккуратный интерьер без лишней туристичности.",
         reviewSummary: "Чаще всего хвалят современную атмосферу и удобство для ужина или встречи. Популярные часы лучше уточнять заранее.",
         features: ["Хорошо для современного ужина", "Подходит для свидания или встречи", "Центр города"],
-        howToGet: "Ищите «Артель Bistro Казань» на карте.",
+        howToGet: "�?щите «Артель Bistro Казань» на карте.",
         mapUrl: maps("Артель Bistro Казань"),
         sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("food", "artel"),
         reviewUrl: maps("Артель Bistro Казань отзывы"),
         reviewSource: "Яндекс"
       }
@@ -365,7 +370,7 @@ export const CATALOG = {
         howToGet: "Метро «Кремлевская» или «Площадь Тукая», дальше 10-15 минут пешком.",
         mapUrl: maps("парк Черное озеро Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("парк Черное озеро Казань")
+        photoLinks: photos("parks", "black_lake")
       },
       {
         id: "gorky",
@@ -377,7 +382,7 @@ export const CATALOG = {
         howToGet: "Едьте до остановки «Парк Горького» или постройте маршрут на такси/карте от метро «Суконная слобода».",
         mapUrl: maps("ЦПКиО им Горького Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("парк Горького Казань")
+        photoLinks: photos("parks", "gorky")
       },
       {
         id: "uritsky",
@@ -389,7 +394,7 @@ export const CATALOG = {
         howToGet: "Стройте маршрут до «Парк Урицкого Казань»; обычно удобно ехать наземным транспортом или такси.",
         mapUrl: maps("парк Урицкого Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("парк Урицкого Казань")
+        photoLinks: photos("parks", "uritsky")
       },
       {
         id: "victory",
@@ -401,7 +406,7 @@ export const CATALOG = {
         howToGet: "Постройте маршрут до «Парк Победы Казань»; удобно наземным транспортом до одноименной остановки.",
         mapUrl: maps("парк Победы Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("парк Победы Казань")
+        photoLinks: photos("parks", "victory")
       },
       {
         id: "gorkinsko_omet",
@@ -413,7 +418,7 @@ export const CATALOG = {
         howToGet: "Ориентируйтесь на станции метро «Горки» или «Проспект Победы», затем стройте пеший маршрут к ближайшему входу.",
         mapUrl: maps("Горкинско-Ометьевский лес Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Горкинско-Ометьевский лес Казань")
+        photoLinks: photos("parks", "gorkinsko_omet")
       },
       {
         id: "fuks",
@@ -425,7 +430,7 @@ export const CATALOG = {
         howToGet: "Удобно идти пешком от центра или построить маршрут до «Фуксовский сад Казань».",
         mapUrl: maps("Фуксовский сад Казань"),
         sourceUrl: PLACES_SOURCE,
-        photoLinks: photos("Фуксовский сад Казань")
+        photoLinks: photos("parks", "fuks")
       }
     ]
   },
@@ -443,7 +448,8 @@ export const CATALOG = {
         timing: "Уточняйте загруженность в выходные и праздничные дни заранее.",
         howToGet: "Удобнее всего на такси или машине. Без авто обычно едут на городском транспорте до района «Ривьеры».",
         mapUrl: maps("Аквапарк Ривьера Казань"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("active", "riviera")
       },
       {
         id: "mazapark",
@@ -455,7 +461,8 @@ export const CATALOG = {
         timing: "Перед поездкой лучше проверить актуальный режим работы и формат билетов.",
         howToGet: "Чаще всего удобно ехать на такси или машине; точный маршрут лучше строить по карте в день визита.",
         mapUrl: maps("MazaPark Казань"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("active", "mazapark")
       },
       {
         id: "thermal_beach",
@@ -467,7 +474,8 @@ export const CATALOG = {
         timing: "Смотрите актуальные правила посещения и загруженность заранее.",
         howToGet: "Удобнее строить маршрут на такси или машине; часть комплексов доступна и городским транспортом.",
         mapUrl: maps("термальный комплекс Казань"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("active", "thermal_beach")
       },
       {
         id: "rope_park",
@@ -479,7 +487,8 @@ export const CATALOG = {
         timing: "Погоду и сезонность лучше проверять заранее.",
         howToGet: "Удобно ехать на машине или такси; без авто заранее проверяйте доступность городским транспортом.",
         mapUrl: maps("канатный парк Казань"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("active", "rope_park")
       }
     ]
   },
@@ -497,43 +506,47 @@ export const CATALOG = {
         timing: "В теплый сезон и в выходные обычно больше людей, поэтому удобнее ехать пораньше.",
         howToGet: "На машине и такси — самый простой сценарий. Без авто заранее ищите актуальные автобусы, трансферы или экскурсионные форматы.",
         mapUrl: maps("Голубые озера Татарстан"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("roadtrip", "blue_lakes")
       },
       {
         id: "sviyazhsk",
         title: "Остров Свияжск",
         subtitle: "исторический выезд на полдня или день",
         description: "Сильное направление для спокойной поездки из Казани, когда хочется истории, видов и более неторопливого ритма. Лучше закладывать на него не меньше половины дня.",
-        highlights: ["Историческая точка", "Хорошо на полдня или день", "Красивые виды и архитектура"],
+        highlights: ["�?сторическая точка", "Хорошо на полдня или день", "Красивые виды и архитектура"],
         bestFor: "На машине поездка получается заметно свободнее по времени. Без машины можно смотреть автобус или экскурсию.",
         timing: "Лучше выезжать утром, чтобы не сжимать прогулку и спокойно вернуться в город.",
         howToGet: "На машине — самый гибкий вариант. Без авто смотрите экскурсии, электричку/автобусные связки и такси.",
         mapUrl: maps("Остров Свияжск"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("roadtrip", "sviyazhsk")
       },
       {
         id: "innopolis",
-        title: "Иннополис",
+        title: "�?ннополис",
         subtitle: "современный город-спутник",
         description: "Поездка для тех, кому интересно увидеть более современный, технологичный и спокойный сценарий вне центра Казани. Хорошо работает как короткий выезд на несколько часов.",
         highlights: ["Современная архитектура", "Другой ритм рядом с Казанью", "Подходит для короткого выезда"],
         bestFor: "Удобен на машине, если хотите совместить дорогу туда и обратно без жёсткого расписания.",
         timing: "Хорошо сочетать с дневным выездом и спокойным возвратом в город к вечеру.",
         howToGet: "На машине или такси проще всего. Без авто проверьте междугородние автобусы и актуальные трансферы.",
-        mapUrl: maps("Иннополис"),
-        sourceUrl: PLACES_SOURCE
+        mapUrl: maps("�?ннополис"),
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("roadtrip", "innopolis")
       },
       {
         id: "bulgar",
         title: "Болгар",
         subtitle: "длинная поездка ради истории",
         description: "Это уже более серьезный выезд, который лучше планировать как отдельный день. Подходит тем, кто готов ради исторического направления заложить дорогу и неспешный маршрут.",
-        highlights: ["Полноценная поездка на день", "Историческое направление", "Нужна отдельная логистика"],
+        highlights: ["Полноценная поездка на день", "�?сторическое направление", "Нужна отдельная логистика"],
         bestFor: "С машиной ехать комфортнее и проще по времени. Без машины чаще удобнее брать экскурсию.",
         timing: "Лучше сразу планировать как отдельный день без плотной привязки к вечерним делам в Казани.",
         howToGet: "На машине — самый свободный сценарий. Без авто чаще всего удобнее экскурсионный формат или заранее продуманная автобусная поездка.",
         mapUrl: maps("Болгар Татарстан"),
-        sourceUrl: PLACES_SOURCE
+        sourceUrl: PLACES_SOURCE,
+        photoLinks: photos("roadtrip", "bulgar")
       }
     ]
   }
@@ -567,15 +580,16 @@ function maps(query) {
   return `https://yandex.ru/maps/?mode=search&text=${encodeURIComponent(query)}`;
 }
 
-function photos(query) {
+function photos(sectionId, itemId) {
   return [
-    { label: "Фото 1", url: photoSearch(`${query} панорама`) },
-    { label: "Фото 2", url: photoSearch(`${query} прогулка`) },
-    { label: "Фото 3", url: photoSearch(`${query} виды`) },
-    { label: "Фото 4", url: photoSearch(`${query} фото`) }
+    { label: "Фото 1", url: photoAsset(sectionId, itemId, 1) },
+    { label: "Фото 2", url: photoAsset(sectionId, itemId, 2) },
+    { label: "Фото 3", url: photoAsset(sectionId, itemId, 3) },
+    { label: "Фото 4", url: photoAsset(sectionId, itemId, 4) }
   ];
 }
 
-function photoSearch(query) {
-  return `https://yandex.ru/images/search?text=${encodeURIComponent(query)}`;
+function photoAsset(sectionId, itemId, index) {
+  return `./photos/${sectionId}/${itemId}/${index}.jpg`;
 }
+

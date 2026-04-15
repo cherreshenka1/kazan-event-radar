@@ -17,6 +17,14 @@ const EVENT_SOURCES = (sourceConfig.sources || [])
     pages: Number(source.pages || 1)
   }));
 
+const PERSISTED_EVENT_TYPES = new Set([
+  "yandex_afisha_listing",
+  "mts_live_collection",
+  "yandex_afisha_browser",
+  "kassir_browser",
+  "browser_import"
+]);
+
 const TICKET_PLATFORMS = (ticketPlatformsConfig.platforms || [])
   .filter((platform) => platform.enabled && platform.searchUrl)
   .map((platform) => ({
@@ -83,6 +91,58 @@ const MONTHS = {
   ноября: 10,
   декабря: 11
 };
+
+const SAFE_EXCLUDED_EVENT_KEYWORDS = [
+  "розыгрыш",
+  "авиабилет",
+  "авиабилеты",
+  "самолет",
+  "самолёт"
+];
+
+const SAFE_EVENT_FINGERPRINT_STOP_WORDS = new Set([
+  "казань",
+  "казани",
+  "город",
+  "сегодня",
+  "завтра",
+  "апрель",
+  "апреля",
+  "афиша",
+  "мероприятие",
+  "событие",
+  "концерт",
+  "выставка",
+  "лекция",
+  "фестиваль",
+  "спектакль",
+  "билеты",
+  "билет",
+  "начало",
+  "клуб",
+  "центр",
+  "пространство",
+  "вечер",
+  "день"
+]);
+
+const SAFE_MONTHS = {
+  января: 0,
+  феврал: 1,
+  февраля: 1,
+  марта: 2,
+  апреля: 3,
+  мая: 4,
+  июня: 5,
+  июля: 6,
+  августа: 7,
+  сентября: 8,
+  октября: 9,
+  ноября: 10,
+  декабря: 11
+};
+
+const TATAR_SPECIFIC_LETTERS = /[ӘәӨөҮүҢңҖҗҺһ]/u;
 
 export default {
   async fetch(request, env) {
@@ -154,12 +214,14 @@ async function handleRequest(request, env) {
       meta = scanResult.meta;
     }
 
-    const filtered = items
+    const filteredAll = items
       .filter((item) => item.categories?.includes("events") || item.eventDate)
       .filter((item) => isAllowedEventItem(item, env, filters))
+      .filter((item) => matchesEventCategory(item, filters.category))
       .sort(compareEventPriority)
-      .slice(0, limit)
-      .map(attachTicketLinks);
+      .map(attachTicketLinksSafe);
+
+    const filtered = filteredAll.slice(0, limit);
 
     const syncedAt = meta?.lastScanAt || items.find((item) => item.updatedAt)?.updatedAt || null;
 
@@ -169,6 +231,7 @@ async function handleRequest(request, env) {
       allowedPeriodLabel: getAllowedEventWindowLabel(env),
       syncedAt,
       totalItems: meta?.totalItems || items.length,
+      matchingItems: filteredAll.length,
       filters: {
         allowedFrom: formatDateInput(filters.allowedFrom),
         allowedTo: formatDateInput(filters.allowedTo),
@@ -238,6 +301,13 @@ async function handleRequest(request, env) {
     return json({ ok: true, meta: result.meta }, 200, env);
   }
 
+  if (url.pathname === "/admin/import-events" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const payload = await request.json();
+    const result = await importExternalEvents(env, payload);
+    return json(result, 200, env);
+  }
+
   return json({ error: "Not found" }, 404, env);
 }
 
@@ -295,7 +365,7 @@ async function handleTelegramMessage(message, env) {
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
       text: [
-        "Сканирование завершено.",
+        "������������ ���������.",
         "",
         formatScanSummary(result.meta, env)
       ].join("\n")
@@ -354,7 +424,7 @@ async function handleCallback(callback, env) {
   await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
 
   if (!isManagerIdentity(user, env)) {
-    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Согласовывать публикации может только менеджер." });
+    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "������������� ���������� ����� ������ ��������." });
     return;
   }
 
@@ -379,13 +449,11 @@ async function handleCallback(callback, env) {
     return;
   }
 
-  await telegramApi(env, "sendMessage", {
-    chat_id: channelId,
-    text: draft.text,
-    disable_web_page_preview: false,
-    reply_markup: {
-      inline_keyboard: [[{ text: "Открыть афишу", url: env.MINI_APP_URL }]]
-    }
+  await sendDraftPost(env, channelId, draft, {
+    inline_keyboard: [[
+      ...(draft.url ? [{ text: "Источник", url: draft.url }] : []),
+      ...(env.MINI_APP_URL ? [{ text: "Mini App", url: env.MINI_APP_URL }] : [])
+    ]]
   });
   await markDraft(env, draftId, "published");
   await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Пост опубликован в канал." });
@@ -423,15 +491,14 @@ async function prepareDraftBatch(env, limit, options = {}) {
   for (const [index, item] of selected.entries()) {
     const draft = await createDraft(env, item);
     drafts.push(draft);
-    await telegramApi(env, "sendMessage", {
-      chat_id: managerId,
-      text: [`Черновик ${index + 1}/${selected.length} для канала`, "", draft.text].join("\n"),
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "Опубликовать", callback_data: `pub:approve:${draft.id}` }],
-          [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
-        ]
-      }
+    await sendDraftPost(env, managerId, {
+      ...draft,
+      text: [`Черновик ${index + 1}/${selected.length} для канала`, "", draft.text].join("\n")
+    }, {
+      inline_keyboard: [
+        [{ text: "Опубликовать", callback_data: `pub:approve:${draft.id}` }],
+        [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
+      ]
     });
   }
 
@@ -441,20 +508,35 @@ async function prepareDraftBatch(env, limit, options = {}) {
 async function scanSources(env, options = {}) {
   const collected = [];
   const sourceStats = [];
+  let yandexBlockedForRun = false;
 
   for (const source of EVENT_SOURCES) {
+    if (yandexBlockedForRun && source.type === "yandex_afisha_listing") {
+      sourceStats.push({
+        id: source.id,
+        name: source.name,
+        status: "skipped",
+        count: 0,
+        error: "Skipped after Yandex anti-bot response in this scan."
+      });
+      continue;
+    }
+
     try {
       const items = await fetchEventSource(source);
       collected.push(...items);
       sourceStats.push({ id: source.id, name: source.name, status: "ok", count: items.length });
     } catch (error) {
+      if (source.type === "yandex_afisha_listing" && /anti-bot/i.test(String(error.message || ""))) {
+        yandexBlockedForRun = true;
+      }
       sourceStats.push({ id: source.id, name: source.name, status: "error", count: 0, error: error.message });
       console.warn(`Source ${source.id} failed: ${error.message}`);
     }
   }
 
   const existing = (await getJson(env, "events:items", []))
-    .filter((item) => ["yandex_afisha_listing", "mts_live_collection"].includes(item.type));
+    .filter((item) => PERSISTED_EVENT_TYPES.has(item.type));
   const nextItems = await collapseDuplicateItems([
     ...existing.map((item) => ({ ...item, _fromExisting: true })),
     ...collected.map((item) => ({ ...item, _seenThisScan: true }))
@@ -472,6 +554,134 @@ async function scanSources(env, options = {}) {
   await putJson(env, "events:items", nextItems);
   await putJson(env, "events:meta", meta);
   return { items: nextItems, meta };
+}
+
+async function importExternalEvents(env, payload = {}) {
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const sourceKey = String(payload.source || "browser_import");
+  const sourceType = mapImportedSourceType(sourceKey);
+  const sourceName = mapImportedSourceName(sourceKey);
+
+  if (!items.length) {
+    return {
+      ok: true,
+      imported: 0,
+      totalItems: (await getJson(env, "events:items", [])).length
+    };
+  }
+
+  const prepared = [];
+
+  for (const raw of items) {
+    const item = prepareImportedEventItem(raw, sourceKey, sourceType, sourceName);
+    if (!item || shouldRejectEventItem(item)) continue;
+    item.id = await itemId(item);
+    prepared.push(item);
+  }
+
+  const existing = (await getJson(env, "events:items", []))
+    .filter((item) => PERSISTED_EVENT_TYPES.has(item.type) && item.type !== sourceType);
+  const nextItems = await collapseDuplicateItems([
+    ...existing.map((item) => ({ ...item, _fromExisting: true })),
+    ...prepared.map((item) => ({ ...item, _seenThisScan: true }))
+  ]);
+
+  const meta = {
+    lastScanAt: new Date().toISOString(),
+    reason: `import:${sourceKey}`,
+    enabledSources: EVENT_SOURCES.length,
+    collectedItems: prepared.length,
+    totalItems: nextItems.length,
+    eventItems: nextItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
+    sources: [
+      {
+        id: sourceKey,
+        name: sourceName,
+        status: "ok",
+        count: prepared.length
+      }
+    ]
+  };
+
+  await putJson(env, "events:items", nextItems);
+  await putJson(env, "events:meta", meta);
+
+  return {
+    ok: true,
+    source: sourceKey,
+    imported: prepared.length,
+    totalItems: nextItems.length,
+    meta
+  };
+}
+
+function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
+  const title = buildShortEventTitleSafe(raw?.title || "");
+  const url = canonicalEventUrl(raw?.url);
+  if (!title || !url) return null;
+
+  const section = raw?.section || resolveYandexSection(url, "events");
+  const kind = normalizeEventKind(section);
+  const rawSummary = cleanEventSummary(raw?.summary || raw?.description || raw?.subtitle || title);
+  const eventDate = normalizeImportedEventDate(raw?.eventDate);
+  const eventHasExplicitTime = raw?.eventHasExplicitTime
+    ? /(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)(?:\D|$)/.test(String(raw?.dateText || ""))
+    : false;
+
+  return applySafeEventCopySafe(classifyItem({
+    sourceId: raw?.sourceId || sourceKey,
+    sourceName: raw?.sourceName || sourceName,
+    type: sourceType,
+    kind,
+    title,
+    rawSummary,
+    summary: rawSummary,
+    shortSummary: rawSummary,
+    url,
+    imageUrl: raw?.imageUrl ? canonicalEventUrl(raw.imageUrl) : null,
+    eventDate,
+    eventHasExplicitTime,
+    venueTitle: normalizeText(raw?.venueTitle || ""),
+    publishedAt: null,
+    categories: ["events", kind],
+    baseScore: Number(raw?.baseScore || 56),
+    score: Number(raw?.score || raw?.baseScore || 56)
+  }));
+}
+
+function mapImportedSourceType(sourceKey) {
+  return {
+    yandex_browser: "yandex_afisha_browser",
+    kassir_browser: "kassir_browser"
+  }[sourceKey] || "browser_import";
+}
+
+function mapImportedSourceName(sourceKey) {
+  return {
+    yandex_browser: "Yandex Afisha Browser",
+    kassir_browser: "Kassir Browser"
+  }[sourceKey] || "Browser Import";
+}
+
+function normalizeImportedEventDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return toMoscowIsoFromLocalString(value);
+  return date.toISOString();
+}
+
+function canonicalEventUrl(value) {
+  const url = toAbsoluteUrl("https://afisha.yandex.ru", String(value || "").trim());
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 async function fetchEventSource(source) {
@@ -532,15 +742,20 @@ async function fetchYandexAfishaSource(source) {
 
 function extractMtsAnnouncementLinks(html) {
   return [...new Set(
-    [...String(html || "").matchAll(/href="(\/kazan\/announcements\/[^"]+?eventId=\d+)"/g)]
-      .map((match) => toAbsoluteUrl("https://live.mts.ru", decodeHtml(match[1])))
+    [...String(html || "").matchAll(/href=["']((?:https?:\/\/live\.mts\.ru)?\/kazan\/announcements\/[^"'#\s]+(?:\?[^"'#\s]*)?)["']/gi)]
+      .map((match) => decodeHtml(match[1]))
+      .map((link) => link.replace(/#.*$/i, ""))
+      .map((link) => toAbsoluteUrl("https://live.mts.ru", link))
   )];
 }
 
 function extractYandexAnnouncementLinks(html) {
-  const links = [...String(html || "").matchAll(/href="(\/kazan\/(?:concert|theatre(?:_show)?|standup|show|exhibition|excursion|excursions|musical|art|kids|circus_show)\/[^"#\s]+)"/gi)]
+  const links = [...String(html || "").matchAll(/href=["'](\/kazan\/[^"'#\s]+\/[^"'#\s]+(?:\?[^"'#\s]*)?)["']/gi)]
     .map((match) => decodeHtml(match[1]))
     .filter((link) => !/[?&]source=menu/i.test(link))
+    .filter((link) => !/^\/kazan\/(?:artist|events|certificates|my|ticket|venue|venues)(?:\/|$)/i.test(link))
+    .filter((link) => !/\/places\//i.test(link))
+    .filter((link) => !/\/selections\//i.test(link))
     .map((link) => link.replace(/#schedule.*$/i, ""))
     .map((link) => toAbsoluteUrl("https://afisha.yandex.ru", link));
 
@@ -551,51 +766,59 @@ function parseMtsAnnouncementPage(html, url, source) {
   const data = extractNextDataJson(html);
   const details = data?.props?.pageProps?.initialState?.Announcements?.announcementDetails;
   if (!details?.title) return null;
+  const resolvedSection = resolveMtsSection(details, source.section);
+  const resolvedEventDate = pickFirstValidEventDate(details.eventClosestDateTime, details.lastEventDateTime);
+  const rawSummary = cleanEventSummary(stripHtml(details.description || details.shortDescription || details.title || ""));
+  const imageUrl = details.poster?.url || details.posterUrl || extractMetaContent(html, "og:image") || "";
 
-  return classifyItem({
+  return applySafeEventCopySafe(classifyItem({
     sourceId: source.id,
     sourceName: source.name,
     type: source.type,
-    kind: normalizeEventKind(source.section),
-    title: normalizeText(details.title),
-    summary: cleanEventSummary(stripHtml(details.description || details.shortDescription || details.title || "")),
+    kind: normalizeEventKind(resolvedSection),
+    title: buildShortEventTitle(details.title),
+    rawSummary,
+    summary: rawSummary,
+    shortSummary: rawSummary,
     url,
-    imageUrl: extractMetaContent(html, "og:image"),
-    eventDate: toMoscowIsoFromLocalString(details.eventClosestDateTime || details.lastEventDateTime),
-    eventHasExplicitTime: Boolean(details.eventClosestDateTime || details.lastEventDateTime),
+    imageUrl: imageUrl ? toAbsoluteUrl(url, imageUrl) : null,
+    eventDate: toMoscowIsoFromLocalString(resolvedEventDate),
+    eventHasExplicitTime: Boolean(resolvedEventDate),
     venueTitle: normalizeText(details.venue?.title || ""),
     publishedAt: null,
-    categories: ["events", normalizeEventKind(source.section)],
+    categories: ["events", normalizeEventKind(resolvedSection)],
     baseScore: 50,
     score: 50
-  });
+  }));
 }
 
 function parseYandexAnnouncementPage(html, url, source) {
   const titleTag = normalizeText(match(html, /<title[^>]*>([^<]+)<\/title>/i));
   const description = cleanEventSummary(extractMetaContent(html, "description"));
-  const imageUrl = extractMetaContent(html, "og:image");
   const parsed = parseYandexTitle(titleTag, description, source.section);
+  const imageUrl = extractMetaContent(html, "og:image");
 
   if (!parsed.title) return null;
 
-  return classifyItem({
+  return applySafeEventCopySafe(classifyItem({
     sourceId: source.id,
     sourceName: source.name,
     type: source.type,
-    kind: normalizeEventKind(source.section),
-    title: parsed.title,
+    kind: normalizeEventKind(resolveYandexSection(url, source.section)),
+    title: buildShortEventTitle(parsed.title),
+    rawSummary: description || parsed.summary || parsed.title,
     summary: description || parsed.summary || parsed.title,
+    shortSummary: description || parsed.summary || parsed.title,
     url,
-    imageUrl,
+    imageUrl: imageUrl ? toAbsoluteUrl(url, imageUrl) : null,
     eventDate: parsed.eventDate,
     eventHasExplicitTime: parsed.eventHasExplicitTime,
     venueTitle: parsed.venueTitle,
     publishedAt: null,
-    categories: ["events", normalizeEventKind(source.section)],
+    categories: ["events", normalizeEventKind(resolveYandexSection(url, source.section))],
     baseScore: 48,
     score: 48
-  });
+  }));
 }
 
 function parseYandexTitle(titleTag, description, section) {
@@ -656,8 +879,15 @@ function extractMetaContent(html, name) {
 }
 
 function shouldRejectEventItem(item) {
-  const haystack = normalizeFingerprintText(`${item.title || ""} ${item.summary || ""}`);
-  return EXCLUDED_EVENT_KEYWORDS.some((keyword) => haystack.includes(normalizeFingerprintText(keyword)));
+  const title = String(item.title || "");
+  const summary = String(item.summary || item.rawSummary || "");
+  const haystack = normalizeFingerprintTextSafe(`${title} ${summary}`);
+
+  if (TATAR_SPECIFIC_LETTERS.test(`${title} ${summary}`)) {
+    return true;
+  }
+
+  return SAFE_EXCLUDED_EVENT_KEYWORDS.some((keyword) => haystack.includes(normalizeFingerprintText(keyword)));
 }
 
 function cleanEventSummary(value) {
@@ -674,13 +904,30 @@ function cleanEventSummary(value) {
 function normalizeEventKind(section) {
   return {
     concert: "concert",
+    concerts: "concert",
+    concert_popular: "concert",
     theatre: "theatre",
+    theater: "theatre",
+    theatre_show: "theatre",
+    spectacle: "theatre",
+    spectacle_popular: "theatre",
+    monoperformance: "theatre",
     show: "show",
+    festival: "show",
+    circus_show: "show",
+    show_and_musicals: "show",
     standup: "standup",
     exhibition: "exhibition",
+    exhibitions: "exhibition",
+    art: "exhibition",
     excursion: "excursion",
+    excursions: "excursion",
     musical: "musical",
-    kids: "kids"
+    musicals: "musical",
+    sport: "sport",
+    sports: "sport",
+    kids: "kids",
+    children: "kids"
   }[section] || "events";
 }
 
@@ -692,8 +939,29 @@ function toAbsoluteUrl(origin, value) {
 
 function toMoscowIsoFromLocalString(value) {
   if (!value) return null;
+  if (!isValidEventDateValue(value)) return null;
   if (/Z$/i.test(value) || /[+-]\d{2}:\d{2}$/i.test(value)) return new Date(value).toISOString();
   return new Date(`${value}+03:00`).toISOString();
+}
+
+function pickFirstValidEventDate(...values) {
+  return values.find((value) => isValidEventDateValue(value)) || null;
+}
+
+function isValidEventDateValue(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return false;
+  if (/^0001-01-01T00:00:00(?:\.000)?$/i.test(normalized)) return false;
+  return !Number.isNaN(new Date(/Z$/i.test(normalized) || /[+-]\d{2}:\d{2}$/i.test(normalized) ? normalized : `${normalized}+03:00`).getTime());
+}
+
+function resolveMtsSection(details, fallbackSection) {
+  return details?.category?.alias || fallbackSection || "events";
+}
+
+function resolveYandexSection(url, fallbackSection) {
+  const slug = match(String(url || ""), /\/kazan\/([^/?#]+)/i)?.toLowerCase();
+  return slug || fallbackSection || "events";
 }
 
 function toMoscowIsoFromDateText(dateText, timeText = "") {
@@ -727,10 +995,10 @@ function classifyItem(item) {
   return {
     ...item,
     categories: [...new Set([...(item.categories || []), ...categories])],
-    eventDate: item.eventDate || extractEventDate(item),
-    eventHasExplicitTime: item.eventHasExplicitTime ?? hasExplicitEventTime(item),
-    baseScore: item.baseScore ?? keywordScore,
-    score: item.score ?? item.baseScore ?? keywordScore
+    eventDate: item.eventDate || extractEventDateSafe(item),
+    eventHasExplicitTime: item.eventHasExplicitTime || hasExplicitEventTime(item),
+    baseScore: item.baseScore || keywordScore,
+    score: item.score || item.baseScore || keywordScore
   };
 }
 
@@ -776,6 +1044,16 @@ function isAllowedEventItem(item, env, filters = buildEventFilters(new URLSearch
   return true;
 }
 
+function matchesEventCategory(item, category = "all") {
+  if (!category || category === "all") return true;
+
+  if (category === "expected") {
+    return (item.sourceCount || 1) > 1 || (item.priorityScore || item.score || 0) >= 80;
+  }
+
+  return item.kind === category;
+}
+
 function getAllowedEventWindow(env) {
   const today = getStartOfCurrentMoscowDay();
   const fallbackFrom = today;
@@ -801,6 +1079,7 @@ function buildEventFilters(searchParams, env) {
   let to = minDate(allowed.to, customTo || defaultTo);
   if (to < from) to = from;
   return {
+    category: searchParams.get("category") || "all",
     allowedFrom: allowed.from,
     allowedTo: allowed.to,
     defaultFrom,
@@ -826,6 +1105,111 @@ function attachTicketLinks(item) {
   };
 }
 
+function applySafeEventCopy(item) {
+  const rawSummary = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || "");
+  const normalized = {
+    ...item,
+    title: buildShortEventTitleSafe(item.title || item.summary || "�������"),
+    rawSummary,
+    imageUrl: null
+  };
+
+  return {
+    ...normalized,
+    summary: buildSafeEventSummarySafe(normalized),
+    shortSummary: buildSafeEventShortSummarySafe(normalized)
+  };
+}
+
+function buildSafeEventSummary(item) {
+  return [
+    buildSafeEventHeadlineSafe(item),
+    buildSafeEventScheduleLineSafe(item),
+    buildSafeEventMoodLineSafe(item),
+    "Подробности, программу и билеты лучше открыть у официального источника по ссылке ниже."
+  ].filter(Boolean).join("\n\n");
+}
+
+function buildSafeEventShortSummary(item) {
+  const compact = [
+    buildSafeEventHeadlineSafe(item),
+    buildSafeEventScheduleLineSafe(item)
+  ].filter(Boolean).join(" ");
+
+  return trim(compact || "Подробности и билеты доступны у источника.", 190);
+}
+
+function buildSafeEventHeadlineSafe(item) {
+  const kindLabel = eventKindLabelSafe(item.kind).toLowerCase();
+  const shortTitle = quoteEventTitleSafe(buildShortEventTitleSafe(item.title || item.summary || "�������"));
+  return shortTitle ? `В афише Казани — ${kindLabel} ${shortTitle}.` : `В афише Казани — ${kindLabel}.`;
+}
+
+function buildSafeEventScheduleLineSafe(item) {
+  const eventDate = item.eventDate ? new Date(item.eventDate) : null;
+  const hasValidDate = eventDate && !Number.isNaN(eventDate.getTime());
+  const venueTitle = normalizeText(item.venueTitle || "");
+
+  if (!hasValidDate && !venueTitle) return "Точное расписание лучше заранее проверить у площадки или организатора.";
+  if (!hasValidDate) return `Площадка: ${venueTitle}.`;
+
+  const dateLabel = formatMoscowDate(eventDate);
+  const timeLabel = item.eventHasExplicitTime ? formatMoscowTime(eventDate) : "";
+
+  if (venueTitle && timeLabel) return `Дата и место: ${dateLabel}, ${timeLabel}, ${venueTitle}.`;
+  if (venueTitle) return `Дата и место: ${dateLabel}, ${venueTitle}.`;
+  if (timeLabel) return `Дата: ${dateLabel}, ${timeLabel}.`;
+  return `Дата: ${dateLabel}.`;
+}
+
+function buildSafeEventMoodLineSafe(item) {
+  return {
+    concert: "Подойдет для вечернего выхода, если хочется живого выступления и понятной логистики.",
+    theatre: "Хороший вариант для спокойного вечера и сценического формата без лишнего шума.",
+    show: "Подойдет тем, кто ищет более яркий и визуальный формат отдыха в городе.",
+    standup: "Можно добавить в план для легкого вечернего выхода с друзьями или вдвоем.",
+    exhibition: "Удобный вариант, если хочется спокойного культурного маршрута в своем темпе.",
+    excursion: "Подойдет тем, кто хочет узнать город или тему глубже и провести время содержательно.",
+    musical: "Хороший выбор для тех, кто любит сцену, музыку и большой постановочный формат.",
+    kids: "Можно рассмотреть как семейный выход, если нужен понятный формат на свободный день."
+  }[item.kind] || "Можно добавить в личный план, если хочется собрать насыщенный выход по городу.";
+}
+
+function buildShortEventTitle(value) {
+  const cleaned = normalizeText(String(value || ""))
+    .replace(/^билеты на\s+/iu, "")
+    .replace(/\s+—\s+яндекс.*$/iu, "")
+    .replace(/\s+на Яндекс Афише.*$/iu, "")
+    .replace(/\s+на МТС Live.*$/iu, "")
+    .replace(/^\d{1,2}[.:]\d{2}\s*/u, "")
+    .replace(/^\d{1,2}\s+[а-яё]+\s*/iu, "")
+    .replace(/^(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер-?класс)\s+/iu, "")
+    .trim();
+
+  return trim(cleaned, 96);
+}
+
+function quoteEventTitle(value) {
+  const title = normalizeText(value);
+  if (!title) return "";
+  if (/^[«"][^«»"]+[»"]$/u.test(title)) return title;
+  if (/[«»"]/u.test(title)) return title;
+  return `«${title}»`;
+}
+
+function eventKindLabel(kind) {
+  return {
+    concert: "Концерт",
+    theatre: "���������",
+    show: "Шоу",
+    standup: "�������",
+    exhibition: "Выставка",
+    excursion: "Экскурсия",
+    musical: "Мюзикл",
+    kids: "�������� ���������"
+  }[kind] || "�������";
+}
+
 async function toggleFavorite(env, userId, favorite) {
   const profile = await getUser(env, userId);
   const favorites = profile.favorites || [];
@@ -843,7 +1227,7 @@ async function toggleFavorite(env, userId, favorite) {
 async function createEventReminders(env, userId, eventId) {
   const items = await getJson(env, "events:items", []);
   const event = items.find((item) => item.id === eventId);
-  if (!event) return { reminders: [], created: [], skippedReason: "Событие не найдено." };
+  if (!event) return { reminders: [], created: [], skippedReason: "������� �� �������." };
 
   const eventDate = event.eventDate ? new Date(event.eventDate) : null;
   if (!eventDate || Number.isNaN(eventDate.getTime())) {
@@ -925,12 +1309,35 @@ async function createDraft(env, item) {
     title: item.title,
     text: formatChannelPost(item),
     url: item.url,
+    photoUrl: buildChannelPhotoUrl(item, env),
     status: "pending",
     createdAt: new Date().toISOString()
   };
   publishing.drafts.unshift(draft);
   await putJson(env, "publishing", publishing);
   return draft;
+}
+
+async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
+  const photoUrl = draft.photoUrl || buildChannelPhotoUrl(draft, env);
+  const caption = trimTelegramCaption(draft.text || "");
+
+  if (photoUrl) {
+    await telegramApi(env, "sendPhoto", {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      reply_markup: replyMarkup || undefined
+    });
+    return;
+  }
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    text: caption,
+    disable_web_page_preview: false,
+    reply_markup: replyMarkup || undefined
+  });
 }
 
 async function getDraft(env, draftId) {
@@ -961,22 +1368,21 @@ async function markDraft(env, draftId, status) {
 
 function formatChannelPost(item) {
   const eventDate = item.eventDate ? new Date(item.eventDate) : null;
-  const when = eventDate && !Number.isNaN(eventDate.getTime()) ? formatMoscowDateTime(eventDate) : "дату уточняйте у организатора";
-  const summary = trim(item.shortSummary || item.summary || item.title || "", 220);
-  const paragraphs = splitDraftParagraphs(summary);
-  const sourceLine = item.sourceCount > 1
-    ? `Событие встретилось в ${item.sourceCount} источниках.`
-    : (item.sourceName ? `Источник: ${item.sourceName}.` : null);
+  const when = eventDate && !Number.isNaN(eventDate.getTime()) ? formatChannelDateLabel(eventDate, item.eventHasExplicitTime) : "дату уточняйте у организатора";
+  const paragraphs = buildSafeEventSummary(item)
+    .split(/\n{2,}/)
+    .map((part) => trim(part, 220))
+    .filter(Boolean);
 
   return [
-    item.title || "Событие в Казани",
+    buildShortEventTitle(item.title || "������� � ������") || "������� � ������",
     "",
     `Когда: ${when}`,
+    item.venueTitle ? `Где: ${item.venueTitle}` : null,
     "",
     ...paragraphs,
-    sourceLine,
     "",
-    item.url ? `Подробнее: ${item.url}` : null
+    item.url ? `Подробнее у источника: ${item.url}` : null
   ].filter(Boolean).join("\n");
 }
 
@@ -1015,7 +1421,9 @@ function hasPendingDraft(publishing, itemId) {
 }
 
 function wasRecentlyPosted(publishing, itemId, env, overrideDays = null) {
-  const cooldownDays = overrideDays ?? Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14);
+  const cooldownDays = overrideDays != null
+    ? Number(overrideDays)
+    : Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14);
   const posted = (publishing.postedItems || []).find((item) => item.itemId === itemId);
   if (!posted?.postedAt) return false;
 
@@ -1042,6 +1450,65 @@ function splitDraftParagraphs(value) {
   ].filter(Boolean);
 }
 
+function buildChannelPhotoUrl(item, env) {
+  const assetPath = channelImagePathForKind(item.kind);
+
+  for (const baseUrl of channelPhotoBaseUrls(env)) {
+    try {
+      return new URL(assetPath, baseUrl).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
+function channelImagePathForKind(kind) {
+  return {
+    food: "brand/section-food.png",
+    route: "brand/section-routes.png",
+    roadtrip: "brand/section-routes.png",
+    active: "brand/section-events.png",
+    excursion: "brand/section-routes.png",
+    exhibition: "brand/section-parks.png",
+    kids: "brand/welcome-kazan-event-radar-640x360.png"
+  }[kind] || "brand/section-events.png";
+}
+
+function channelPhotoBaseUrls(env) {
+  const candidates = [];
+  const miniAppUrl = normalizeBaseUrl(env.MINI_APP_URL);
+
+  if (miniAppUrl) {
+    candidates.push(miniAppUrl);
+
+    try {
+      const parsed = new URL(miniAppUrl);
+      if (!/\/miniapp\/?$/i.test(parsed.pathname)) {
+        candidates.push(new URL("miniapp/", miniAppUrl).toString());
+      }
+    } catch {
+      // Ignore malformed env values and keep other fallbacks.
+    }
+  }
+
+  candidates.push("https://raw.githubusercontent.com/cherreshenka1/kazan-event-radar/main/public/miniapp/");
+  candidates.push("https://cherreshenka1.github.io/kazan-event-radar/miniapp/");
+
+  return [...new Set(candidates)];
+}
+
+function normalizeBaseUrl(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return normalized.endsWith("/") ? normalized : `${normalized}/`;
+}
+
+function trimTelegramCaption(value, maxLength = 1000) {
+  return trim(value, maxLength);
+}
+
 function extractTelegramImageUrl(chunk) {
   const style = match(chunk, /tgme_widget_message_photo_wrap[^>]+style="([^"]+)"/)
     || match(chunk, /tgme_widget_message_link_preview[^>]+style="([^"]+)"/);
@@ -1065,7 +1532,7 @@ async function sendMiniAppEntry(chatId, env, text) {
 function formatScanSummary(meta, env) {
   if (!meta) {
     return [
-      "Сканирование еще не запускалось.",
+      "������������ ��� �� �����������.",
       `Период событий: ${getAllowedEventWindowLabel(env)}.`,
       `Активных источников афиши: ${EVENT_SOURCES.length}.`
     ].join("\n");
@@ -1078,9 +1545,9 @@ function formatScanSummary(meta, env) {
   return [
     `Последнее обновление: ${meta.lastScanAt ? formatMoscowDateTime(new Date(meta.lastScanAt)) : "неизвестно"}`,
     `Причина запуска: ${meta.reason || "manual"}`,
-    `Активных источников: ${meta.enabledSources ?? EVENT_SOURCES.length}`,
-    `Материалов в базе: ${meta.totalItems ?? 0}`,
-    `Событий на период ${getAllowedEventWindowLabel(env)}: ${meta.eventItems ?? 0}`,
+    `Активных источников: ${meta.enabledSources || EVENT_SOURCES.length}`,
+    `Материалов в базе: ${meta.totalItems || 0}`,
+    `������� �� ������ ${getAllowedEventWindowLabel(env)}: ${meta.eventItems || 0}`,
     sourceLines ? "" : null,
     sourceLines
   ].filter(Boolean).join("\n");
@@ -1370,7 +1837,8 @@ function ensureEventAggregate(item) {
     sourceNames: uniqueStrings([...(item.sourceNames || []), ...sources.map((source) => source.name).filter(Boolean)]),
     sources,
     duplicateUrls: uniqueStrings([...(item.duplicateUrls || []), item.url, ...sources.map((source) => source.url)]),
-    shortSummary: item.shortSummary || buildCompactSummary(normalized.summary || normalized.title || ""),
+    rawSummary: item.rawSummary || item.summary || "",
+    shortSummary: item.shortSummary || buildSafeEventShortSummary(normalized),
     priorityScore: item.priorityScore || 0
   };
 }
@@ -1387,7 +1855,7 @@ function mergeDuplicateItems(current, candidate, nowIso) {
   const mergedSources = normalizeSourceEntries([...(current.sources || []), ...(candidate.sources || [])]);
   const candidateUpdatedAt = candidate._seenThisScan ? nowIso : (candidate.updatedAt || current.updatedAt || nowIso);
   const keepCandidateTitle = titleQuality(candidate.title) > titleQuality(current.title);
-  const keepCandidateSummary = summaryQuality(candidate.summary) > summaryQuality(current.summary);
+  const keepCandidateSummary = summaryQuality(candidate.rawSummary || candidate.summary) > summaryQuality(current.rawSummary || current.summary);
 
   return {
     ...current,
@@ -1395,6 +1863,7 @@ function mergeDuplicateItems(current, candidate, nowIso) {
     id: current.id || candidate.id,
     title: keepCandidateTitle ? candidate.title : current.title,
     summary: keepCandidateSummary ? candidate.summary : current.summary,
+    rawSummary: keepCandidateSummary ? (candidate.rawSummary || candidate.summary) : (current.rawSummary || current.summary),
     url: keepCandidateSummary ? (candidate.url || current.url) : (current.url || candidate.url),
     sourceName: keepCandidateTitle ? (candidate.sourceName || current.sourceName) : (current.sourceName || candidate.sourceName),
     categories: uniqueStrings([...(current.categories || []), ...(candidate.categories || [])]),
@@ -1416,16 +1885,17 @@ function mergeDuplicateItems(current, candidate, nowIso) {
 function finalizeMergedItem(item) {
   const sourceCount = item.sourceCount || item.sources?.length || 1;
   const priorityScore = (item.baseScore || item.score || 0) + (sourceCount - 1) * 6;
-  return {
+  return applySafeEventCopy({
     ...item,
     sourceCount,
     sourceIds: uniqueStrings([...(item.sourceIds || []), ...normalizeSourceEntries(item.sources || []).map((source) => source.id)]),
     sourceNames: uniqueStrings([...(item.sourceNames || []), ...normalizeSourceEntries(item.sources || []).map((source) => source.name)]),
     sources: normalizeSourceEntries(item.sources || []),
     duplicateUrls: uniqueStrings([...(item.duplicateUrls || []), item.url]),
-    shortSummary: buildCompactSummary(item.shortSummary || item.summary || item.title || ""),
+    rawSummary: item.rawSummary || item.summary || "",
+    shortSummary: buildSafeEventShortSummary(item),
     priorityScore
-  };
+  });
 }
 
 function normalizeSourceEntries(sources) {
@@ -1452,21 +1922,21 @@ function buildItemFingerprint(item) {
   if (exactSignature) return exactSignature;
 
   const dateKey = item.eventDate ? formatDateInput(item.eventDate) : "undated";
-  const quotedTokens = extractQuotedTokens(item.title || item.summary || "");
-  const titleTokens = quotedTokens.length ? quotedTokens : tokenizeFingerprint(item.title || firstLine(item.summary) || "");
-  const fallbackTokens = titleTokens.length ? titleTokens : tokenizeFingerprint(item.summary || item.url || item.id || "");
+  const quotedTokens = extractQuotedTokens(item.title || item.rawSummary || item.summary || "");
+  const titleTokens = quotedTokens.length ? quotedTokens : tokenizeFingerprintSafe(item.title || firstLine(item.rawSummary || item.summary) || "");
+  const fallbackTokens = titleTokens.length ? titleTokens : tokenizeFingerprintSafe(item.rawSummary || item.summary || item.url || item.id || "");
   return `${dateKey}:${fallbackTokens.slice(0, 7).sort().join("-") || "event"}`;
 }
 
 function tokenizeFingerprint(value) {
   return [...new Set(
-    normalizeFingerprintText(value)
+    normalizeFingerprintTextSafe(value)
       .split(" ")
       .filter((token) => token.length >= 3 && !EVENT_FINGERPRINT_STOP_WORDS.has(token))
   )];
 }
 
-function normalizeFingerprintText(value) {
+function normalizeFingerprintTextSafe(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/ё/g, "е")
@@ -1495,8 +1965,8 @@ function areLikelySameEvent(current, candidate) {
     return true;
   }
 
-  const quotedCurrent = extractQuotedTokens(`${current.title || ""} ${current.summary || ""}`);
-  const quotedCandidate = extractQuotedTokens(`${candidate.title || ""} ${candidate.summary || ""}`);
+  const quotedCurrent = extractQuotedTokens(`${current.title || ""} ${current.rawSummary || current.summary || ""}`);
+  const quotedCandidate = extractQuotedTokens(`${candidate.title || ""} ${candidate.rawSummary || candidate.summary || ""}`);
   if (countTokenOverlap(quotedCurrent, quotedCandidate) >= 2) {
     return true;
   }
@@ -1513,7 +1983,7 @@ function buildComparableTokens(item) {
   const text = [
     item.title || "",
     item.venueTitle || "",
-    trim(item.summary || "", 220)
+    trim(item.rawSummary || item.summary || "", 220)
   ].join(" ");
 
   return tokenizeFingerprint(text);
@@ -1530,7 +2000,7 @@ function buildExactEventSignature(item) {
 }
 
 function normalizeComparableEntity(value) {
-  return normalizeFingerprintText(value).replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс)\b/giu, "").trim();
+  return normalizeFingerprintTextSafe(value).replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс)\b/giu, "").trim();
 }
 
 function formatTimeKey(value) {
@@ -1547,7 +2017,7 @@ function formatTimeKey(value) {
 
 function extractQuotedTokens(value) {
   const matches = [...String(value || "").matchAll(/[«"]([^»"]{2,80})[»"]/g)];
-  return matches.flatMap((match) => tokenizeFingerprint(match[1]));
+  return matches.flatMap((match) => tokenizeFingerprintSafe(match[1]));
 }
 
 function countTokenOverlap(left, right) {
@@ -1728,6 +2198,28 @@ function formatMoscowDate(value) {
   }).format(value);
 }
 
+function formatMoscowDayMonth(value) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "numeric",
+    month: "long"
+  }).format(value);
+}
+
+function formatMoscowTime(value) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(value);
+}
+
+function formatChannelDateLabel(value, hasExplicitTime = false) {
+  const dateLabel = formatMoscowDayMonth(value);
+  if (!hasExplicitTime) return dateLabel;
+  return `${dateLabel}, ${formatMoscowTime(value)}`;
+}
+
 function formatMoscowDateTime(value) {
   return new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
@@ -1769,7 +2261,7 @@ function corsResponse(payload, status, env, extraHeaders = {}, contentType = "te
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
+  return String(value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

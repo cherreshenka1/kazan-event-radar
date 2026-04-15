@@ -3,13 +3,32 @@
   "timezone": "Europe/Moscow",
   "sources": [
     {
+      "id": "mts-main",
+      "type": "mts_live_collection",
+      "name": "MTS Live Main",
+      "url": "https://live.mts.ru/kazan",
+      "section": "events",
+      "enabled": true,
+      "limit": 36,
+      "pages": 1
+    },
+    {
+      "id": "yandex-main",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Main",
+      "url": "https://afisha.yandex.ru/kazan",
+      "section": "events",
+      "enabled": true,
+      "limit": 18
+    },
+    {
       "id": "yandex-concert",
       "type": "yandex_afisha_listing",
       "name": "Yandex Afisha Concerts",
       "url": "https://afisha.yandex.ru/kazan/concert",
       "section": "concert",
       "enabled": true,
-      "limit": 1
+      "limit": 8
     },
     {
       "id": "yandex-theatre",
@@ -18,7 +37,7 @@
       "url": "https://afisha.yandex.ru/kazan/theatre_show",
       "section": "theatre",
       "enabled": true,
-      "limit": 1
+      "limit": 8
     },
     {
       "id": "yandex-show",
@@ -27,7 +46,7 @@
       "url": "https://afisha.yandex.ru/kazan/show",
       "section": "show",
       "enabled": true,
-      "limit": 1
+      "limit": 8
     },
     {
       "id": "yandex-standup",
@@ -36,7 +55,7 @@
       "url": "https://afisha.yandex.ru/kazan/selections/standup",
       "section": "standup",
       "enabled": true,
-      "limit": 1
+      "limit": 8
     },
     {
       "id": "yandex-exhibition",
@@ -45,7 +64,7 @@
       "url": "https://afisha.yandex.ru/kazan/exhibition",
       "section": "exhibition",
       "enabled": true,
-      "limit": 1
+      "limit": 8
     },
     {
       "id": "yandex-excursion",
@@ -54,7 +73,16 @@
       "url": "https://afisha.yandex.ru/kazan/excursion",
       "section": "excursion",
       "enabled": true,
-      "limit": 1
+      "limit": 8
+    },
+    {
+      "id": "yandex-sport",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Sport",
+      "url": "https://afisha.yandex.ru/kazan/sport",
+      "section": "sport",
+      "enabled": true,
+      "limit": 10
     },
     {
       "id": "mts-concerts",
@@ -63,7 +91,7 @@
       "url": "https://live.mts.ru/kazan/collections/concerts",
       "section": "concert",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -73,17 +101,17 @@
       "url": "https://live.mts.ru/kazan/collections/theater",
       "section": "theatre",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
       "id": "mts-show",
       "type": "mts_live_collection",
       "name": "MTS Live Shows",
-      "url": "https://live.mts.ru/kazan/collections/show",
+      "url": "https://live.mts.ru/kazan/collections/show_and_musicals",
       "section": "show",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -93,7 +121,7 @@
       "url": "https://live.mts.ru/kazan/collections/standup",
       "section": "standup",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -103,7 +131,7 @@
       "url": "https://live.mts.ru/kazan/collections/exhibitions",
       "section": "exhibition",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -113,7 +141,7 @@
       "url": "https://live.mts.ru/kazan/collections/excursions",
       "section": "excursion",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -123,7 +151,7 @@
       "url": "https://live.mts.ru/kazan/collections/musicals",
       "section": "musical",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
       "pages": 1
     },
     {
@@ -133,7 +161,17 @@
       "url": "https://live.mts.ru/kazan/collections/children",
       "section": "kids",
       "enabled": true,
-      "limit": 3,
+      "limit": 8,
+      "pages": 1
+    },
+    {
+      "id": "mts-sport",
+      "type": "mts_live_collection",
+      "name": "MTS Live Sport",
+      "url": "https://live.mts.ru/kazan/collections/sport",
+      "section": "sport",
+      "enabled": true,
+      "limit": 10,
       "pages": 1
     }
   ]
