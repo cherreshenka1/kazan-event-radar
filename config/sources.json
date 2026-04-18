@@ -9,8 +9,8 @@
       "url": "https://live.mts.ru/kazan",
       "section": "events",
       "enabled": true,
-      "limit": 72,
-      "pages": 3
+      "limit": 180,
+      "pages": 6
     },
     {
       "id": "yandex-main",
@@ -19,7 +19,7 @@
       "url": "https://afisha.yandex.ru/kazan",
       "section": "events",
       "enabled": true,
-      "limit": 60
+      "limit": 120
     },
     {
       "id": "yandex-concert",
@@ -28,7 +28,7 @@
       "url": "https://afisha.yandex.ru/kazan/concert",
       "section": "concert",
       "enabled": true,
-      "limit": 24
+      "limit": 60
     },
     {
       "id": "yandex-theatre",
@@ -37,7 +37,7 @@
       "url": "https://afisha.yandex.ru/kazan/theatre_show",
       "section": "theatre",
       "enabled": true,
-      "limit": 24
+      "limit": 60
     },
     {
       "id": "yandex-show",
@@ -46,7 +46,7 @@
       "url": "https://afisha.yandex.ru/kazan/show",
       "section": "show",
       "enabled": true,
-      "limit": 24
+      "limit": 60
     },
     {
       "id": "yandex-standup",
@@ -55,7 +55,7 @@
       "url": "https://afisha.yandex.ru/kazan/selections/standup",
       "section": "standup",
       "enabled": true,
-      "limit": 20
+      "limit": 40
     },
     {
       "id": "yandex-exhibition",
@@ -64,7 +64,7 @@
       "url": "https://afisha.yandex.ru/kazan/exhibition",
       "section": "exhibition",
       "enabled": true,
-      "limit": 20
+      "limit": 40
     },
     {
       "id": "yandex-excursion",
@@ -73,7 +73,7 @@
       "url": "https://afisha.yandex.ru/kazan/excursion",
       "section": "excursion",
       "enabled": true,
-      "limit": 20
+      "limit": 40
     },
     {
       "id": "yandex-sport",
@@ -82,7 +82,7 @@
       "url": "https://afisha.yandex.ru/kazan/sport",
       "section": "sport",
       "enabled": true,
-      "limit": 24
+      "limit": 48
     },
     {
       "id": "mts-concerts",
@@ -91,8 +91,8 @@
       "url": "https://live.mts.ru/kazan/collections/concerts",
       "section": "concert",
       "enabled": true,
-      "limit": 24,
-      "pages": 2
+      "limit": 60,
+      "pages": 4
     },
     {
       "id": "mts-theatre",
@@ -101,8 +101,8 @@
       "url": "https://live.mts.ru/kazan/collections/theater",
       "section": "theatre",
       "enabled": true,
-      "limit": 24,
-      "pages": 2
+      "limit": 48,
+      "pages": 4
     },
     {
       "id": "mts-show",
@@ -111,8 +111,8 @@
       "url": "https://live.mts.ru/kazan/collections/show_and_musicals",
       "section": "show",
       "enabled": true,
-      "limit": 24,
-      "pages": 2
+      "limit": 48,
+      "pages": 4
     },
     {
       "id": "mts-standup",
@@ -121,8 +121,8 @@
       "url": "https://live.mts.ru/kazan/collections/standup",
       "section": "standup",
       "enabled": true,
-      "limit": 20,
-      "pages": 2
+      "limit": 40,
+      "pages": 4
     },
     {
       "id": "mts-exhibitions",
@@ -131,8 +131,8 @@
       "url": "https://live.mts.ru/kazan/collections/exhibitions",
       "section": "exhibition",
       "enabled": true,
-      "limit": 20,
-      "pages": 2
+      "limit": 40,
+      "pages": 4
     },
     {
       "id": "mts-excursions",
@@ -141,8 +141,8 @@
       "url": "https://live.mts.ru/kazan/collections/excursions",
       "section": "excursion",
       "enabled": true,
-      "limit": 20,
-      "pages": 2
+      "limit": 40,
+      "pages": 4
     },
     {
       "id": "mts-musicals",
@@ -151,8 +151,8 @@
       "url": "https://live.mts.ru/kazan/collections/musicals",
       "section": "musical",
       "enabled": true,
-      "limit": 18,
-      "pages": 2
+      "limit": 36,
+      "pages": 4
     },
     {
       "id": "mts-children",
@@ -161,8 +161,8 @@
       "url": "https://live.mts.ru/kazan/collections/children",
       "section": "kids",
       "enabled": true,
-      "limit": 18,
-      "pages": 2
+      "limit": 36,
+      "pages": 4
     },
     {
       "id": "mts-sport",
@@ -171,8 +171,8 @@
       "url": "https://live.mts.ru/kazan/collections/sport",
       "section": "sport",
       "enabled": true,
-      "limit": 24,
-      "pages": 2
+      "limit": 48,
+      "pages": 4
     },
     {
       "id": "kassir-main",
