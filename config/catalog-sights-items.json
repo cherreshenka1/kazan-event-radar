@@ -1,0 +1,37 @@
+{
+  "section": "sights",
+  "items": [
+    {
+      "id": "kremlin",
+      "officialUrl": "https://kazan-kremlin.ru/",
+      "guideUrl": "https://visit-tatarstan.com/en/places/sightseeings/kazanskiy-kreml/",
+      "notes": "У Кремля есть сильный официальный источник, а Visit Tatarstan дает чистую витринную карточку с удобной обложкой."
+    },
+    {
+      "id": "kul_sharif",
+      "officialUrl": "https://kazan-kremlin.ru/poi/mechet-kul-sharif/",
+      "guideUrl": "https://visit-tatarstan.com/places/attractions/kul-sharif/",
+      "notes": "Для мечети используем официальную страницу внутри сайта Кремля и туристический guide-слой как визуальный резерв."
+    },
+    {
+      "id": "bauman",
+      "guideUrl": "https://visit-tatarstan.com/en/places/attractions/ulica_baumana/",
+      "notes": "Улица Баумана удобнее всего собирается через туристическую карточку и карту, без привязки к формально отдельному официальному сайту."
+    },
+    {
+      "id": "old_sloboda",
+      "guideUrl": "https://visit-tatarstan.com/en/places/sightseeings/staro-tatarskaya_sloboda/",
+      "notes": "Старая Татарская слобода — городской район, поэтому основной открытый источник здесь туристический портал."
+    },
+    {
+      "id": "family_center",
+      "guideUrl": "https://visit-tatarstan.com/places/sightseeings/centr_semi_kazan/",
+      "notes": "Для центра семьи берем стабильную туристическую карточку: она уверенно отдает описание и фотографию."
+    },
+    {
+      "id": "farmers_palace",
+      "guideUrl": "https://visit-tatarstan.com/places/sightseeings/dvorets-zemledeltsev/",
+      "notes": "У Дворца земледельцев основной открытый и стабильный источник сейчас — Visit Tatarstan."
+    }
+  ]
+}

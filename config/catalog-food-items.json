@@ -1,0 +1,35 @@
+{
+  "section": "food",
+  "items": [
+    {
+      "id": "tugan_avylym",
+      "officialUrl": "https://www.tugan-avilim.ru/",
+      "cityGuideUrl": "https://go.kzn.ru/places/tugan-avylym",
+      "notes": "Для бренда и туристического описания используем официальный сайт и карточку туристического портала."
+    },
+    {
+      "id": "tatarskaya_usadba",
+      "officialUrl": "https://tatusadba.orgs.biz/",
+      "cityGuideUrl": "https://go.kzn.ru/articles/gastronomiceskaia-karta-kazani",
+      "notes": "Усадьба пока заведена через собственную страницу и гастро-гид go.kzn.ru."
+    },
+    {
+      "id": "chirem",
+      "cityGuideUrl": "https://go.kzn.ru/places/restoran-cirem",
+      "guideUrl": "https://taigastro.ru/members/kazan2025/chirem",
+      "notes": "Основная опора — карточка туристического портала Казани."
+    },
+    {
+      "id": "gus",
+      "officialUrl": "https://gusrest.ru/",
+      "cityGuideUrl": "https://go.kzn.ru/places/restoran-gus",
+      "notes": "Есть и официальный сайт, и сильная карточка на туристическом портале."
+    },
+    {
+      "id": "artel",
+      "officialUrl": "https://artelkzn.ru/",
+      "cityGuideUrl": "https://go.kzn.ru/places/bistro-artel",
+      "notes": "Используем официальный сайт как главный источник, go.kzn.ru как городской гид."
+    }
+  ]
+}

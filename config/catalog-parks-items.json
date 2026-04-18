@@ -1,0 +1,35 @@
+{
+  "section": "parks",
+  "items": [
+    {
+      "id": "black_lake",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/chernoje_ozero/",
+      "notes": "Черное озеро удобно вести через туристическую карточку и карту."
+    },
+    {
+      "id": "gorky",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/park_gorkogo/",
+      "notes": "Парк Горького берем из открытой англоязычной карточки Visit Tatarstan: у нее хороший заголовок и фото."
+    },
+    {
+      "id": "uritsky",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/park_urickogo/",
+      "notes": "Парк Урицкого пока опирается на Visit Tatarstan как на основной структурированный источник."
+    },
+    {
+      "id": "victory",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/park_pobedy/",
+      "notes": "Для Парка Победы берем туристическую карточку и добавляем карту с отзывами."
+    },
+    {
+      "id": "gorkinsko_omet",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/gorkinsko-ometjevskij_les/",
+      "notes": "Горкинско-Ометьевский лес удобнее всего собирать через Visit Tatarstan."
+    },
+    {
+      "id": "fuks",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/fuksovskij_sad/",
+      "notes": "Для Фуксовского сада уже есть рабочая карточка Visit Tatarstan, поэтому отдельный городской news-url пока не нужен."
+    }
+  ]
+}

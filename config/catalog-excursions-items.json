@@ -1,0 +1,25 @@
+{
+  "section": "excursions",
+  "items": [
+    {
+      "id": "classic",
+      "guideUrl": "https://visit-tatarstan.com/en/routes/den-v-kazani/",
+      "notes": "Базовая обзорная логика по центру Казани и Кремлю. Используем как основной открытый источник для витрины."
+    },
+    {
+      "id": "evening",
+      "guideUrl": "https://visit-tatarstan.com/en/guides/layk-za-foto-putevoditel-po-samym-fotogenichnym-mestam-kazani/",
+      "notes": "Подходит для вечернего маршрута и красивой обложки с акцентом на панорамы и фототочки."
+    },
+    {
+      "id": "old_tatar",
+      "guideUrl": "https://visit-tatarstan.com/en/guides/tatarskaya-atlantida-gid-po-staro-tatarskoy-slobode/",
+      "notes": "Исторический маршрут по Старо-Татарской слободе. Хорошо закрывает локальный контекст и атмосферу района."
+    },
+    {
+      "id": "food_walk",
+      "guideUrl": "https://visit-tatarstan.com/en/guides/putevoditel-po-restorannym-ulitsam-kazani/",
+      "notes": "Гастрономический сценарий прогулки. Берем как guide-слой для обложки и внешнего краткого описания."
+    }
+  ]
+}

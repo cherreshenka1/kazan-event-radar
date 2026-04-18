@@ -1,0 +1,33 @@
+{
+  "section": "hotels",
+  "items": [
+    {
+      "id": "nogai",
+      "officialUrl": "https://hotelnogai.ru/",
+      "guideUrl": "https://visit-tatarstan.com/en/hotels/nogay/",
+      "bookingUrl": "https://hotelnogai.ru/",
+      "notes": "Официальный сайт дает описание и фотографии, туристический портал помогает с витринным изображением и краткой карточкой."
+    },
+    {
+      "id": "kazan_palace",
+      "officialUrl": "https://kazanpalace.com/",
+      "guideUrl": "https://visit-tatarstan.com/hotels/kazan-palace-by-tasigo-/",
+      "bookingUrl": "https://kazanpalace.com/",
+      "notes": "Основной брендовый источник — официальный сайт TASIGO, для карточки полезен и туристический гид с фотографией номера."
+    },
+    {
+      "id": "luciano",
+      "officialUrl": "https://www.luciano.ru/",
+      "guideUrl": "https://visit-tatarstan.com/en/places/spa-and-wellness/luciano/",
+      "bookingUrl": "https://www.luciano.ru/",
+      "notes": "LUCIANO совмещает отель и SPA-формат, поэтому берем официальный сайт и туристическую карточку wellness-направления."
+    },
+    {
+      "id": "courtyard",
+      "officialUrl": "https://courtyard-kazan.ru/",
+      "guideUrl": "https://travel.yandex.ru/hotels/kazan/courtyard-by-marriott-kazan-kremlin/",
+      "bookingUrl": "https://travel.yandex.ru/hotels/kazan/courtyard-by-marriott-kazan-kremlin/",
+      "notes": "У официального сайта мало открытых метатегов, поэтому для превью и фото используем страницу Яндекс Путешествий."
+    }
+  ]
+}

@@ -1,0 +1,671 @@
+{
+  "version": 1,
+  "city": "Kazan",
+  "timezone": "Europe/Moscow",
+  "notes": [
+    "Этот файл описывает источники для разделов каталога, кроме афиши мероприятий.",
+    "Официальные сайты всегда имеют больший приоритет, чем карты и агрегаторы.",
+    "Карты и агрегаторы используются как слой логистики, отзывов, фото и бронирования.",
+    "Тексты в карточках должны быть краткими и перефразированными, без копирования больших фрагментов."
+  ],
+  "sections": {
+    "sights": {
+      "label": "Достопримечательности",
+      "refreshDays": 7,
+      "rawDir": "data/catalog-imports/raw/sights",
+      "normalizedFile": "data/catalog-imports/normalized/sights.json",
+      "photosDir": "public/miniapp/photos/sights",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "highlights",
+        "foodNearby",
+        "bestFor",
+        "timing",
+        "howToGet",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "official-sight-site",
+          "name": "Официальный сайт локации",
+          "type": "official_site",
+          "priority": 1,
+          "enabled": false,
+          "url": "",
+          "fields": [
+            "title",
+            "description",
+            "hours",
+            "tickets",
+            "photos"
+          ],
+          "usage": "Берем официальный источник там, где он есть: например, Кремль и крупные объекты. Per-item official URLs are stored in section manifests."
+        },
+        {
+          "id": "visit-tatarstan-sights",
+          "name": "Visit Tatarstan",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.visit-tatarstan.com/en/places/",
+          "fields": [
+            "title",
+            "description",
+            "photo",
+            "category"
+          ],
+          "usage": "Основной открытый источник для витринных обложек и туристических карточек."
+        },
+        {
+          "id": "yandex-maps-sights",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "address",
+            "hours",
+            "route",
+            "rating",
+            "review_count",
+            "photos"
+          ],
+          "usage": "Маршрут, отзывы и быстрая логистика для посетителя."
+        }
+      ]
+    },
+    "parks": {
+      "label": "Парки",
+      "refreshDays": 7,
+      "rawDir": "data/catalog-imports/raw/parks",
+      "normalizedFile": "data/catalog-imports/normalized/parks.json",
+      "photosDir": "public/miniapp/photos/parks",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "highlights",
+        "foodNearby",
+        "bestFor",
+        "timing",
+        "howToGet",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "visit-tatarstan-parks",
+          "name": "Visit Tatarstan",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/",
+          "fields": [
+            "title",
+            "description",
+            "photo",
+            "category"
+          ],
+          "usage": "Основная открытая подборка по паркам и зонам прогулок."
+        },
+        {
+          "id": "kzn-city-portal-parks",
+          "name": "Портал Казани",
+          "type": "official_city_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://kzn.ru/",
+          "fields": [
+            "news",
+            "reconstruction",
+            "official_address"
+          ],
+          "usage": "Нужен для обновлений по благоустройству и сезонным изменениям."
+        },
+        {
+          "id": "yandex-maps-parks",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "address",
+            "hours",
+            "route",
+            "rating",
+            "photos"
+          ],
+          "usage": "Маршрут, отзывы, фотографии и логистика."
+        }
+      ]
+    },
+    "food": {
+      "label": "Еда",
+      "refreshDays": 3,
+      "rawDir": "data/catalog-imports/raw/food",
+      "normalizedFile": "data/catalog-imports/normalized/food.json",
+      "photosDir": "public/miniapp/photos/food",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "cuisine",
+        "signatureDishes",
+        "interior",
+        "features",
+        "reviewSummary",
+        "reviewRating",
+        "reviewCount",
+        "howToGet",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "official-restaurant-site",
+          "name": "Официальный сайт ресторана",
+          "type": "official_site",
+          "priority": 1,
+          "enabled": false,
+          "url": "",
+          "fields": [
+            "title",
+            "concept",
+            "menu",
+            "interior",
+            "booking",
+            "contacts",
+            "photos"
+          ],
+          "usage": "Главный источник по кухне, ключевым блюдам, интерьеру и брендовым фото. Per-item official URLs are stored in section manifests."
+        },
+        {
+          "id": "visit-tatarstan-food",
+          "name": "Visit Tatarstan: Cafes & Restaurants",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://visit-tatarstan.com/en/places/cafes-and-restaurants/",
+          "fields": [
+            "selection",
+            "description",
+            "category"
+          ],
+          "usage": "Подборки и локальный контекст для гастрономических мест."
+        },
+        {
+          "id": "yandex-maps-food",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "rating",
+            "review_count",
+            "hours",
+            "address",
+            "photos"
+          ],
+          "usage": "Отзывы, рейтинг, фотографии гостей, режим и маршрут."
+        },
+        {
+          "id": "2gis-food",
+          "name": "2GIS",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://2gis.ru/kazan",
+          "fields": [
+            "rating",
+            "hours",
+            "address",
+            "route",
+            "photos"
+          ],
+          "usage": "Проверка часов работы и резервный источник отзывов и логистики."
+        }
+      ]
+    },
+    "hotels": {
+      "label": "Отели",
+      "refreshDays": 3,
+      "rawDir": "data/catalog-imports/raw/hotels",
+      "normalizedFile": "data/catalog-imports/normalized/hotels.json",
+      "photosDir": "public/miniapp/photos/hotels",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "district",
+        "features",
+        "reviewSummary",
+        "reviewRating",
+        "reviewCount",
+        "howToGet",
+        "mapUrl",
+        "bookingUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "yandex-travel-hotels",
+          "name": "Яндекс Путешествия",
+          "type": "travel_aggregator",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://travel.yandex.ru/hotels/",
+          "fields": [
+            "title",
+            "rating",
+            "review_count",
+            "amenities",
+            "district",
+            "photos",
+            "booking"
+          ],
+          "usage": "Основной агрегатор по отелям: рейтинг, удобства, фото и бронирование."
+        },
+        {
+          "id": "official-hotel-site",
+          "name": "Официальный сайт отеля",
+          "type": "official_site",
+          "priority": 1,
+          "enabled": false,
+          "url": "",
+          "fields": [
+            "brand_description",
+            "rooms",
+            "spa",
+            "parking",
+            "check_in",
+            "check_out",
+            "photos"
+          ],
+          "usage": "Проверяем фактические удобства и официальные фотографии. Per-item official URLs are stored in section manifests."
+        },
+        {
+          "id": "yandex-maps-hotels",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "address",
+            "route",
+            "hours",
+            "rating",
+            "review_count",
+            "photos"
+          ],
+          "usage": "Логистика, пользовательские фото и доп.проверка рейтинга."
+        },
+        {
+          "id": "2gis-hotels",
+          "name": "2GIS",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://2gis.ru/kazan",
+          "fields": [
+            "address",
+            "route",
+            "photos",
+            "contacts"
+          ],
+          "usage": "Резервная логистика и контакты."
+        }
+      ]
+    },
+    "excursions": {
+      "label": "Экскурсии",
+      "refreshDays": 1,
+      "rawDir": "data/catalog-imports/raw/excursions",
+      "normalizedFile": "data/catalog-imports/normalized/excursions.json",
+      "photosDir": "public/miniapp/photos/excursions",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "duration",
+        "meetingPoint",
+        "format",
+        "includes",
+        "priceLabel",
+        "schedule",
+        "mapUrl",
+        "bookingUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "go-kzn-excursions",
+          "name": "go.kzn.ru",
+          "type": "official_tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://go.kzn.ru/excursions",
+          "fields": [
+            "title",
+            "description",
+            "route",
+            "format",
+            "duration"
+          ],
+          "usage": "Главный официальный источник для экскурсионного раздела."
+        },
+        {
+          "id": "kazantrip",
+          "name": "KazanTrip",
+          "type": "local_operator",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://kazantrip.ru/en",
+          "fields": [
+            "title",
+            "description",
+            "duration",
+            "program",
+            "booking"
+          ],
+          "usage": "Локальный оператор, удобно использовать для наполнения и сверки программ."
+        },
+        {
+          "id": "sputnik8-kazan",
+          "name": "Sputnik8 Казань",
+          "type": "excursion_aggregator",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://www.sputnik8.com/ru/kazan",
+          "fields": [
+            "title",
+            "price",
+            "duration",
+            "meeting_point",
+            "reviews",
+            "photos"
+          ],
+          "usage": "Цены, длительность, отзывы и дополнительные фото."
+        }
+      ]
+    },
+    "routes": {
+      "label": "Пешие маршруты",
+      "refreshDays": 7,
+      "rawDir": "data/catalog-imports/raw/routes",
+      "normalizedFile": "data/catalog-imports/normalized/routes.json",
+      "photosDir": "public/miniapp/photos/routes",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "stops",
+        "foodNearby",
+        "howToGet",
+        "duration",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "visit-tatarstan-routes",
+          "name": "Visit Tatarstan Routes",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://visit-tatarstan.com/en/routes/",
+          "fields": [
+            "title",
+            "description",
+            "photo",
+            "route"
+          ],
+          "usage": "Основной открытый источник по готовым прогулочным сценариям по Казани."
+        },
+        {
+          "id": "visit-tatarstan-guides",
+          "name": "Visit Tatarstan Guides",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://visit-tatarstan.com/en/guides/",
+          "fields": [
+            "title",
+            "description",
+            "photo",
+            "district"
+          ],
+          "usage": "Поддерживающий источник для районных и тематических прогулок."
+        },
+        {
+          "id": "yandex-maps-routes",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "route",
+            "walking_time",
+            "photos",
+            "reviews"
+          ],
+          "usage": "Нужен для быстрой логистики, маршрута пешком и отзывов по ключевым точкам."
+        }
+      ]
+    },
+    "active": {
+      "label": "Активный отдых",
+      "refreshDays": 3,
+      "rawDir": "data/catalog-imports/raw/active",
+      "normalizedFile": "data/catalog-imports/normalized/active.json",
+      "photosDir": "public/miniapp/photos/active",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "highlights",
+        "bestFor",
+        "timing",
+        "howToGet",
+        "priceLabel",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "official-venue-site",
+          "name": "Официальный сайт площадки",
+          "type": "official_site",
+          "priority": 1,
+          "enabled": false,
+          "url": "",
+          "fields": [
+            "title",
+            "format",
+            "rules",
+            "price",
+            "schedule",
+            "photos"
+          ],
+          "usage": "Фактические правила посещения, цена и брендовые фото. Per-item official URLs are stored in section manifests."
+        },
+        {
+          "id": "visit-tatarstan-active",
+          "name": "Visit Tatarstan",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.visit-tatarstan.com/en/",
+          "fields": [
+            "selection",
+            "description"
+          ],
+          "usage": "Туристический контекст и подборки активностей."
+        },
+        {
+          "id": "yandex-maps-active",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "hours",
+            "address",
+            "route",
+            "rating",
+            "photos"
+          ],
+          "usage": "Режим работы, адрес, маршрут, отзывы и фото."
+        },
+        {
+          "id": "2gis-active",
+          "name": "2GIS",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://2gis.ru/kazan",
+          "fields": [
+            "hours",
+            "address",
+            "route",
+            "photos"
+          ],
+          "usage": "Резервная карта и контакты."
+        }
+      ]
+    },
+    "roadtrip": {
+      "label": "На машине",
+      "refreshDays": 7,
+      "rawDir": "data/catalog-imports/raw/roadtrip",
+      "normalizedFile": "data/catalog-imports/normalized/roadtrip.json",
+      "photosDir": "public/miniapp/photos/roadtrip",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "highlights",
+        "bestFor",
+        "timing",
+        "howToGet",
+        "transportOptions",
+        "mapUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "visit-tatarstan-roadtrip",
+          "name": "Visit Tatarstan",
+          "type": "tourism_portal",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.visit-tatarstan.com/en/",
+          "fields": [
+            "title",
+            "description",
+            "seasonality",
+            "photos"
+          ],
+          "usage": "Туристический обзор по выездным направлениям."
+        },
+        {
+          "id": "sviyazhsk-official",
+          "name": "Остров-град Свияжск",
+          "type": "official_destination_site",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://ostrovgrad.ru/",
+          "fields": [
+            "official_description",
+            "hours",
+            "tickets",
+            "route",
+            "photos"
+          ],
+          "usage": "Главный источник для Свияжска."
+        },
+        {
+          "id": "bulgar-official",
+          "name": "Болгарский музей-заповедник",
+          "type": "official_destination_site",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://vbolgar.ru/?lang=en",
+          "fields": [
+            "official_description",
+            "hours",
+            "tickets",
+            "route",
+            "photos"
+          ],
+          "usage": "Главный источник для Болгара."
+        },
+        {
+          "id": "raifa-official",
+          "name": "Раифский монастырь",
+          "type": "official_destination_site",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.raifa.ru/english/",
+          "fields": [
+            "official_description",
+            "route",
+            "photos"
+          ],
+          "usage": "Главный источник для Раифы."
+        },
+        {
+          "id": "innopolis-official",
+          "name": "Иннополис",
+          "type": "official_destination_site",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://www.innopolis.com/en",
+          "fields": [
+            "official_description",
+            "route",
+            "photos",
+            "city_info"
+          ],
+          "usage": "Главный источник для Иннополиса."
+        },
+        {
+          "id": "yandex-maps-roadtrip",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "route",
+            "travel_time",
+            "address",
+            "photos"
+          ],
+          "usage": "Время в пути и логистика."
+        }
+      ]
+    }
+  }
+}

@@ -2,6 +2,7 @@
 const config = window.KAZAN_EVENT_RADAR_CONFIG || {};
 const apiBaseUrl = (config.apiBaseUrl || "").replace(/\/$/, "");
 const params = new URLSearchParams(window.location.search);
+const EVENTS_FETCH_LIMIT = 600;
 
 if (tg) {
   tg.ready();
@@ -19,6 +20,7 @@ const state = {
   selectedFoodId: params.get("food") || null,
   selectedActiveId: params.get("active") || null,
   selectedRoadtripId: params.get("roadtrip") || null,
+  selectedFavoriteId: params.get("favorite") || null,
   eventCategory: params.get("category") || "all",
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
@@ -83,6 +85,7 @@ async function bootstrap() {
     if (!state.selectedFoodId) state.selectedFoodId = getSectionItems("food")[0]?.id || null;
     if (!state.selectedActiveId) state.selectedActiveId = getSectionItems("active")[0]?.id || null;
     if (!state.selectedRoadtripId) state.selectedRoadtripId = getSectionItems("roadtrip")[0]?.id || null;
+    if (!state.selectedFavoriteId) state.selectedFavoriteId = state.favorites[0]?.id || null;
 
     setStatus("");
     track("page_view", "miniapp_home");
@@ -255,6 +258,14 @@ function bindEvents() {
       return;
     }
 
+    if (action === "favorite-focus") {
+      state.selectedFavoriteId = button.dataset.id;
+      track("favorite_focus", state.selectedFavoriteId);
+      syncUrl();
+      render();
+      return;
+    }
+
     if (action === "favorite-remove") {
       await removeFavorite(button.dataset.id);
     }
@@ -299,6 +310,7 @@ function applyEventsPayload(events, previousSelectedId = null) {
 
 function buildEventsPath() {
   const search = new URLSearchParams();
+  search.set("limit", String(EVENTS_FETCH_LIMIT));
   if (state.eventCategory && state.eventCategory !== "all") search.set("category", state.eventCategory);
   if (state.dateFrom) search.set("dateFrom", state.dateFrom);
   if (state.dateTo) search.set("dateTo", state.dateTo);
@@ -337,7 +349,7 @@ function renderHero() {
     events: {
       eyebrow: "Kazan Event Radar",
       title: "Казань без лишнего поиска",
-      text: "Только будущие события из Яндекс Афиши и MTS Live. Короткие карточки, фильтр по датам и быстрый переход к источнику без лишнего шума.",
+      text: "Только будущие события из Яндекс Афиши, MTS Live и Kassir. Короткие карточки, фильтр по датам и быстрый переход к источнику без лишнего шума.",
       badges: [
         state.periodLabel || "Будущие события",
         state.events.length ? `${state.events.length} карточек` : "Афиша обновляется"
@@ -408,8 +420,8 @@ function renderEvents() {
     eventFilterPanel(),
     statBar([
       `Период: ${state.periodLabel}`,
-      state.events.length ? `Показано: ${state.events.length}` : "По фильтру пока пусто",
-      `Уникальных по фильтру: ${state.totalEvents}`,
+      state.events.length ? `Показано карточек: ${state.events.length} из ${state.totalEvents}` : "По фильтру пока пусто",
+      state.totalEvents ? `Уникальных событий: ${state.totalEvents}` : "",
       state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Обновление скоро"
     ]),
     state.events.length
@@ -427,8 +439,15 @@ function renderPlaces() {
   contentNode.innerHTML = [
     `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
     sectionHeader(section.title, section.intro, SECTION_VISUALS[state.placeSection] || SECTION_VISUALS.places),
-    `<div class="chip-grid">${items.map((item) => chip(item.title, "place-item", { id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
-    selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
+    statBar(buildCatalogSectionStats(state.placeSection, items, selected)),
+    renderCatalogExplorerLayout({
+      panelLabel: sectionLabel(state.placeSection),
+      panelTitle: `${items.length || 0} точек в подборке`,
+      panelText: buildCatalogCollectionText(state.placeSection, selected),
+      panelBadges: buildCatalogCollectionBadges(state.placeSection, items, selected),
+      cardsHtml: items.map((item) => catalogPreviewCard(state.placeSection, item, item.id === selected?.id, "place-item", { id: item.id })).join(""),
+      detailHtml: selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
+    })
   ].join("");
 }
 
@@ -439,8 +458,15 @@ function renderFood() {
 
   contentNode.innerHTML = [
     sectionHeader(section.title, section.intro, SECTION_VISUALS.food),
-    `<div class="chip-grid">${items.map((item) => chip(item.title, "section-item", { section: "food", id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
-    selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
+    statBar(buildCatalogSectionStats("food", items, selected)),
+    renderCatalogExplorerLayout({
+      panelLabel: "Еда",
+      panelTitle: `${items.length || 0} ресторанов и бистро`,
+      panelText: buildCatalogCollectionText("food", selected),
+      panelBadges: buildCatalogCollectionBadges("food", items, selected),
+      cardsHtml: items.map((item) => catalogPreviewCard("food", item, item.id === selected?.id, "section-item", { section: "food", id: item.id })).join(""),
+      detailHtml: selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
+    })
   ].join("");
 }
 
@@ -460,8 +486,15 @@ function renderSectionExplorer(sectionId, emptyText) {
 
   contentNode.innerHTML = [
     sectionHeader(section.title, section.intro, SECTION_VISUALS[sectionId]),
-    `<div class="chip-grid">${items.map((item) => chip(item.title, "section-item", { section: sectionId, id: item.id }, item.id === selected?.id, "wide")).join("")}</div>`,
-    selected ? placeDetailCard(sectionId, selected) : empty(emptyText)
+    statBar(buildCatalogSectionStats(sectionId, items, selected)),
+    renderCatalogExplorerLayout({
+      panelLabel: sectionLabel(sectionId),
+      panelTitle: `${items.length || 0} вариантов`,
+      panelText: buildCatalogCollectionText(sectionId, selected),
+      panelBadges: buildCatalogCollectionBadges(sectionId, items, selected),
+      cardsHtml: items.map((item) => catalogPreviewCard(sectionId, item, item.id === selected?.id, "section-item", { section: sectionId, id: item.id })).join(""),
+      detailHtml: selected ? placeDetailCard(sectionId, selected) : empty(emptyText)
+    })
   ].join("");
 }
 
@@ -469,20 +502,39 @@ function renderRoutes() {
   const routes = state.catalog.routes;
   const items = getActiveRouteItems();
   const selected = items.find((route) => route.id === state.selectedRouteId) || items[0] || null;
+  const activeLevel = routes.levels.find((level) => level.id === state.routeLevel);
 
   contentNode.innerHTML = [
     `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
     sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro, SECTION_VISUALS.routes),
-    `<div class="chip-grid">${items.map((route) => chip(route.title, "route-item", { id: route.id }, route.id === selected?.id, "wide")).join("")}</div>`,
-    selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
+    statBar(buildRouteSectionStats(items, selected)),
+    renderCatalogExplorerLayout({
+      panelLabel: "Пешие маршруты",
+      panelTitle: activeLevel ? `${items.length || 0} маршрутов: ${activeLevel.title.toLowerCase()} уровень` : `${items.length || 0} маршрутов`,
+      panelText: buildRouteCollectionText(selected, activeLevel),
+      panelBadges: buildRouteCollectionBadges(items, selected, activeLevel),
+      cardsHtml: items.map((route) => routePreviewCard(route, route.id === selected?.id)).join(""),
+      detailHtml: selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
+    })
   ].join("");
 }
 
 function renderFavorites() {
+  normalizeFavoriteSelection();
+  const selected = state.favorites.find((item) => item.id === state.selectedFavoriteId) || null;
+
   contentNode.innerHTML = [
     sectionHeader("Избранное и личный план", "Сохраняйте события, парки, маршруты и места, чтобы быстро вернуться к ним позже и при необходимости сразу убрать их из плана.", SECTION_VISUALS.favorites),
+    statBar(buildFavoriteSectionStats(state.favorites, selected)),
     state.favorites.length
-      ? `<div class="grid">${state.favorites.map(favoriteCard).join("")}</div>`
+      ? renderCatalogExplorerLayout({
+        panelLabel: "Личный план",
+        panelTitle: `${state.favorites.length} сохранённых карточек`,
+        panelText: buildFavoriteCollectionText(selected),
+        panelBadges: buildFavoriteCollectionBadges(state.favorites, selected),
+        cardsHtml: state.favorites.map((item) => favoritePreviewCard(item, item.id === state.selectedFavoriteId)).join(""),
+        detailHtml: selected ? favoriteDetailCard(selected) : empty("Выберите карточку, чтобы посмотреть детали.")
+      })
       : empty("Пока пусто. Добавьте в избранное хотя бы одно событие или место.")
   ].join("");
 }
@@ -491,27 +543,28 @@ function eventDetailCard(item) {
   const sourceButtons = (item.sources || [])
     .filter((source) => source?.url)
     .slice(0, 1)
-    .map((source) => actionButton(source.name || "�?сточник", "open", { url: source.url }));
+    .map((source) => actionButton(source.name || "Источник", "open", { url: source.url }));
   const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
   const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
   const venueLabel = eventVenueText(item);
   const sourceLabel = item.sourceName || item.sources?.[0]?.name || "Прямой источник";
+  const fallbackImage = eventVisualUrl(item, "detail");
 
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие") : "",
+    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage) : mediaImage(fallbackImage, eventCardTitle(item) || "Событие"),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     eventCardSummary(item) ? richTextBlock(splitSummaryParagraphs(eventCardSummary(item), 4)) : "",
     `<div class="fact-grid">
-      ${dateLabel ? factBlock("Р”Р°С‚Р°", dateLabel) : ""}
+      ${dateLabel ? factBlock("Дата", dateLabel) : ""}
       ${timeLabel ? factBlock("Время", timeLabel) : ""}
       ${venueLabel ? factBlock("Место", venueLabel) : ""}
-      ${sourceLabel ? factBlock("�?сточник", sourceLabel) : ""}
+      ${sourceLabel ? factBlock("Источник", sourceLabel) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
       `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
-      item.url ? actionButton("�?сточник", "open", { url: item.url }, "primary") : "",
+      item.url ? actionButton("Источник", "open", { url: item.url }, "primary") : "",
       ...sourceButtons,
       ...(item.ticketLinks || []).slice(0, 4).map((link) => actionButton(link.name, "open", { url: link.url }))
     ])
@@ -520,8 +573,9 @@ function eventDetailCard(item) {
 
 function eventPreviewCard(item) {
   const meta = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)].filter(Boolean).join(" В· ");
+  const fallbackImage = eventVisualUrl(item, "compact");
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "compact") : "",
+    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "compact", fallbackImage) : mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact"),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -539,10 +593,11 @@ function safeEventDetailCard(item) {
   const venueLabel = eventVenueText(item);
   const sourceLabel = item.sourceName || item.sources?.[0]?.name || "Прямой источник";
   const sourceUrl = item.url || item.sources?.find((source) => source?.url)?.url || "";
-  const imageUrl = item.imageUrl || eventVisualUrl(item, "detail");
+  const fallbackImage = eventVisualUrl(item, "detail");
+  const imageUrl = item.imageUrl || fallbackImage;
 
   return card([
-    mediaImage(imageUrl, eventCardTitle(item) || "Событие"),
+    mediaImage(imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     richTextBlock(eventDetailSummary(item)),
@@ -568,11 +623,12 @@ function safeEventPreviewCard(item) {
     formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime),
     eventVenueText(item)
   ].filter(Boolean).join(" · ");
-  const imageUrl = item.imageUrl || eventVisualUrl(item, "compact");
+  const fallbackImage = eventVisualUrl(item, "compact");
+  const imageUrl = item.imageUrl || fallbackImage;
   const isOpened = item.id === state.openEventId;
 
   return card([
-    mediaImage(imageUrl, eventCardTitle(item) || "Событие", "compact"),
+    mediaImage(imageUrl, eventCardTitle(item) || "Событие", "compact", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -602,13 +658,60 @@ function renderEventModal(item) {
   `;
 }
 
+function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelText = "", panelBadges = [], cardsHtml = "", detailHtml = "" }) {
+  return `
+    <section class="two-column explorer-shell">
+      <div class="explorer-sidebar">
+        <article class="card explorer-panel">
+          ${panelLabel ? `<div class="preview-label">${escapeHtml(panelLabel)}</div>` : ""}
+          ${panelTitle ? `<h3>${escapeHtml(panelTitle)}</h3>` : ""}
+          ${panelText ? `<p class="summary-short">${escapeHtml(panelText)}</p>` : ""}
+          ${panelBadges.length ? `<div class="meta-badges explorer-badges">${panelBadges.map((value) => badge(value)).join("")}</div>` : ""}
+        </article>
+        <div class="list-grid selector-list">${cardsHtml}</div>
+      </div>
+      <div class="explorer-detail">${detailHtml}</div>
+    </section>
+  `;
+}
+
+function catalogPreviewCard(sectionId, item, isActive, action, data) {
+  const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
+  const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
+  const summary = trim(item.description || item.reviewSummary || item.cuisine || item.subtitle || item.title, 140);
+  const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
+  const previewImage = primaryItemImage(item, fallbackImage);
+
+  return `
+    <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="${action}" ${attrs}>
+      ${previewImage ? mediaImage(previewImage, item.title, "compact", fallbackImage) : ""}
+      <div class="selector-card-head">
+        <span class="preview-label">${escapeHtml(sectionLabel(sectionId))}</span>
+        <span class="selector-state">${isActive ? "Открыто" : "Смотреть"}</span>
+      </div>
+      <div class="selector-card-title">${escapeHtml(item.title)}</div>
+      ${item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : ""}
+      ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
+      ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
+    </button>
+  `;
+}
+
 function placeDetailCard(sectionId, item) {
   const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
+  const primaryImage = primaryItemImage(item, fallbackImage);
   const highlightsTitle = sectionId === "active" ? "Что внутри" : "Что посмотреть";
+  const detailBadges = buildCatalogDetailBadges(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
   return card([
-    (item.imageUrl || fallbackImage) ? mediaImage(item.imageUrl || fallbackImage, item.title) : "",
+    primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">${escapeHtml(sectionLabel(sectionId))}</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
     `<h2>${escapeHtml(item.title)}</h2>`,
     item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
     richTextBlock(item.description),
     `<div class="fact-grid">
       ${item.highlights?.length ? factListBlock(highlightsTitle, item.highlights) : ""}
@@ -630,10 +733,19 @@ function placeDetailCard(sectionId, item) {
 }
 
 function foodDetailCard(item) {
+  const detailBadges = buildCatalogDetailBadges("food", item);
+  const quickFacts = buildFoodQuickFacts(item);
+  const fallbackImage = SECTION_VISUALS.food;
+  const primaryImage = primaryItemImage(item, fallbackImage);
   return card([
-    mediaImage(item.imageUrl || SECTION_VISUALS.food, item.title),
+    primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">Еда</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
     `<h2>${escapeHtml(item.title)}</h2>`,
     item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
     richTextBlock(item.description),
     `<div class="fact-grid">
       ${item.photoLinks?.length ? factButtonsBlock("Подборка фото", item.photoLinks) : ""}
@@ -653,11 +765,160 @@ function foodDetailCard(item) {
   ], "active");
 }
 
+function detailQuickGrid(items) {
+  return `<div class="detail-quick-grid">${items
+    .filter((item) => item?.label && item?.value)
+    .map((item) => `<section class="detail-quick-card"><p class="subtle-title">${escapeHtml(item.label)}</p><p>${escapeHtml(item.value)}</p></section>`)
+    .join("")}</div>`;
+}
+
+function buildCatalogCollectionText(sectionId, selected) {
+  if (sectionId === "food") {
+    return selected
+      ? `Сейчас в фокусе ${selected.title}: можно быстро посмотреть кухню, ключевые блюда, отзывы и как удобнее добраться.`
+      : "Выберите место, чтобы быстро сравнить кухню, атмосферу и логистику.";
+  }
+
+  if (sectionId === "roadtrip") {
+    return selected
+      ? `Сейчас открыт маршрут до ${selected.title}: внутри есть акценты по дороге, времени и формату поездки.`
+      : "Выберите направление, чтобы увидеть, зачем туда ехать и как лучше строить выезд.";
+  }
+
+  return selected
+    ? `Сейчас открыта карточка ${selected.title}: внутри только главное — фото, сильные стороны, логистика и полезные ориентиры.`
+    : "Выберите место, чтобы открыть краткий, но полезный гид без лишнего текста.";
+}
+
+function buildCatalogCollectionBadges(sectionId, items, selected) {
+  const badges = [];
+
+  if (items?.length) badges.push(`${items.length} в подборке`);
+  if (selected?.photoLinks?.length) badges.push(`${selected.photoLinks.length} фото`);
+  if (selected?.mapUrl) badges.push(sectionId === "food" ? "Есть карта" : "Есть маршрут");
+  if (sectionId === "food" && selected?.reviewUrl) badges.push("Есть отзывы");
+  if (sectionId === "roadtrip") badges.push("На авто удобнее");
+
+  return badges.slice(0, 4);
+}
+
+function buildCatalogSectionStats(sectionId, items, selected) {
+  const stats = [];
+
+  if (items?.length) {
+    stats.push(sectionId === "food" ? `${items.length} мест для еды` : `${items.length} точек в разделе`);
+  }
+
+  if (selected?.subtitle) stats.push(selected.subtitle);
+  if (selected?.photoLinks?.length) stats.push(`${selected.photoLinks.length} фото`);
+  if (selected?.reviewUrl) stats.push("Есть отзывы");
+  if (selected?.mapUrl) stats.push(sectionId === "food" ? "Карта под рукой" : "Маршрут под рукой");
+
+  return stats.slice(0, 4);
+}
+
+function buildCatalogPreviewBadges(sectionId, item) {
+  if (sectionId === "food") {
+    return [
+      item.cuisine ? trim(item.cuisine, 30) : "",
+      item.signatureDishes?.[0] || "",
+      item.reviewUrl ? "Отзывы" : "",
+      item.mapUrl ? "Карта" : ""
+    ].filter(Boolean);
+  }
+
+  return [
+    item.highlights?.[0] || item.features?.[0] || "",
+    item.foodNearby ? "Есть где перекусить" : "",
+    item.bestFor ? trim(item.bestFor, 28) : "",
+    item.mapUrl ? "Маршрут" : ""
+  ].filter(Boolean);
+}
+
+function buildCatalogDetailBadges(sectionId, item) {
+  if (sectionId === "food") {
+    return [
+      item.cuisine ? trim(item.cuisine, 36) : "",
+      item.signatureDishes?.length ? `${item.signatureDishes.length} блюда в фокусе` : "",
+      item.reviewSource ? `Отзывы: ${item.reviewSource}` : ""
+    ].filter(Boolean);
+  }
+
+  return [
+    item.highlights?.length ? `${item.highlights.length} акцента` : "",
+    item.reviewRating ? `${item.reviewRating} / 5` : "",
+    item.foodNearby ? "Можно совместить с едой" : ""
+  ].filter(Boolean);
+}
+
+function buildPlaceQuickFacts(sectionId, item) {
+  return [
+    {
+      label: sectionId === "roadtrip" ? "Формат" : "Раздел",
+      value: sectionId === "roadtrip" ? "Поездка на машине" : sectionLabel(sectionId)
+    },
+    {
+      label: sectionId === "roadtrip" ? "Почему ехать" : "Лучше для",
+      value: trim(item.bestFor || item.highlights?.[0] || item.subtitle || "", 88)
+    },
+    {
+      label: "Логистика",
+      value: trim(item.howToGet || item.timing || item.foodNearby || "", 88)
+    }
+  ].filter((item) => item.value);
+}
+
+function buildFoodQuickFacts(item) {
+  return [
+    {
+      label: "Кухня",
+      value: trim(item.cuisine || item.subtitle || "", 88)
+    },
+    {
+      label: "Стоит взять",
+      value: trim((item.signatureDishes || []).slice(0, 2).join(", "), 88)
+    },
+    {
+      label: "Формат",
+      value: trim(item.features?.[0] || item.interior || item.subtitle || "", 88)
+    }
+  ].filter((item) => item.value);
+}
+
+function routePreviewCard(route, isActive) {
+  const badges = buildRoutePreviewBadges(route).slice(0, 3);
+  const summary = trim(route.description || route.foodNearby || route.howToGet || route.subtitle || route.title, 150);
+  const previewImage = primaryItemImage(route, SECTION_VISUALS.routes);
+
+  return `
+    <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="route-item" data-id="${escapeHtml(route.id)}">
+      ${previewImage ? mediaImage(previewImage, route.title, "compact", SECTION_VISUALS.routes) : ""}
+      <div class="selector-card-head">
+        <span class="preview-label">Пеший маршрут</span>
+        <span class="selector-state">${isActive ? "Открыто" : "Смотреть"}</span>
+      </div>
+      <div class="selector-card-title">${escapeHtml(route.title)}</div>
+      ${route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : ""}
+      ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
+      ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
+    </button>
+  `;
+}
+
 function routeDetailCard(route) {
+  const detailBadges = buildRouteDetailBadges(route);
+  const quickFacts = buildRouteQuickFacts(route);
+  const primaryImage = primaryItemImage(route, SECTION_VISUALS.routes);
+
   return card([
-    (route.imageUrl || SECTION_VISUALS.routes) ? mediaImage(route.imageUrl || SECTION_VISUALS.routes, route.title) : "",
+    primaryImage ? mediaImage(primaryImage, route.title, "", SECTION_VISUALS.routes) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">Пеший маршрут</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
     `<h2>${escapeHtml(route.title)}</h2>`,
-    `<div class="meta-badges">${route.subtitle ? badge(route.subtitle) : ""}${route.duration ? badge(route.duration) : ""}${badge(routeLevelLabel(route.level))}</div>`,
+    route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
     richTextBlock(route.description),
     `<div class="fact-grid">
       ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
@@ -673,18 +934,72 @@ function routeDetailCard(route) {
   ], "active");
 }
 
-function favoriteCard(item) {
-  return card([
-    `<h3>${escapeHtml(item.title)}</h3>`,
-    item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
-    item.eventDate ? `<p>${escapeHtml(formatDate(item.eventDate))}</p>` : `<p>${escapeHtml(favoriteTypeLabel(item.type, item.sectionId))}</p>`,
-    actions([
-      actionButton("Открыть карточку", "favorite-open", { id: item.id }, "primary"),
-      actionButton("Убрать", "favorite-remove", { id: item.id }),
-      item.mapUrl ? actionButton("Карта", "open", { url: item.mapUrl }) : "",
-      item.url ? actionButton("Источник", "open", { url: item.url }) : ""
-    ])
-  ]);
+function buildRouteCollectionText(selected, activeLevel) {
+  if (selected) {
+    return `Сейчас открыт маршрут ${selected.title}. Внутри есть длина, темп прогулки, точки по пути и понятная логистика старта.`;
+  }
+
+  if (activeLevel) {
+    return `Выберите ${activeLevel.title.toLowerCase()} маршрут, чтобы быстро понять длину прогулки, ритм и главные остановки.`;
+  }
+
+  return "Выберите маршрут, чтобы быстро сравнить длину, темп и ключевые точки прогулки.";
+}
+
+function buildRouteCollectionBadges(items, selected, activeLevel) {
+  const badges = [];
+
+  if (activeLevel) badges.push(routeLevelLabel(activeLevel.id));
+  if (items?.length) badges.push(`${items.length} маршрутов`);
+  if (selected?.duration) badges.push(selected.duration);
+  if (selected?.stops?.length) badges.push(`${selected.stops.length} точек`);
+
+  return badges.slice(0, 4);
+}
+
+function buildRouteSectionStats(items, selected) {
+  const stats = [];
+
+  if (items?.length) stats.push(`${items.length} маршрутов в уровне`);
+  if (selected?.subtitle) stats.push(selected.subtitle);
+  if (selected?.duration) stats.push(selected.duration);
+  if (selected?.stops?.length) stats.push(`${selected.stops.length} остановок`);
+
+  return stats.slice(0, 4);
+}
+
+function buildRoutePreviewBadges(route) {
+  return [
+    routeLevelLabel(route.level),
+    route.duration || "",
+    route.stops?.length ? `${route.stops.length} точек` : "",
+    route.foodNearby ? "Есть остановка на еду" : ""
+  ].filter(Boolean);
+}
+
+function buildRouteDetailBadges(route) {
+  return [
+    routeLevelLabel(route.level),
+    route.duration || "",
+    route.stops?.length ? `${route.stops.length} точек маршрута` : ""
+  ].filter(Boolean);
+}
+
+function buildRouteQuickFacts(route) {
+  return [
+    {
+      label: "Сложность",
+      value: routeLevelLabel(route.level)
+    },
+    {
+      label: "Темп",
+      value: trim(route.duration || route.subtitle || "", 88)
+    },
+    {
+      label: "Маршрут",
+      value: trim(route.howToGet || route.foodNearby || "", 88)
+    }
+  ].filter((item) => item.value);
 }
 
 async function toggleFavorite(payload) {
@@ -696,6 +1011,7 @@ async function toggleFavorite(payload) {
       body: JSON.stringify(payload)
     });
     state.favorites = result.favorites || [];
+    normalizeFavoriteSelection();
     track("favorite_toggle", payload.id, { active: result.active });
     toast(result.active ? "Добавлено в избранное" : "Удалено из избранного");
     render();
@@ -756,6 +1072,7 @@ function openFavorite(favoriteId) {
   }
 
   track("favorite_open", favorite.id, { type: favorite.type });
+  syncUrl();
   render();
 }
 
@@ -765,11 +1082,15 @@ function eventFavoritePayload(item) {
   return {
     type: "event",
     id: item.id,
-    title: item.title || "Событие",
-    subtitle: item.sourceName,
+    title: eventCardTitle(item) || item.title || "Событие",
+    subtitle: eventVenueText(item) || item.sourceName || "",
+    summary: eventPreviewSummary(item),
+    imageUrl: item.imageUrl || eventVisualUrl(item, "detail"),
     url: item.url,
     eventDate: item.eventDate,
-    sourceName: item.sourceName
+    eventHasExplicitTime: item.eventHasExplicitTime,
+    sourceName: item.sourceName,
+    venueTitle: item.venueTitle || eventVenueText(item)
   };
 }
 
@@ -784,8 +1105,11 @@ function catalogFavoritePayload(sectionId, itemId) {
     itemId: item.id,
     title: item.title,
     subtitle: item.subtitle,
+    summary: trim(item.description || item.reviewSummary || item.cuisine || item.bestFor || item.title, 180),
+    imageUrl: item.imageUrl || SECTION_VISUALS[sectionId] || SECTION_VISUALS.places,
     url: item.sourceUrl,
-    mapUrl: item.mapUrl
+    mapUrl: item.mapUrl,
+    reviewUrl: item.reviewUrl
   };
 }
 
@@ -799,9 +1123,335 @@ function routeFavoritePayload(routeId) {
     itemId: route.id,
     title: route.title,
     subtitle: route.subtitle,
+    summary: trim(route.description || route.foodNearby || route.howToGet || route.title, 180),
+    imageUrl: route.imageUrl || SECTION_VISUALS.routes,
     url: route.sourceUrl,
-    mapUrl: route.mapUrl
+    mapUrl: route.mapUrl,
+    duration: route.duration,
+    level: route.level
   };
+}
+
+function normalizeFavoriteSelection() {
+  if (!state.favorites.length) {
+    state.selectedFavoriteId = null;
+    return;
+  }
+
+  if (!state.favorites.some((item) => item.id === state.selectedFavoriteId)) {
+    state.selectedFavoriteId = state.favorites[0]?.id || null;
+  }
+}
+
+function favoritePreviewCard(item, isActive) {
+  const snapshot = getFavoriteSnapshot(item);
+  const badges = buildFavoritePreviewBadges(snapshot).slice(0, 3);
+  const imageUrl = snapshot.imageUrl || snapshot.fallbackImage;
+
+  return `
+    <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="favorite-focus" data-id="${escapeHtml(item.id)}">
+      ${imageUrl ? mediaImage(imageUrl, snapshot.title, "compact", snapshot.fallbackImage) : ""}
+      <div class="selector-card-head">
+        <span class="preview-label">${escapeHtml(snapshot.typeLabel)}</span>
+        <span class="selector-state">${isActive ? "Открыто" : "Смотреть"}</span>
+      </div>
+      <div class="selector-card-title">${escapeHtml(snapshot.title)}</div>
+      ${snapshot.metaLine ? `<div class="meta">${escapeHtml(snapshot.metaLine)}</div>` : ""}
+      ${snapshot.summary ? `<p class="summary-short">${escapeHtml(snapshot.summary)}</p>` : ""}
+      ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
+    </button>
+  `;
+}
+
+function favoriteDetailCard(item) {
+  const snapshot = getFavoriteSnapshot(item);
+  const detailBadges = buildFavoriteDetailBadges(snapshot);
+  const quickFacts = buildFavoriteQuickFacts(snapshot);
+  const imageUrl = snapshot.imageUrl || snapshot.fallbackImage;
+  const highlightTitle = snapshot.type === "route"
+    ? "Точки маршрута"
+    : snapshot.type === "catalog" && snapshot.sectionId === "food"
+      ? "Ключевые блюда"
+      : "Что важно";
+
+  return card([
+    imageUrl ? mediaImage(imageUrl, snapshot.title, "", snapshot.fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">Личный план</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
+    `<h2>${escapeHtml(snapshot.title)}</h2>`,
+    snapshot.metaLine ? `<div class="meta">${escapeHtml(snapshot.metaLine)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(snapshot.description || snapshot.summary || "Карточка сохранена в вашем плане."),
+    `<div class="fact-grid">
+      ${snapshot.dateLabel ? factBlock("Дата", snapshot.dateLabel) : ""}
+      ${snapshot.timeLabel ? factBlock("Время", snapshot.timeLabel) : ""}
+      ${snapshot.venue ? factBlock("Место", snapshot.venue) : ""}
+      ${snapshot.reviewSummary ? factBlock("По отзывам", snapshot.reviewSummary) : ""}
+      ${snapshot.howToGet ? factBlock("Как добраться", snapshot.howToGet) : ""}
+      ${snapshot.interior ? factBlock("Интерьер", snapshot.interior) : ""}
+      ${snapshot.sourceLabel ? factBlock("Источник", snapshot.sourceLabel) : ""}
+      ${snapshot.highlights?.length ? factListBlock(highlightTitle, snapshot.highlights) : ""}
+      ${snapshot.photoLinks?.length ? factButtonsBlock("Подборка фото", snapshot.photoLinks) : ""}
+    </div>`,
+    actions([
+      actionButton("Открыть карточку", "favorite-open", { id: item.id }, "primary"),
+      snapshot.type === "event" && snapshot.eventId && snapshot.eventDate
+        ? `<button class="button" data-action="remind" data-id="${escapeHtml(snapshot.eventId)}">Напомнить</button>`
+        : "",
+      actionButton("Убрать из плана", "favorite-remove", { id: item.id }),
+      snapshot.mapUrl ? actionButton("Открыть карту", "open", { url: snapshot.mapUrl }) : "",
+      snapshot.reviewUrl ? actionButton(snapshot.reviewSource ? `Отзывы: ${snapshot.reviewSource}` : "Отзывы", "open", { url: snapshot.reviewUrl }) : "",
+      snapshot.sourceUrl ? actionButton("Источник", "open", { url: snapshot.sourceUrl }) : ""
+    ])
+  ], "active");
+}
+
+function getFavoriteSnapshot(item) {
+  if (!item) {
+    return {
+      id: "",
+      type: "unknown",
+      typeLabel: "Избранное",
+      title: "Карточка",
+      summary: "",
+      description: "",
+      imageUrl: SECTION_VISUALS.favorites,
+      fallbackImage: SECTION_VISUALS.favorites,
+      metaLine: ""
+    };
+  }
+
+  if (item.type === "event") {
+    const current = findEvent(item.id);
+    const dateLabel = formatEventDateOnly(current?.eventDate || item.eventDate);
+    const timeLabel = formatEventTimeOnly(
+      current?.eventDate || item.eventDate,
+      current?.eventHasExplicitTime ?? item.eventHasExplicitTime ?? true
+    );
+    const venue = current ? eventVenueText(current) : (item.venueTitle || "");
+    const sourceLabel = current?.sourceName || current?.sources?.[0]?.name || item.sourceName || "Источник";
+    const typeLabel = current ? eventTypeLabel(current) : favoriteTypeLabel(item.type, item.sectionId);
+    const title = current ? (eventCardTitle(current) || item.title || "Событие") : (item.title || "Событие");
+    const summary = current ? eventPreviewSummary(current) : trim(item.summary || item.title || "", 170);
+
+    return {
+      id: item.id,
+      eventId: item.id,
+      type: "event",
+      typeLabel,
+      title,
+      summary,
+      description: current ? eventDetailSummary(current) : summary,
+      imageUrl: current?.imageUrl || item.imageUrl || (current ? eventVisualUrl(current, "detail") : SECTION_VISUALS.events),
+      fallbackImage: current ? eventVisualUrl(current, "detail") : SECTION_VISUALS.events,
+      metaLine: [dateLabel, timeLabel, venue].filter(Boolean).join(" · "),
+      eventDate: current?.eventDate || item.eventDate || "",
+      dateLabel,
+      timeLabel,
+      venue,
+      sourceLabel,
+      sourceUrl: current?.url || item.url || "",
+      mapUrl: item.mapUrl || "",
+      addedAt: item.addedAt || ""
+    };
+  }
+
+  if (item.type === "catalog") {
+    const current = getSectionItems(item.sectionId).find((value) => value.id === item.itemId);
+    const sectionName = sectionLabel(item.sectionId);
+    const fallbackImage = SECTION_VISUALS[item.sectionId] || SECTION_VISUALS.places;
+    const imageUrl = primaryItemImage(current || item, fallbackImage) || item.imageUrl || fallbackImage;
+    const isFood = item.sectionId === "food";
+    const highlights = isFood
+      ? (current?.signatureDishes || [])
+      : (current?.highlights || current?.features || []);
+    const summary = trim(
+      current?.description
+        || current?.reviewSummary
+        || current?.bestFor
+        || current?.cuisine
+        || item.summary
+        || item.subtitle
+        || item.title,
+      180
+    );
+
+    return {
+      id: item.id,
+      type: "catalog",
+      typeLabel: sectionName,
+      sectionId: item.sectionId,
+      title: current?.title || item.title || sectionName,
+      summary,
+      description: current?.description || current?.reviewSummary || summary,
+      imageUrl,
+      fallbackImage,
+      metaLine: [sectionName, current?.subtitle || item.subtitle || ""].filter(Boolean).join(" · "),
+      sourceLabel: current?.reviewSource || sectionName,
+      sourceUrl: current?.sourceUrl || item.url || "",
+      mapUrl: current?.mapUrl || item.mapUrl || "",
+      reviewUrl: current?.reviewUrl || item.reviewUrl || "",
+      reviewSource: current?.reviewSource || "",
+      reviewSummary: current?.reviewSummary || "",
+      howToGet: current?.howToGet || "",
+      interior: current?.interior || "",
+      highlights,
+      photoLinks: current?.photoLinks || [],
+      cuisine: current?.cuisine || "",
+      bestFor: current?.bestFor || "",
+      addedAt: item.addedAt || ""
+    };
+  }
+
+  if (item.type === "route") {
+    const current = state.catalog?.routes?.items?.find((value) => value.id === item.itemId);
+    const level = current?.level || item.level || "";
+    const duration = current?.duration || item.duration || "";
+    const summary = trim(current?.description || current?.foodNearby || current?.howToGet || item.summary || item.subtitle || item.title, 180);
+    const fallbackImage = SECTION_VISUALS.routes;
+    const imageUrl = primaryItemImage(current || item, fallbackImage) || item.imageUrl || fallbackImage;
+
+    return {
+      id: item.id,
+      type: "route",
+      typeLabel: "Пеший маршрут",
+      title: current?.title || item.title || "Маршрут",
+      summary,
+      description: current?.description || summary,
+      imageUrl,
+      fallbackImage,
+      metaLine: [level ? routeLevelLabel(level) : "", duration, current?.subtitle || item.subtitle || ""].filter(Boolean).join(" · "),
+      sourceLabel: "Маршрут по Казани",
+      sourceUrl: current?.sourceUrl || item.url || "",
+      mapUrl: current?.mapUrl || item.mapUrl || "",
+      howToGet: current?.howToGet || "",
+      highlights: current?.stops || [],
+      photoLinks: current?.photoLinks || [],
+      duration,
+      level,
+      addedAt: item.addedAt || ""
+    };
+  }
+
+  return {
+    id: item.id,
+    type: item.type || "unknown",
+    typeLabel: favoriteTypeLabel(item.type, item.sectionId),
+    title: item.title || "Карточка",
+    summary: trim(item.summary || item.subtitle || item.title || "", 170),
+    description: trim(item.summary || item.subtitle || item.title || "", 320),
+    imageUrl: item.imageUrl || SECTION_VISUALS.favorites,
+    fallbackImage: SECTION_VISUALS.favorites,
+    metaLine: item.subtitle || "",
+    sourceUrl: item.url || "",
+    mapUrl: item.mapUrl || "",
+    addedAt: item.addedAt || ""
+  };
+}
+
+function buildFavoriteSectionStats(items, selected) {
+  const counts = countFavoritesByType(items);
+  const stats = [];
+
+  if (items?.length) stats.push(`${items.length} в личном плане`);
+  if (counts.event) stats.push(`${counts.event} событий`);
+  if (counts.catalog) stats.push(`${counts.catalog} мест`);
+  if (counts.route) stats.push(`${counts.route} маршрутов`);
+  if (!counts.route && selected?.metaLine) stats.push(selected.metaLine);
+
+  return stats.slice(0, 4);
+}
+
+function buildFavoriteCollectionText(selected) {
+  if (!selected) {
+    return "Здесь собраны все сохранённые события, места и маршруты. Можно быстро открыть нужную карточку или убрать лишнее из плана.";
+  }
+
+  const snapshot = getFavoriteSnapshot(selected);
+  return `Сейчас в фокусе ${snapshot.title}. Внутри собраны только главные ориентиры: краткое описание, логистика, карта и быстрый переход к источнику.`;
+}
+
+function buildFavoriteCollectionBadges(items, selected) {
+  const counts = countFavoritesByType(items);
+  const badges = [];
+
+  if (counts.event) badges.push(`${counts.event} событий`);
+  if (counts.catalog) badges.push(`${counts.catalog} мест`);
+  if (counts.route) badges.push(`${counts.route} маршрутов`);
+
+  if (selected) {
+    const snapshot = getFavoriteSnapshot(selected);
+    if (snapshot.typeLabel) badges.push(snapshot.typeLabel);
+    if (snapshot.dateLabel) badges.push(snapshot.dateLabel);
+    else if (snapshot.mapUrl) badges.push("Есть карта");
+  }
+
+  return badges.slice(0, 4);
+}
+
+function buildFavoritePreviewBadges(snapshot) {
+  if (snapshot.type === "event") {
+    return [snapshot.dateLabel, snapshot.timeLabel, snapshot.venue || snapshot.sourceLabel].filter(Boolean);
+  }
+
+  if (snapshot.type === "route") {
+    return [
+      snapshot.level ? routeLevelLabel(snapshot.level) : "",
+      snapshot.duration || "",
+      snapshot.mapUrl ? "Карта" : ""
+    ].filter(Boolean);
+  }
+
+  return [
+    snapshot.typeLabel,
+    snapshot.cuisine ? trim(snapshot.cuisine, 28) : "",
+    snapshot.reviewUrl ? "Отзывы" : "",
+    snapshot.mapUrl ? "Карта" : ""
+  ].filter(Boolean);
+}
+
+function buildFavoriteDetailBadges(snapshot) {
+  return [
+    snapshot.typeLabel,
+    snapshot.addedAt ? `В плане с ${formatFavoriteAddedDate(snapshot.addedAt)}` : "",
+    snapshot.reviewUrl ? "Есть отзывы" : "",
+    snapshot.mapUrl ? "Есть карта" : ""
+  ].filter(Boolean).slice(0, 4);
+}
+
+function buildFavoriteQuickFacts(snapshot) {
+  return [
+    {
+      label: "Тип",
+      value: snapshot.typeLabel
+    },
+    {
+      label: snapshot.type === "event" ? "Когда" : "Формат",
+      value: trim(snapshot.metaLine || snapshot.summary || "", 88)
+    },
+    {
+      label: "Добавлено",
+      value: snapshot.addedAt ? formatFavoriteAddedDate(snapshot.addedAt) : ""
+    }
+  ].filter((item) => item.value);
+}
+
+function countFavoritesByType(items) {
+  return (items || []).reduce((acc, item) => {
+    acc[item.type] = (acc[item.type] || 0) + 1;
+    return acc;
+  }, { event: 0, catalog: 0, route: 0 });
+}
+
+function formatFavoriteAddedDate(value) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long"
+  });
 }
 
 function getActivePlaceItems() {
@@ -896,6 +1546,10 @@ function syncUrl() {
     next.set("event", state.openEventId || state.selectedEventId);
   }
 
+  if (state.activeTab === "favorites" && state.selectedFavoriteId) {
+    next.set("favorite", state.selectedFavoriteId);
+  }
+
   if (state.activeTab === "events" && state.eventCategory && state.eventCategory !== "all") {
     next.set("category", state.eventCategory);
   }
@@ -912,7 +1566,9 @@ function sectionHeader(title, description, imageUrl = "") {
 }
 
 function statBar(items) {
-  return `<div class="stat-row">${items.filter(Boolean).map((item) => `<span class="stat-pill">${escapeHtml(item)}</span>`).join("")}</div>`;
+  const filtered = (items || []).filter(Boolean);
+  if (!filtered.length) return "";
+  return `<div class="stat-row">${filtered.map((item) => `<span class="stat-pill">${escapeHtml(item)}</span>`).join("")}</div>`;
 }
 
 function eventCategoryChips() {
@@ -987,8 +1643,10 @@ function factListBlock(title, items) {
 function factButtonsBlock(title, links) {
   return `<section class="fact"><p class="subtle-title">${escapeHtml(title)}</p><div class="photo-grid">${links
     .map(
-      (link) =>
-        `<a class="photo-tile" href="${escapeHtml(link.url)}" target="_blank" rel="noopener" style="background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)), url('${escapeHtml(link.url)}'), url('./brand/welcome-kazan-event-radar-640x360.png');"><span>${escapeHtml(link.label)}</span></a>`
+      (link) => {
+        const previewUrl = resolveMediaUrl(link.url);
+        return `<a class="photo-tile" href="${escapeHtml(link.url)}" target="_blank" rel="noopener" style="background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)), url('${escapeHtml(previewUrl)}'), url('./brand/welcome-kazan-event-radar-640x360.png');"><span>${escapeHtml(link.label)}</span></a>`;
+      }
     )
     .join("")}</div></section>`;
 }
@@ -1001,8 +1659,32 @@ function empty(text) {
   return `<div class="empty">${escapeHtml(text)}</div>`;
 }
 
-function mediaImage(url, alt, extraClass = "") {
-  return `<div class="media-frame ${extraClass}"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer"></div>`;
+function mediaImage(url, alt, extraClass = "", fallbackUrl = "") {
+  const resolvedUrl = resolveMediaUrl(url);
+  const resolvedFallbackUrl = resolveMediaUrl(fallbackUrl);
+  const fallbackAttrs = resolvedFallbackUrl
+    ? ` data-fallback="${escapeHtml(resolvedFallbackUrl)}" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}"`
+    : "";
+
+  return `<div class="media-frame ${extraClass}"><img src="${escapeHtml(resolvedUrl)}" alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer"${fallbackAttrs}></div>`;
+}
+
+function primaryItemImage(item, fallbackUrl = "") {
+  return firstPhotoUrl(item) || item?.imageUrl || fallbackUrl || "";
+}
+
+function firstPhotoUrl(item) {
+  if (!Array.isArray(item?.photoLinks)) return "";
+  return item.photoLinks.find((link) => String(link?.url || "").trim())?.url || "";
+}
+
+function resolveMediaUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("data:")) return raw;
+  if (!/^https?:\/\//i.test(raw)) return raw;
+  if (!apiBaseUrl) return raw;
+  return `${apiBaseUrl}/api/image?url=${encodeURIComponent(raw)}`;
 }
 
 function richTextBlock(text) {

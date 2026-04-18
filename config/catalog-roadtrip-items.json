@@ -1,0 +1,38 @@
+{
+  "section": "roadtrip",
+  "items": [
+    {
+      "id": "blue_lakes",
+      "officialUrl": "https://visit-tatarstan.com/en/places/camping/golubyje_ozera/",
+      "guideUrl": "https://visitkazan.ru/en/golubye-ozera",
+      "notes": "Главный акцент — природная локация рядом с Казанью, поэтому берём официальную туристическую страницу и дополнительный городской гид."
+    },
+    {
+      "id": "sviyazhsk",
+      "officialUrl": "https://ostrovgrad.ru/en/",
+      "notes": "Основной источник — официальный сайт острова-града."
+    },
+    {
+      "id": "innopolis",
+      "officialUrl": "https://www.innopolis.com/en",
+      "notes": "Основной источник — официальный сайт города."
+    },
+    {
+      "id": "bulgar",
+      "officialUrl": "https://vbolgar.ru/?page_id=29&lang=en",
+      "notes": "Основной источник — официальный сайт музея-заповедника."
+    },
+    {
+      "id": "raifa",
+      "officialUrl": "https://www.raifa.ru/english/",
+      "guideUrl": "https://www.raifa.ru/english/adress/",
+      "notes": "Официальный монастырский сайт даёт историю и контакты."
+    },
+    {
+      "id": "kamskoye_ustye",
+      "officialUrl": "https://kamskoye-ustye.tatarstan.ru/eng/index.htm",
+      "guideUrl": "https://tatarstan.eu/cities-districts/districts/kamsko-ustyinsky-district/",
+      "notes": "Берём официальный районный портал и туристическую подборку по району."
+    }
+  ]
+}

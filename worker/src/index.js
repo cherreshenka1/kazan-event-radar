@@ -4,6 +4,7 @@ import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
 
 const DAILY_DRAFTS_CRON = "0 6 * * *";
 const HOURLY_SCAN_CRON = "15 * * * *";
+const DEFAULT_EVENTS_API_LIMIT = 600;
 
 const EVENT_SOURCES = (sourceConfig.sources || [])
   .filter((source) => source.enabled && ["yandex_afisha_listing", "mts_live_collection"].includes(source.type))
@@ -20,6 +21,7 @@ const EVENT_SOURCES = (sourceConfig.sources || [])
 const PERSISTED_EVENT_TYPES = new Set([
   "yandex_afisha_listing",
   "mts_live_collection",
+  "mts_live_browser",
   "yandex_afisha_browser",
   "kassir_browser",
   "browser_import"
@@ -202,8 +204,12 @@ async function handleRequest(request, env) {
     return json({ sections: MAIN_SECTIONS, catalog: CATALOG }, 200, env);
   }
 
+  if (url.pathname === "/api/image") {
+    return proxyExternalImage(url.searchParams.get("url"), env);
+  }
+
   if (url.pathname === "/api/events") {
-    const limit = Number(url.searchParams.get("limit") || 60);
+    const limit = Number(url.searchParams.get("limit") || DEFAULT_EVENTS_API_LIMIT);
     const filters = buildEventFilters(url.searchParams, env);
     let items = await getJson(env, "events:items", []);
     let meta = await getEventMeta(env, items);
@@ -365,7 +371,7 @@ async function handleTelegramMessage(message, env) {
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
       text: [
-        "������������ ���������.",
+        "Сканирование завершено.",
         "",
         formatScanSummary(result.meta, env)
       ].join("\n")
@@ -424,7 +430,7 @@ async function handleCallback(callback, env) {
   await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
 
   if (!isManagerIdentity(user, env)) {
-    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "������������� ���������� ����� ������ ��������." });
+    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Публикациями управляет только менеджер канала." });
     return;
   }
 
@@ -537,10 +543,10 @@ async function scanSources(env, options = {}) {
 
   const existing = (await getJson(env, "events:items", []))
     .filter((item) => PERSISTED_EVENT_TYPES.has(item.type));
-  const nextItems = await collapseDuplicateItems([
+  const nextItems = pruneExpiredEventItems(await collapseDuplicateItems([
     ...existing.map((item) => ({ ...item, _fromExisting: true })),
     ...collected.map((item) => ({ ...item, _seenThisScan: true }))
-  ]);
+  ]));
   const meta = {
     lastScanAt: new Date().toISOString(),
     reason: options.reason || "manual",
@@ -561,10 +567,13 @@ async function importExternalEvents(env, payload = {}) {
   const sourceKey = String(payload.source || "browser_import");
   const sourceType = mapImportedSourceType(sourceKey);
   const sourceName = mapImportedSourceName(sourceKey);
+  const importMode = normalizeExternalImportMode(payload.mode);
+  const reportedImportedCount = Math.max(0, Number(payload.reportedImportedCount || 0)) || items.length;
 
   if (!items.length) {
     return {
       ok: true,
+      mode: importMode,
       imported: 0,
       totalItems: (await getJson(env, "events:items", [])).length
     };
@@ -580,27 +589,19 @@ async function importExternalEvents(env, payload = {}) {
   }
 
   const existing = (await getJson(env, "events:items", []))
-    .filter((item) => PERSISTED_EVENT_TYPES.has(item.type) && item.type !== sourceType);
-  const nextItems = await collapseDuplicateItems([
-    ...existing.map((item) => ({ ...item, _fromExisting: true })),
-    ...prepared.map((item) => ({ ...item, _seenThisScan: true }))
-  ]);
+    .filter((item) => PERSISTED_EVENT_TYPES.has(item.type))
+    .filter((item) => importMode === "replace_source" ? item.type !== sourceType : true);
+  const nextItems = await mergeImportedEventItems(existing, prepared);
+  const metaSources = normalizeImportedMetaSources(payload.sourceStats, sourceKey, sourceName, importMode, reportedImportedCount);
 
   const meta = {
-    lastScanAt: new Date().toISOString(),
-    reason: `import:${sourceKey}`,
+    lastScanAt: payload.syncedAt || new Date().toISOString(),
+    reason: `import:${sourceKey}:${importMode}`,
     enabledSources: EVENT_SOURCES.length,
-    collectedItems: prepared.length,
+    collectedItems: reportedImportedCount,
     totalItems: nextItems.length,
     eventItems: nextItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && isAllowedEventItem(item, env)).length,
-    sources: [
-      {
-        id: sourceKey,
-        name: sourceName,
-        status: "ok",
-        count: prepared.length
-      }
-    ]
+    sources: metaSources
   };
 
   await putJson(env, "events:items", nextItems);
@@ -609,10 +610,97 @@ async function importExternalEvents(env, payload = {}) {
   return {
     ok: true,
     source: sourceKey,
+    mode: importMode,
     imported: prepared.length,
     totalItems: nextItems.length,
     meta
   };
+}
+
+function normalizeImportedMetaSources(sourceStats, sourceKey, sourceName, importMode, fallbackCount) {
+  if (Array.isArray(sourceStats) && sourceStats.length) {
+    const normalized = sourceStats
+      .map((source) => ({
+        id: source?.id || sourceKey,
+        name: source?.name || source?.sourceName || sourceName,
+        status: source?.status || "ok",
+        mode: source?.mode || importMode,
+        count: Math.max(0, Number(source?.count ?? source?.importedItems ?? 0)),
+        collectedLinks: Math.max(0, Number(source?.collectedLinks ?? 0)),
+        queuedLinks: Math.max(0, Number(source?.queuedLinks ?? 0)),
+        skippedKnownLinks: Math.max(0, Number(source?.skippedKnownLinks ?? 0))
+      }))
+      .filter((source) => source.id || source.name);
+
+    if (normalized.length) {
+      return normalized;
+    }
+  }
+
+  return [{
+    id: sourceKey,
+    name: sourceName,
+    status: "ok",
+    mode: importMode,
+    count: fallbackCount
+  }];
+}
+
+async function mergeImportedEventItems(existingItems, preparedItems) {
+  const nowIso = new Date().toISOString();
+  const nextItems = existingItems.map((item) => ({ ...item, _fromExisting: true }));
+  const indexById = new Map(nextItems.map((item, index) => [item.id, index]));
+  const bucketMap = new Map();
+
+  for (const item of nextItems) {
+    const bucketKey = importedEventBucketKey(item);
+    if (!bucketMap.has(bucketKey)) bucketMap.set(bucketKey, []);
+    bucketMap.get(bucketKey).push(item);
+  }
+
+  for (const rawItem of preparedItems) {
+    const candidate = ensureEventAggregate({ ...rawItem, _seenThisScan: true });
+    const bucketKey = importedEventBucketKey(candidate);
+    const bucket = bucketMap.get(bucketKey) || [];
+    const current = bucket.find((item) => areLikelySameEvent(item, candidate)) || null;
+
+    if (current) {
+      const merged = finalizeMergedItem(mergeDuplicateItems(current, candidate, nowIso));
+      merged.id = current.id || merged.id || await fingerprintId(merged.fingerprint);
+
+      const index = indexById.get(current.id);
+      if (typeof index === "number") {
+        nextItems[index] = merged;
+      }
+
+      const bucketIndex = bucket.indexOf(current);
+      if (bucketIndex >= 0) {
+        bucket[bucketIndex] = merged;
+      }
+
+      indexById.delete(current.id);
+      indexById.set(merged.id, typeof index === "number" ? index : nextItems.length);
+      continue;
+    }
+
+    const finalized = finalizeMergedItem(candidate);
+    finalized.id = finalized.id || await fingerprintId(finalized.fingerprint);
+
+    nextItems.push(finalized);
+    bucket.push(finalized);
+    bucketMap.set(bucketKey, bucket);
+    indexById.set(finalized.id, nextItems.length - 1);
+  }
+
+  return pruneExpiredEventItems(nextItems).sort((a, b) => {
+    const updatedDiff = String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    if (updatedDiff) return updatedDiff;
+    return compareEventPriority(a, b);
+  });
+}
+
+function importedEventBucketKey(item) {
+  return formatDateInput(item?.eventDate) || "undated";
 }
 
 function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
@@ -623,10 +711,7 @@ function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
   const section = raw?.section || resolveYandexSection(url, "events");
   const kind = normalizeEventKind(section);
   const rawSummary = cleanEventSummary(raw?.summary || raw?.description || raw?.subtitle || title);
-  const eventDate = normalizeImportedEventDate(raw?.eventDate);
-  const eventHasExplicitTime = raw?.eventHasExplicitTime
-    ? /(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)(?:\D|$)/.test(String(raw?.dateText || ""))
-    : false;
+  const timing = resolveImportedEventTiming(raw);
 
   return applySafeEventCopySafe(classifyItem({
     sourceId: raw?.sourceId || sourceKey,
@@ -639,8 +724,8 @@ function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
     shortSummary: rawSummary,
     url,
     imageUrl: raw?.imageUrl ? canonicalEventUrl(raw.imageUrl) : null,
-    eventDate,
-    eventHasExplicitTime,
+    eventDate: timing.eventDate,
+    eventHasExplicitTime: timing.eventHasExplicitTime,
     venueTitle: normalizeText(raw?.venueTitle || ""),
     publishedAt: null,
     categories: ["events", kind],
@@ -651,6 +736,7 @@ function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
 
 function mapImportedSourceType(sourceKey) {
   return {
+    mts_browser: "mts_live_browser",
     yandex_browser: "yandex_afisha_browser",
     kassir_browser: "kassir_browser"
   }[sourceKey] || "browser_import";
@@ -658,6 +744,7 @@ function mapImportedSourceType(sourceKey) {
 
 function mapImportedSourceName(sourceKey) {
   return {
+    mts_browser: "MTS Live Browser",
     yandex_browser: "Yandex Afisha Browser",
     kassir_browser: "Kassir Browser"
   }[sourceKey] || "Browser Import";
@@ -668,6 +755,63 @@ function normalizeImportedEventDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return toMoscowIsoFromLocalString(value);
   return date.toISOString();
+}
+
+function resolveImportedEventTiming(raw) {
+  const directDate = normalizeImportedEventDate(raw?.eventDate);
+  const textForDate = [
+    raw?.dateText,
+    raw?.subtitle,
+    raw?.summary,
+    raw?.shortSummary,
+    raw?.description,
+    raw?.title
+  ].filter(Boolean).join("\n");
+  const fallbackDate = directDate || extractImportedEventDateFromText(textForDate);
+  const eventHasExplicitTime = Boolean(
+    raw?.eventHasExplicitTime
+    || /(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)(?:\D|$)/.test(String(textForDate || ""))
+  );
+
+  return {
+    eventDate: fallbackDate,
+    eventHasExplicitTime: Boolean(fallbackDate && eventHasExplicitTime)
+  };
+}
+
+function extractImportedEventDateFromText(value, now = new Date()) {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+
+  const isoMatch = normalized.match(/(?:^|\D)(\d{4})-(\d{2})-(\d{2})(?:\D+(\d{1,2}):(\d{2}))?/u);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    const hour = isoMatch[4] ? Number(isoMatch[4]) : 12;
+    const minute = isoMatch[5] ? Number(isoMatch[5]) : 0;
+    return toMoscowIso(year, month, day, hour, minute);
+  }
+
+  const numericMatch = normalized.match(/(?:^|\D)(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\D+(\d{1,2}):(\d{2}))?/u);
+  if (numericMatch) {
+    const day = Number(numericMatch[1]);
+    const month = Number(numericMatch[2]) - 1;
+    const year = Number(numericMatch[3]);
+    const hour = numericMatch[4] ? Number(numericMatch[4]) : 12;
+    const minute = numericMatch[5] ? Number(numericMatch[5]) : 0;
+    return toMoscowIso(year, month, day, hour, minute);
+  }
+
+  const text = normalized.toLowerCase();
+  const time = extractTime(text);
+  const found = text.match(/(?:^|\D)(\d{1,2})(?:\s*(?:-|–|—|и)\s*\d{1,2}|\s+по\s+\d{1,2})?\s+(января|феврал[ья]|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)(?:\s+(\d{4}))?(?:,\s*[а-яё]+)?/u);
+  if (!found) return null;
+
+  const day = Number(found[1]);
+  const month = MONTHS[found[2]];
+  const year = found[3] ? Number(found[3]) : inferYear(month, day, now);
+  return toMoscowIso(year, month, day, time.hour, time.minute);
 }
 
 function canonicalEventUrl(value) {
@@ -769,7 +913,7 @@ function parseMtsAnnouncementPage(html, url, source) {
   const resolvedSection = resolveMtsSection(details, source.section);
   const resolvedEventDate = pickFirstValidEventDate(details.eventClosestDateTime, details.lastEventDateTime);
   const rawSummary = cleanEventSummary(stripHtml(details.description || details.shortDescription || details.title || ""));
-  const imageUrl = details.poster?.url || details.posterUrl || extractMetaContent(html, "og:image") || "";
+  const imageUrl = resolveMtsImageUrl(details, html);
 
   return applySafeEventCopySafe(classifyItem({
     sourceId: source.id,
@@ -790,6 +934,24 @@ function parseMtsAnnouncementPage(html, url, source) {
     baseScore: 50,
     score: 50
   }));
+}
+
+function resolveMtsImageUrl(details, html = "") {
+  const mediaItems = Array.isArray(details?.media) ? details.media : [];
+  const mediaPoster = mediaItems.find((item) => /poster/i.test(String(item?.type || "")))?.url || "";
+  const mediaGallery = mediaItems.find((item) => /gallery/i.test(String(item?.type || "")))?.url || "";
+  const candidates = [
+    details?.poster?.url,
+    details?.posterUrl,
+    details?.banner?.url,
+    details?.banner?.src,
+    mediaPoster,
+    mediaGallery,
+    extractMetaContent(html, "og:image"),
+    extractMetaContent(html, "twitter:image")
+  ];
+
+  return candidates.find((value) => normalizeText(value)) || "";
 }
 
 function parseYandexAnnouncementPage(html, url, source) {
@@ -887,7 +1049,7 @@ function shouldRejectEventItem(item) {
     return true;
   }
 
-  return SAFE_EXCLUDED_EVENT_KEYWORDS.some((keyword) => haystack.includes(normalizeFingerprintText(keyword)));
+  return SAFE_EXCLUDED_EVENT_KEYWORDS.some((keyword) => haystack.includes(normalizeFingerprintTextSafe(keyword)));
 }
 
 function cleanEventSummary(value) {
@@ -1002,6 +1164,10 @@ function classifyItem(item) {
   };
 }
 
+function extractEventDateSafe(item, now = new Date()) {
+  return extractEventDate(item, now);
+}
+
 function extractEventDate(item, now = new Date()) {
   const text = `${item.title || ""}\n${item.summary || ""}`.toLowerCase();
   const time = extractTime(text);
@@ -1037,6 +1203,7 @@ function inferYear(month, day, now) {
 }
 
 function isAllowedEventItem(item, env, filters = buildEventFilters(new URLSearchParams(), env)) {
+  if (!item || shouldRejectEventItem(item)) return false;
   const date = item.eventDate ? new Date(item.eventDate) : null;
   if (!date || Number.isNaN(date.getTime())) return false;
   if (date < filters.from || date > filters.to) return false;
@@ -1054,10 +1221,33 @@ function matchesEventCategory(item, category = "all") {
   return item.kind === category;
 }
 
+function normalizeExternalImportMode(value) {
+  return ["replace_source", "replace", "reconcile"].includes(String(value || "").toLowerCase())
+    ? "replace_source"
+    : "merge";
+}
+
+function pruneExpiredEventItems(items, now = new Date()) {
+  return (items || []).filter((item) => !isExpiredEventItem(item, now));
+}
+
+function isExpiredEventItem(item, now = new Date()) {
+  const date = item?.eventDate ? new Date(item.eventDate) : null;
+  if (!date || Number.isNaN(date.getTime())) return true;
+
+  if (item.eventHasExplicitTime) {
+    return date < now;
+  }
+
+  const endOfDay = parseDateInput(formatDateInput(date), true);
+  if (!endOfDay) return true;
+  return endOfDay < now;
+}
+
 function getAllowedEventWindow(env) {
   const today = getStartOfCurrentMoscowDay();
   const fallbackFrom = today;
-  const fallbackTo = getEndOfMoscowDay(addMoscowMonths(today, 5));
+  const fallbackTo = getEndOfCurrentMoscowYear(today);
   return {
     from: new Date(env.EVENTS_ALLOWED_FROM || fallbackFrom),
     to: new Date(env.EVENTS_ALLOWED_TO || fallbackTo)
@@ -1072,7 +1262,7 @@ function getAllowedEventWindowLabel(env) {
 function buildEventFilters(searchParams, env) {
   const allowed = getAllowedEventWindow(env);
   const defaultFrom = maxDate(allowed.from, getStartOfCurrentMoscowDay());
-  const defaultTo = minDate(allowed.to, getEndOfMoscowDay(addMoscowMonths(defaultFrom, 4)));
+  const defaultTo = allowed.to;
   const customFrom = parseDateInput(searchParams.get("dateFrom"));
   const customTo = parseDateInput(searchParams.get("dateTo"), true);
   const from = maxDate(defaultFrom, customFrom || defaultFrom);
@@ -1105,13 +1295,17 @@ function attachTicketLinks(item) {
   };
 }
 
+function attachTicketLinksSafe(item) {
+  return attachTicketLinks(item);
+}
+
 function applySafeEventCopy(item) {
   const rawSummary = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || "");
   const normalized = {
     ...item,
-    title: buildShortEventTitleSafe(item.title || item.summary || "�������"),
+    title: buildShortEventTitleSafe(item.title || item.summary || "Событие"),
     rawSummary,
-    imageUrl: null
+    imageUrl: item.imageUrl || null
   };
 
   return {
@@ -1141,7 +1335,7 @@ function buildSafeEventShortSummary(item) {
 
 function buildSafeEventHeadlineSafe(item) {
   const kindLabel = eventKindLabelSafe(item.kind).toLowerCase();
-  const shortTitle = quoteEventTitleSafe(buildShortEventTitleSafe(item.title || item.summary || "�������"));
+  const shortTitle = quoteEventTitleSafe(buildShortEventTitleSafe(item.title || item.summary || "Событие"));
   return shortTitle ? `В афише Казани — ${kindLabel} ${shortTitle}.` : `В афише Казани — ${kindLabel}.`;
 }
 
@@ -1175,6 +1369,30 @@ function buildSafeEventMoodLineSafe(item) {
   }[item.kind] || "Можно добавить в личный план, если хочется собрать насыщенный выход по городу.";
 }
 
+function applySafeEventCopySafe(item) {
+  return applySafeEventCopy(item);
+}
+
+function buildSafeEventSummarySafe(item) {
+  return buildSafeEventSummary(item);
+}
+
+function buildSafeEventShortSummarySafe(item) {
+  return buildSafeEventShortSummary(item);
+}
+
+function buildShortEventTitleSafe(value) {
+  return buildShortEventTitle(value);
+}
+
+function quoteEventTitleSafe(value) {
+  return quoteEventTitle(value);
+}
+
+function eventKindLabelSafe(kind) {
+  return eventKindLabel(kind);
+}
+
 function buildShortEventTitle(value) {
   const cleaned = normalizeText(String(value || ""))
     .replace(/^билеты на\s+/iu, "")
@@ -1200,14 +1418,14 @@ function quoteEventTitle(value) {
 function eventKindLabel(kind) {
   return {
     concert: "Концерт",
-    theatre: "���������",
+    theatre: "Спектакль",
     show: "Шоу",
-    standup: "�������",
+    standup: "Стендап",
     exhibition: "Выставка",
     excursion: "Экскурсия",
     musical: "Мюзикл",
-    kids: "�������� ���������"
-  }[kind] || "�������";
+    kids: "Детское событие"
+  }[kind] || "Событие";
 }
 
 async function toggleFavorite(env, userId, favorite) {
@@ -1227,7 +1445,7 @@ async function toggleFavorite(env, userId, favorite) {
 async function createEventReminders(env, userId, eventId) {
   const items = await getJson(env, "events:items", []);
   const event = items.find((item) => item.id === eventId);
-  if (!event) return { reminders: [], created: [], skippedReason: "������� �� �������." };
+  if (!event) return { reminders: [], created: [], skippedReason: "Событие не найдено." };
 
   const eventDate = event.eventDate ? new Date(event.eventDate) : null;
   if (!eventDate || Number.isNaN(eventDate.getTime())) {
@@ -1319,8 +1537,9 @@ async function createDraft(env, item) {
 }
 
 async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
-  const photoUrl = draft.photoUrl || buildChannelPhotoUrl(draft, env);
-  const caption = trimTelegramCaption(draft.text || "");
+  const resolvedDraft = await hydrateDraftForSend(env, draft);
+  const photoUrl = resolvedDraft.photoUrl || buildChannelPhotoUrl(resolvedDraft, env);
+  const caption = trimTelegramCaption(resolvedDraft.text || "");
 
   if (photoUrl) {
     await telegramApi(env, "sendPhoto", {
@@ -1338,6 +1557,22 @@ async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
     disable_web_page_preview: false,
     reply_markup: replyMarkup || undefined
   });
+}
+
+async function hydrateDraftForSend(env, draft) {
+  if (!draft?.itemId) return draft;
+
+  const items = await getJson(env, "events:items", []);
+  const item = items.find((entry) => entry.id === draft.itemId);
+  if (!item) return draft;
+
+  return {
+    ...draft,
+    title: item.title || draft.title,
+    text: formatChannelPost(item),
+    url: item.url || draft.url,
+    photoUrl: buildChannelPhotoUrl(item, env) || draft.photoUrl
+  };
 }
 
 async function getDraft(env, draftId) {
@@ -1375,7 +1610,7 @@ function formatChannelPost(item) {
     .filter(Boolean);
 
   return [
-    buildShortEventTitle(item.title || "������� � ������") || "������� � ������",
+    buildShortEventTitle(item.title || "Событие в Казани") || "Событие в Казани",
     "",
     `Когда: ${when}`,
     item.venueTitle ? `Где: ${item.venueTitle}` : null,
@@ -1532,7 +1767,7 @@ async function sendMiniAppEntry(chatId, env, text) {
 function formatScanSummary(meta, env) {
   if (!meta) {
     return [
-      "������������ ��� �� �����������.",
+      "Сканирование еще не запускалось.",
       `Период событий: ${getAllowedEventWindowLabel(env)}.`,
       `Активных источников афиши: ${EVENT_SOURCES.length}.`
     ].join("\n");
@@ -1547,7 +1782,7 @@ function formatScanSummary(meta, env) {
     `Причина запуска: ${meta.reason || "manual"}`,
     `Активных источников: ${meta.enabledSources || EVENT_SOURCES.length}`,
     `Материалов в базе: ${meta.totalItems || 0}`,
-    `������� �� ������ ${getAllowedEventWindowLabel(env)}: ${meta.eventItems || 0}`,
+    `Событий по окну ${getAllowedEventWindowLabel(env)}: ${meta.eventItems || 0}`,
     sourceLines ? "" : null,
     sourceLines
   ].filter(Boolean).join("\n");
@@ -1856,6 +2091,8 @@ function mergeDuplicateItems(current, candidate, nowIso) {
   const candidateUpdatedAt = candidate._seenThisScan ? nowIso : (candidate.updatedAt || current.updatedAt || nowIso);
   const keepCandidateTitle = titleQuality(candidate.title) > titleQuality(current.title);
   const keepCandidateSummary = summaryQuality(candidate.rawSummary || candidate.summary) > summaryQuality(current.rawSummary || current.summary);
+  const keepCandidateVenue = textQuality(candidate.venueTitle) > textQuality(current.venueTitle);
+  const mergedImageUrl = candidate.imageUrl || current.imageUrl || null;
 
   return {
     ...current,
@@ -1865,6 +2102,8 @@ function mergeDuplicateItems(current, candidate, nowIso) {
     summary: keepCandidateSummary ? candidate.summary : current.summary,
     rawSummary: keepCandidateSummary ? (candidate.rawSummary || candidate.summary) : (current.rawSummary || current.summary),
     url: keepCandidateSummary ? (candidate.url || current.url) : (current.url || candidate.url),
+    imageUrl: mergedImageUrl,
+    venueTitle: keepCandidateVenue ? (candidate.venueTitle || current.venueTitle) : (current.venueTitle || candidate.venueTitle),
     sourceName: keepCandidateTitle ? (candidate.sourceName || current.sourceName) : (current.sourceName || candidate.sourceName),
     categories: uniqueStrings([...(current.categories || []), ...(candidate.categories || [])]),
     sourceIds: uniqueStrings([...(current.sourceIds || []), ...(candidate.sourceIds || []), ...mergedSources.map((source) => source.id)]),
@@ -1928,6 +2167,10 @@ function buildItemFingerprint(item) {
   return `${dateKey}:${fallbackTokens.slice(0, 7).sort().join("-") || "event"}`;
 }
 
+function tokenizeFingerprintSafe(value) {
+  return tokenizeFingerprint(value);
+}
+
 function tokenizeFingerprint(value) {
   return [...new Set(
     normalizeFingerprintTextSafe(value)
@@ -1958,6 +2201,7 @@ function findMatchingFingerprint(grouped, candidate) {
 function areLikelySameEvent(current, candidate) {
   if (!current?.eventDate || !candidate?.eventDate) return false;
   if (formatDateInput(current.eventDate) !== formatDateInput(candidate.eventDate)) return false;
+  if (!areMergeCompatibleKinds(current.kind, candidate.kind)) return false;
 
   const currentExact = buildExactEventSignature(current);
   const candidateExact = buildExactEventSignature(candidate);
@@ -1965,18 +2209,71 @@ function areLikelySameEvent(current, candidate) {
     return true;
   }
 
+  const currentTitleKey = normalizeComparableEntity(current.title);
+  const candidateTitleKey = normalizeComparableEntity(candidate.title);
+  const currentVenueKey = normalizeComparableEntity(current.venueTitle);
+  const candidateVenueKey = normalizeComparableEntity(candidate.venueTitle);
+
+  if (currentTitleKey && candidateTitleKey && currentTitleKey === candidateTitleKey) {
+    if (!currentVenueKey || !candidateVenueKey || currentVenueKey === candidateVenueKey) {
+      return true;
+    }
+  }
+
   const quotedCurrent = extractQuotedTokens(`${current.title || ""} ${current.rawSummary || current.summary || ""}`);
   const quotedCandidate = extractQuotedTokens(`${candidate.title || ""} ${candidate.rawSummary || candidate.summary || ""}`);
-  if (countTokenOverlap(quotedCurrent, quotedCandidate) >= 2) {
+  const quotedOverlap = countTokenOverlap(quotedCurrent, quotedCandidate);
+  if (quotedCurrent.length && quotedCandidate.length && quotedOverlap >= Math.min(2, quotedCurrent.length, quotedCandidate.length)) {
     return true;
   }
 
-  const currentTokens = buildComparableTokens(current);
-  const candidateTokens = buildComparableTokens(candidate);
-  const overlap = countTokenOverlap(currentTokens, candidateTokens);
-  const shortest = Math.max(1, Math.min(currentTokens.length, candidateTokens.length));
+  const currentTitleTokens = tokenizeFingerprint(current.title || "");
+  const candidateTitleTokens = tokenizeFingerprint(candidate.title || "");
+  const titleOverlap = countTokenOverlap(currentTitleTokens, candidateTitleTokens);
+  const titleShortest = Math.max(1, Math.min(currentTitleTokens.length, candidateTitleTokens.length));
+  const titleRatio = titleOverlap / titleShortest;
 
-  return overlap >= 5 || (overlap >= 4 && overlap / shortest >= 0.55);
+  if (titleOverlap < 2 || titleRatio < 0.74) {
+    return false;
+  }
+
+  if (!currentVenueKey || !candidateVenueKey) {
+    return true;
+  }
+
+  if (currentVenueKey === candidateVenueKey) {
+    return true;
+  }
+
+  const currentVenueTokens = tokenizeFingerprint(current.venueTitle || "");
+  const candidateVenueTokens = tokenizeFingerprint(candidate.venueTitle || "");
+  return countTokenOverlap(currentVenueTokens, candidateVenueTokens) >= 1;
+}
+
+function areMergeCompatibleKinds(left, right) {
+  if (!left || !right) return true;
+  return eventKindFamily(left) === eventKindFamily(right);
+}
+
+function eventKindFamily(kind) {
+  return {
+    concert: "concert",
+    standup: "standup",
+    theatre: "theatre",
+    theatre_show: "theatre",
+    monoperformance: "theatre",
+    show: "show",
+    festival: "show",
+    circus_show: "show",
+    musical: "show",
+    kids: "show",
+    exhibition: "exhibition",
+    art: "exhibition",
+    excursion: "excursion",
+    excursions: "excursion",
+    sport: "sport",
+    sports: "sport"
+  }[kind] || kind;
 }
 
 function buildComparableTokens(item) {
@@ -2069,13 +2366,23 @@ function buildCompactSummary(value) {
 function titleQuality(value) {
   const normalized = normalizeText(value);
   if (!normalized) return 0;
-  return normalized.length + (/\d/.test(normalized) ? 20 : 0);
+  let score = normalized.length;
+  if (/\d/.test(normalized)) score += 20;
+  if (/[«»"]/u.test(normalized)) score += 8;
+  if (/^(?:\u0433\u0440\u0443\u043f\u043f\u044b|\u043f\u0435\u0432\u0446\u0430|\u0430\u0440\u0442\u0438\u0441\u0442\u0430|\u043a\u043e\u043c\u0430\u043d\u0434\u044b|\u043e\u0440\u043a\u0435\u0441\u0442\u0440\u0430)\s+/iu.test(normalized)) score -= 18;
+  return score;
 }
 
 function summaryQuality(value) {
   const normalized = normalizeText(value);
   if (!normalized) return 0;
   return Math.min(normalized.length, 260) + (/[.!?]/.test(normalized) ? 15 : 0) + (/\d/.test(normalized) ? 10 : 0);
+}
+
+function textQuality(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return 0;
+  return normalized.length + (/[«»"]/u.test(normalized) ? 6 : 0);
 }
 
 function uniqueStrings(values) {
@@ -2100,6 +2407,15 @@ function getStartOfCurrentMoscowDay(now = new Date()) {
 function getEndOfMoscowDay(value) {
   const start = value instanceof Date ? value : new Date(value);
   return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+}
+
+function getEndOfCurrentMoscowYear(value) {
+  const base = value instanceof Date ? value : new Date(value);
+  const year = Number(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric"
+  }).format(base));
+  return new Date(Date.UTC(year + 1, 0, 1, -3, 0, 0) - 1);
 }
 
 function addMoscowMonths(value, months) {
@@ -2278,6 +2594,83 @@ function safeOrigin(value) {
   }
 }
 
+async function proxyExternalImage(rawUrl, env) {
+  const targetUrl = parseExternalImageUrl(rawUrl);
+  const upstream = await fetch(targetUrl.toString(), {
+    headers: {
+      accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+    },
+    cf: {
+      cacheEverything: true,
+      cacheTtl: 60 * 60 * 24
+    }
+  });
+
+  if (!upstream.ok) {
+    throw new HttpError(`Image upstream returned HTTP ${upstream.status}.`, 502);
+  }
+
+  const contentType = String(upstream.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.startsWith("image/")) {
+    throw new HttpError("Upstream resource is not an image.", 415);
+  }
+
+  const headers = new Headers({
+    "content-type": upstream.headers.get("content-type") || "image/jpeg",
+    "cache-control": "public, max-age=86400, s-maxage=86400",
+    "access-control-allow-origin": safeOrigin(env?.MINI_APP_URL) || "*"
+  });
+
+  const contentLength = upstream.headers.get("content-length");
+  const lastModified = upstream.headers.get("last-modified");
+  const etag = upstream.headers.get("etag");
+
+  if (contentLength) headers.set("content-length", contentLength);
+  if (lastModified) headers.set("last-modified", lastModified);
+  if (etag) headers.set("etag", etag);
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers
+  });
+}
+
+function parseExternalImageUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    throw new HttpError("Image URL is required.", 400);
+  }
+
+  let target;
+  try {
+    target = new URL(raw);
+  } catch {
+    throw new HttpError("Image URL is invalid.", 400);
+  }
+
+  if (!["http:", "https:"].includes(target.protocol)) {
+    throw new HttpError("Only HTTP(S) image URLs are allowed.", 400);
+  }
+
+  if (isBlockedProxyHostname(target.hostname)) {
+    throw new HttpError("This image host is blocked.", 403);
+  }
+
+  return target;
+}
+
+function isBlockedProxyHostname(hostname) {
+  const normalized = String(hostname || "").trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized === "localhost" || normalized.endsWith(".local")) return true;
+  if (normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]") return true;
+  if (/^10\.\d+\.\d+\.\d+$/.test(normalized)) return true;
+  if (/^192\.168\.\d+\.\d+$/.test(normalized)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(normalized)) return true;
+  if (/^169\.254\.\d+\.\d+$/.test(normalized)) return true;
+  return false;
+}
+
 class HttpError extends Error {
   constructor(message, status = 400, headers = {}) {
     super(message);
@@ -2291,3 +2684,16 @@ class AuthError extends HttpError {
     super(message, 401, { "www-authenticate": 'Basic realm="Kazan Event Radar Analytics"' });
   }
 }
+
+export const IMPORT_INTERNALS = {
+  PERSISTED_EVENT_TYPES,
+  mapImportedSourceType,
+  mapImportedSourceName,
+  normalizeExternalImportMode,
+  prepareImportedEventItem,
+  shouldRejectEventItem,
+  itemId,
+  mergeImportedEventItems,
+  normalizeImportedMetaSources,
+  isAllowedEventItem
+};

@@ -1,9 +1,9 @@
 :root {
   color-scheme: light;
-  --bg: #d2dbe6;
+  --bg: #c4d0dc;
   --text: #102033;
-  --hint: #4a5b70;
-  --card: #edf2f7;
+  --hint: #415468;
+  --card: #e6edf4;
   --accent: #2563eb;
   --accent-text: #ffffff;
   --border: rgba(16, 32, 51, 0.12);
@@ -25,8 +25,8 @@ body {
 body {
   font-family: "Segoe UI", "SF Pro Text", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 32rem),
-    linear-gradient(180deg, #e2e8f0 0%, var(--bg) 52%);
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 30rem),
+    linear-gradient(180deg, #d7e0e9 0%, var(--bg) 52%);
   color: var(--text);
   line-height: 1.58;
 }
@@ -89,7 +89,7 @@ a {
   max-width: 680px;
   padding: 18px 20px;
   border-radius: 22px;
-  background: rgba(5, 12, 24, 0.64);
+  background: rgba(5, 12, 24, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(14px);
 }
@@ -244,6 +244,24 @@ h1 {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr);
 }
 
+.explorer-shell {
+  align-items: start;
+}
+
+.explorer-sidebar,
+.explorer-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.explorer-panel h3 {
+  margin: 0 0 10px;
+}
+
+.explorer-badges {
+  margin-top: 14px;
+}
+
 .grid {
   display: grid;
   gap: 14px;
@@ -253,6 +271,10 @@ h1 {
 .list-grid {
   display: grid;
   gap: 10px;
+}
+
+.selector-list {
+  gap: 12px;
 }
 
 .card {
@@ -273,6 +295,98 @@ h1 {
 .card:hover {
   transform: translateY(-2px);
   background: color-mix(in srgb, #f4f7fb 92%, var(--card-hover));
+}
+
+.selector-card {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(16, 32, 51, 0.12);
+  border-radius: 22px;
+  background: rgba(248, 251, 255, 0.96);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(18, 32, 51, 0.08);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.selector-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, 0.24);
+  box-shadow: 0 14px 30px rgba(18, 32, 51, 0.12);
+}
+
+.selector-card.is-active {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(248, 251, 255, 0.98));
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.14);
+}
+
+.selector-card-head,
+.detail-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.selector-card-head .preview-label {
+  margin-bottom: 0;
+}
+
+.selector-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(16, 32, 51, 0.08);
+  color: var(--hint);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.selector-card.is-active .selector-state {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+.selector-card-title {
+  margin: 4px 0 8px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+}
+
+.selector-card .summary-short {
+  margin-top: 8px;
+}
+
+.selector-card .media-frame {
+  margin: -4px -4px 14px;
+}
+
+.selector-badges {
+  margin-top: 12px;
+}
+
+.detail-quick-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin: 14px 0 2px;
+}
+
+.detail-quick-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.detail-quick-card p {
+  margin: 0;
 }
 
 .card h2,

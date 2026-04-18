@@ -1,0 +1,31 @@
+{
+  "section": "routes",
+  "items": [
+    {
+      "id": "first_day",
+      "guideUrl": "https://visit-tatarstan.com/en/routes/den-v-kazani/",
+      "notes": "Базовый маршрут для первого дня в Казани. Хорошо подходит как основной внешний источник."
+    },
+    {
+      "id": "old_tatar_kaban",
+      "guideUrl": "https://visit-tatarstan.com/en/guides/tatarskaya-atlantida-gid-po-staro-tatarskoy-slobode/",
+      "notes": "Маршрут по Старо-Татарской слободе и Кабану. Источник хорошо совпадает с текущим сценарием прогулки."
+    },
+    {
+      "id": "green_city",
+      "guideUrl": "https://visit-tatarstan.com/en/routes/den-v-kazani-1/",
+      "notes": "Подходит как внешний layer для длинного городского маршрута с зелёными зонами и панорамами."
+    },
+    {
+      "id": "kazanka_uram",
+      "guideUrl": "https://visit-tatarstan.com/en/guides/young-and-beautiful-mesta-dlya-molodezhi-v-kazani-/",
+      "notes": "Современный маршрут вдоль Казанки и УРАМа. Используем как основной источник по визуалу и краткому контексту."
+    },
+    {
+      "id": "bauman_gorky",
+      "guideUrl": "https://visit-tatarstan.com/en/places/attractions/ulica_baumana/",
+      "secondaryGuideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/park_gorkogo/",
+      "notes": "Маршрут склеивает центральную пешеходную ось и парк Горького, поэтому оставляем два открытых источника."
+    }
+  ]
+}

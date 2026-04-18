@@ -1,0 +1,40 @@
+{
+  "section": "active",
+  "items": [
+    {
+      "id": "riviera",
+      "officialUrl": "https://kazanriviera.ru/aquapark/",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/akvapark-rivera/",
+      "notes": "Официальный сайт нужен для самого объекта, туристическая карточка дает нормальное фото и понятный заголовок."
+    },
+    {
+      "id": "mazapark",
+      "officialUrl": "https://mazapark.ru/kzn/",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/mazapark/",
+      "notes": "Основная информация идет с официального сайта, а guide-слой нужен для более удачного превью вместо сервисной иконки."
+    },
+    {
+      "id": "thermal_beach",
+      "officialUrl": "https://plyazh.pro/",
+      "guideUrl": "https://visit-tatarstan.com/places/spa-and-wellness/termalnyy-kompleks-plyazh/",
+      "notes": "У комплекса сильный собственный сайт, но карточка Visit Tatarstan тоже пригодится для витрины и резервного описания."
+    },
+    {
+      "id": "rope_park",
+      "officialUrl": "https://sky-park.club/",
+      "guideUrl": "https://visit-tatarstan.com/places/leisure/sky_park/",
+      "notes": "Sky Park дает официальный контекст, а туристический портал — более выигрышную карточку и фото трасс."
+    },
+    {
+      "id": "uram",
+      "officialUrl": "https://urampark.ru/main",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/ekstrim-park-uram/",
+      "notes": "Берем и официальный сайт парка, и туристическую страницу, потому что у гида лучше обложка для карточки."
+    },
+    {
+      "id": "sup_kazanka",
+      "officialUrl": "https://supmaniac.ru/",
+      "notes": "Пока опираемся на официальный сайт проката: он стабильно отдает описание, заголовок и базовую картинку."
+    }
+  ]
+}
