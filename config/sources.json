@@ -49,6 +49,15 @@
       "limit": 60
     },
     {
+      "id": "yandex-festival",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Festivals",
+      "url": "https://afisha.yandex.ru/kazan/festival",
+      "section": "festival",
+      "enabled": true,
+      "limit": 40
+    },
+    {
       "id": "yandex-standup",
       "type": "yandex_afisha_listing",
       "name": "Yandex Afisha Standup",
@@ -74,6 +83,15 @@
       "section": "excursion",
       "enabled": true,
       "limit": 40
+    },
+    {
+      "id": "yandex-musical",
+      "type": "yandex_afisha_listing",
+      "name": "Yandex Afisha Musicals",
+      "url": "https://afisha.yandex.ru/kazan/musical",
+      "section": "musical",
+      "enabled": true,
+      "limit": 36
     },
     {
       "id": "yandex-sport",
@@ -105,6 +123,16 @@
       "pages": 4
     },
     {
+      "id": "mts-popular",
+      "type": "mts_live_collection",
+      "name": "MTS Live Popular",
+      "url": "https://live.mts.ru/kazan/collections/popular_events",
+      "section": "events",
+      "enabled": true,
+      "limit": 72,
+      "pages": 4
+    },
+    {
       "id": "mts-show",
       "type": "mts_live_collection",
       "name": "MTS Live Shows",
@@ -130,6 +158,16 @@
       "name": "MTS Live Exhibitions",
       "url": "https://live.mts.ru/kazan/collections/exhibitions",
       "section": "exhibition",
+      "enabled": true,
+      "limit": 40,
+      "pages": 4
+    },
+    {
+      "id": "mts-festivals",
+      "type": "mts_live_collection",
+      "name": "MTS Live Festivals",
+      "url": "https://live.mts.ru/kazan/collections/festivals",
+      "section": "show",
       "enabled": true,
       "limit": 40,
       "pages": 4
@@ -173,6 +211,28 @@
       "enabled": true,
       "limit": 48,
       "pages": 4
+    },
+    {
+      "id": "sport-rubin-official",
+      "type": "official_sport_schedule",
+      "name": "FC Rubin Official Matches",
+      "url": "https://www.rubin-kazan.ru/calendar/upcoming/",
+      "section": "sport",
+      "enabled": true,
+      "limit": 20,
+      "parser": "rubin",
+      "homeVenue": "Ак Барс Арена"
+    },
+    {
+      "id": "sport-unics-official",
+      "type": "official_sport_schedule",
+      "name": "BC UNICS Official Matches",
+      "url": "https://unics.ru/schedule/unics/?season=2026&tournament=",
+      "section": "sport",
+      "enabled": true,
+      "limit": 32,
+      "parser": "unics",
+      "homeVenue": "Баскет-холл"
     },
     {
       "id": "kassir-main",

@@ -5,9 +5,19 @@ import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
 const DAILY_DRAFTS_CRON = "0 6 * * *";
 const HOURLY_SCAN_CRON = "15 * * * *";
 const DEFAULT_EVENTS_API_LIMIT = 600;
+const WORKER_SCAN_EXCLUDED_SOURCE_IDS = new Set([
+  "yandex-festival",
+  "yandex-musical",
+  "mts-popular",
+  "mts-festivals",
+  "sport-rubin-official",
+  "sport-unics-official"
+]);
 
 const EVENT_SOURCES = (sourceConfig.sources || [])
-  .filter((source) => source.enabled && ["yandex_afisha_listing", "mts_live_collection"].includes(source.type))
+  .filter((source) => source.enabled)
+  .filter((source) => !WORKER_SCAN_EXCLUDED_SOURCE_IDS.has(source.id))
+  .filter((source) => ["yandex_afisha_listing", "mts_live_collection"].includes(source.type))
   .map((source) => ({
     id: source.id,
     name: source.name,
@@ -15,12 +25,15 @@ const EVENT_SOURCES = (sourceConfig.sources || [])
     url: source.url,
     section: source.section || "events",
     limit: Number(source.limit || 20),
-    pages: Number(source.pages || 1)
+    pages: Number(source.pages || 1),
+    parser: String(source.parser || ""),
+    homeVenue: String(source.homeVenue || "")
   }));
 
 const PERSISTED_EVENT_TYPES = new Set([
   "yandex_afisha_listing",
   "mts_live_collection",
+  "official_sport_schedule",
   "mts_live_browser",
   "yandex_afisha_browser",
   "kassir_browser",
@@ -815,12 +828,18 @@ function extractImportedEventDateFromText(value, now = new Date()) {
 }
 
 function canonicalEventUrl(value) {
+  return normalizeAbsoluteUrl(value, false);
+}
+
+function normalizeAbsoluteUrl(value, preserveQuery = false) {
   const url = toAbsoluteUrl("https://afisha.yandex.ru", String(value || "").trim());
   if (!url) return "";
 
   try {
     const parsed = new URL(url);
-    parsed.search = "";
+    if (!preserveQuery) {
+      parsed.search = "";
+    }
     parsed.hash = "";
     return parsed.toString();
   } catch {
@@ -835,6 +854,10 @@ async function fetchEventSource(source) {
 
   if (source.type === "yandex_afisha_listing") {
     return fetchYandexAfishaSource(source);
+  }
+
+  if (source.type === "official_sport_schedule") {
+    return fetchOfficialSportSource(source);
   }
 
   throw new Error(`Unsupported source type: ${source.type}`);
@@ -882,6 +905,176 @@ async function fetchYandexAfishaSource(source) {
   }
 
   return items;
+}
+
+async function fetchOfficialSportSource(source) {
+  const html = await fetchText(source.url, { referer: source.url });
+  let parsedItems = [];
+
+  if (source.parser === "rubin") {
+    parsedItems = parseRubinOfficialMatches(html, source);
+  } else if (source.parser === "unics") {
+    parsedItems = parseUnicsOfficialMatches(html, source);
+  } else {
+    throw new Error(`Unsupported official sport parser: ${source.parser || "unknown"}`);
+  }
+
+  const uniqueItems = [];
+  for (const item of parsedItems.slice(0, source.limit || parsedItems.length || 20)) {
+    if (!item || shouldRejectEventItem(item)) continue;
+    item.id = await itemId(item);
+    uniqueItems.push(item);
+  }
+
+  return uniqueItems;
+}
+
+function parseRubinOfficialMatches(html, source) {
+  return [...String(html || "").matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((entry) => parseRubinOfficialMatchRow(entry[0], source))
+    .filter(Boolean);
+}
+
+function parseRubinOfficialMatchRow(rowHtml, source) {
+  const arenaChunk = match(rowHtml, /<div class="arena">([\s\S]*?)<\/div>/i) || "";
+  const title = normalizeText(match(arenaChunk, /<span>([^<]+)<\/span>/i));
+  if (!title) return null;
+
+  const rawDateText = normalizeText(stripHtml(match(rowHtml, /<div class="date[^"]*">([\s\S]*?)<\/div>/i) || ""));
+  const dateText = normalizeText(rawDateText.replace(/Добавить[\s\S]*/iu, ""));
+  const eventDate = extractImportedEventDateFromText(dateText);
+  if (!eventDate) return null;
+
+  const venueTitle = normalizeText(stripHtml(arenaChunk).replace(title, "")) || source.homeVenue || "";
+  const eventHref = match(rowHtml, /<div class="date[^"]*">[\s\S]*?<a[^>]+href="([^"]+)"/i)
+    || match(arenaChunk, /<a[^>]+href="([^"]+)"/i)
+    || source.url;
+  const imageCandidates = [...String(rowHtml || "").matchAll(/<img[^>]+src="([^"]+)"/gi)]
+    .map((entry) => toAbsoluteUrl(source.url, decodeHtml(entry[1])))
+    .filter(Boolean);
+  const isHomeMatch = normalizeText(title).toLowerCase().startsWith("рубин");
+  const summary = [
+    `Официальный матч ФК «Рубин»: ${title}.`,
+    isHomeMatch
+      ? `Домашняя игра пройдет${venueTitle ? ` на площадке ${venueTitle}` : " в Казани"}.`
+      : venueTitle
+        ? `Выездная игра пройдет на площадке ${venueTitle}.`
+        : "Выездная игра включена в официальный календарь клуба.",
+    dateText ? `Время в календаре клуба: ${dateText}.` : ""
+  ].filter(Boolean).join(" ");
+
+  return buildOfficialSportItem({
+    source,
+    title,
+    summary,
+    venueTitle,
+    url: toAbsoluteUrl(source.url, eventHref),
+    imageUrl: imageCandidates[1] || imageCandidates[0] || "",
+    eventDate,
+    eventHasExplicitTime: /(?:^|\D)([01]?\d|2[0-3]):(\d{2})(?:\D|$)/.test(dateText),
+    baseScore: isHomeMatch ? 70 : 66
+  });
+}
+
+function parseUnicsOfficialMatches(html, source) {
+  return [...String(html || "").matchAll(/<tr\b[^>]*data-id="[^"]+"[^>]*>[\s\S]*?<\/tr>/gi)]
+    .map((entry) => parseUnicsOfficialMatchRow(entry[0], source))
+    .filter(Boolean);
+}
+
+function parseUnicsOfficialMatchRow(rowHtml, source) {
+  const cells = [...String(rowHtml || "").matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((entry) => entry[1]);
+  if (cells.length < 6) return null;
+
+  const tournament = normalizeText(match(cells[0], /<img[^>]+title="([^"]+)"/i) || "");
+  const stage = normalizeText(stripHtml(cells[1]));
+  const dateRaw = normalizeText(stripHtml(cells[2]));
+  const timeRaw = normalizeText(stripHtml(cells[3]));
+  const eventDate = normalizeImportedEventDate(dateRaw);
+  if (!eventDate) return null;
+
+  const home = /fa-home/i.test(cells[4]);
+  const opponent = normalizeText(match(cells[5], /<b[^>]*>([\s\S]*?)<\/b>/i) ? stripHtml(match(cells[5], /<b[^>]*>([\s\S]*?)<\/b>/i)) : "");
+  if (!opponent) return null;
+
+  const locationText = normalizeText(stripHtml(cells[5]).replace(opponent, ""));
+  const venueTitle = home ? (source.homeVenue || "Баскет-холл") : locationText;
+  const title = `УНИКС - ${opponent}`;
+  const imageUrl = toAbsoluteUrl(source.url, decodeHtml(match(cells[0], /<img[^>]+src="([^"]+)"/i) || ""));
+  const summary = [
+    `Официальный матч БК «УНИКС»: ${title}.`,
+    tournament ? `Турнир: ${tournament}.` : "",
+    stage ? `Стадия: ${stage}.` : "",
+    home
+      ? `Домашняя встреча пройдет${venueTitle ? ` в ${venueTitle}` : " в Казани"}.`
+      : venueTitle
+        ? `Выездная встреча пройдет в ${venueTitle}.`
+        : "Выездная встреча указана в официальном календаре клуба."
+  ].filter(Boolean).join(" ");
+
+  return buildOfficialSportItem({
+    source,
+    title,
+    summary,
+    venueTitle,
+    url: buildOfficialSportEventUrl(source.url, {
+      event: title,
+      at: dateRaw
+    }),
+    imageUrl,
+    eventDate,
+    eventHasExplicitTime: Boolean(timeRaw || /(?:^|\D)([01]?\d|2[0-3]):(\d{2})(?:\D|$)/.test(dateRaw)),
+    baseScore: home ? 68 : 64
+  });
+}
+
+function buildOfficialSportItem({
+  source,
+  title,
+  summary,
+  venueTitle,
+  url,
+  imageUrl,
+  eventDate,
+  eventHasExplicitTime = false,
+  baseScore = 64
+}) {
+  if (!title || !url || !eventDate) return null;
+  const rawSummary = cleanEventSummary(summary || title);
+
+  return applySafeEventCopySafe(classifyItem({
+    sourceId: source.id,
+    sourceName: source.name,
+    type: source.type,
+    kind: "sport",
+    title: buildShortEventTitle(title),
+    rawSummary,
+    summary: rawSummary,
+    shortSummary: rawSummary,
+    url: normalizeAbsoluteUrl(url, true),
+    imageUrl: imageUrl ? toAbsoluteUrl(url, imageUrl) : null,
+    eventDate,
+    eventHasExplicitTime: Boolean(eventHasExplicitTime),
+    venueTitle: normalizeText(venueTitle || ""),
+    publishedAt: null,
+    categories: ["events", "sport"],
+    baseScore,
+    score: baseScore
+  }));
+}
+
+function buildOfficialSportEventUrl(baseUrl, params = {}) {
+  try {
+    const url = new URL(baseUrl);
+    for (const [key, value] of Object.entries(params)) {
+      if (!value) continue;
+      url.searchParams.set(key, String(value));
+    }
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return String(baseUrl || "");
+  }
 }
 
 function extractMtsAnnouncementLinks(html) {
@@ -1319,7 +1512,9 @@ function buildSafeEventSummary(item) {
   return [
     buildSafeEventHeadlineSafe(item),
     buildSafeEventScheduleLineSafe(item),
-    buildSafeEventMoodLineSafe(item),
+    item.kind === "sport"
+      ? "Подойдет для живой атмосферы, если хочется пойти на матч и заранее понять логистику."
+      : buildSafeEventMoodLineSafe(item),
     "Подробности, программу и билеты лучше открыть у официального источника по ссылке ниже."
   ].filter(Boolean).join("\n\n");
 }
@@ -1334,7 +1529,7 @@ function buildSafeEventShortSummary(item) {
 }
 
 function buildSafeEventHeadlineSafe(item) {
-  const kindLabel = eventKindLabelSafe(item.kind).toLowerCase();
+  const kindLabel = (item.kind === "sport" ? "Спортивное событие" : eventKindLabelSafe(item.kind)).toLowerCase();
   const shortTitle = quoteEventTitleSafe(buildShortEventTitleSafe(item.title || item.summary || "Событие"));
   return shortTitle ? `В афише Казани — ${kindLabel} ${shortTitle}.` : `В афише Казани — ${kindLabel}.`;
 }
@@ -1967,7 +2162,10 @@ async function putJson(env, key, value) {
 }
 
 async function itemId(item) {
-  return (await sha256(item.url || `${item.sourceId}:${item.title}:${item.publishedAt || item.eventDate || ""}`)).slice(0, 24);
+  const stableKey = String(item?.sourceId || "").startsWith("sport-")
+    ? `${item.sourceId}:${item.url || ""}:${item.title || ""}:${item.eventDate || ""}`
+    : (item.url || `${item.sourceId}:${item.title}:${item.publishedAt || item.eventDate || ""}`);
+  return (await sha256(stableKey)).slice(0, 24);
 }
 
 async function fingerprintId(fingerprint) {

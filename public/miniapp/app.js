@@ -1578,6 +1578,8 @@ function eventCategoryChips() {
     { id: "concert", label: "Концерты" },
     { id: "theatre", label: "Спектакли" },
     { id: "show", label: "Шоу" },
+    { id: "festival", label: "Фестивали" },
+    { id: "musical", label: "Мюзиклы" },
     { id: "standup", label: "Стендап" },
     { id: "sport", label: "Спорт" },
     { id: "exhibition", label: "Выставки" },
@@ -1702,13 +1704,16 @@ function eventTypeLabel(item) {
   if (item.kind === "concert") return "Концерт";
   if (item.kind === "theatre") return "Спектакль";
   if (item.kind === "show") return "Шоу";
+  if (item.kind === "festival") return "Фестиваль";
   if (item.kind === "standup") return "Стендап";
+  if (item.kind === "sport") return "Спорт";
   if (item.kind === "exhibition") return "Выставка";
   if (item.kind === "excursion") return "Экскурсия";
   if (item.kind === "musical") return "Мюзикл";
   if (item.kind === "kids") return "Семейная программа";
 
   const text = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
+  if (text.includes("матч") || text.includes("хоккей") || text.includes("футбол") || text.includes("волейбол") || text.includes("баскетбол")) return "Спорт";
   if (text.includes("мастер-класс")) return "Мастер-класс";
   if (text.includes("спектак")) return "Спектакль";
   if (text.includes("выстав")) return "Выставка";
@@ -1724,7 +1729,7 @@ function eventCardTitle(item) {
   const base = trim(firstMeaningfulLine(item.title || item.summary || "Событие"), 84)
     .replace(/^\d{1,2}[.:]\d{2}\s*/u, "")
     .replace(/^\d{1,2}\s+[а-яё]+\s*/iu, "")
-    .replace(/^(концерт|спектакль|мастер-класс|выставка|лекция|экскурсия|стендап|фестиваль|шоу)\s*/iu, "")
+    .replace(/^(концерт|спектакль|мастер-класс|выставка|лекция|экскурсия|стендап|фестиваль|шоу|мюзикл|матч|турнир|спортивное событие)\s*/iu, "")
     .trim();
 
   if (!base) return item.title || "Событие";
@@ -1774,7 +1779,9 @@ function buildSafeEventMoodLine(item) {
     concert: "Подойдет для вечернего выхода, если хочется живой музыки и понятной логистики.",
     theatre: "Хороший вариант для спокойного театрального вечера без перегруженного описания.",
     show: "Подойдет тем, кто ищет более яркий и визуальный формат отдыха в городе.",
+    festival: "Удобный выбор, если хочется провести в городе большой и насыщенный день с программой на несколько часов.",
     standup: "Можно добавить в план для легкого вечернего выхода с друзьями или вдвоем.",
+    sport: "Хороший вариант для живой атмосферы, эмоций трибун и понятного сценария выхода без лишнего текста.",
     exhibition: "Удобный вариант, если хочется спокойного культурного маршрута в своем темпе.",
     excursion: "Подойдет тем, кто хочет узнать город или тему глубже и провести время содержательно.",
     musical: "Хороший выбор для тех, кто любит сцену, музыку и большой постановочный формат.",

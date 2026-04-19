@@ -45,6 +45,7 @@
     "catalog:routes": "node scripts/import-routes-catalog.mjs",
     "catalog:active": "node scripts/import-active-catalog.mjs",
     "catalog:roadtrip": "node scripts/import-roadtrip-catalog.mjs",
+    "sports:official": "node scripts/import-official-sport-events.mjs",
     "set-token": "powershell -ExecutionPolicy Bypass -File scripts/set-telegram-token.ps1",
     "set-analytics-password": "powershell -ExecutionPolicy Bypass -File scripts/set-analytics-password.ps1",
     "worker:whoami": "npx wrangler whoami --config worker/wrangler.toml --env-file .cloudflare.env",
