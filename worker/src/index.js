@@ -169,13 +169,23 @@ export default {
 
   async scheduled(event, env) {
     if (event.cron === DAILY_DRAFTS_CRON) {
-      await scanSources(env, { reason: "daily_drafts" });
-      await prepareDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), { refresh: false });
+      try {
+        await prepareDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), {
+          refresh: false,
+          reason: "daily_drafts"
+        });
+      } catch (error) {
+        console.warn(`Daily drafts job failed: ${error.message}`);
+      }
       return;
     }
 
     if (event.cron === HOURLY_SCAN_CRON) {
-      await scanSources(env, { reason: "scheduled_refresh" });
+      try {
+        await scanSources(env, { reason: "scheduled_refresh" });
+      } catch (error) {
+        console.warn(`Scheduled refresh failed: ${error.message}`);
+      }
       return;
     }
 
@@ -407,7 +417,10 @@ async function handleTelegramMessage(message, env) {
     }
 
     const limit = command === "/drafts" ? Number(text.split(/\s+/)[1] || env.DRAFTS_PER_DAY || 10) : 1;
-    const drafts = await prepareDraftBatch(env, limit);
+    const drafts = await prepareDraftBatch(env, limit, {
+      refresh: false,
+      reason: "manager_drafts"
+    });
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
       text: drafts.length ? `Отправил черновики: ${drafts.length}.` : "Пока не нашел подходящие события для черновиков."
@@ -1723,6 +1736,8 @@ async function createDraft(env, item) {
     text: formatChannelPost(item),
     url: item.url,
     photoUrl: buildChannelPhotoUrl(item, env),
+    kind: item.kind || "event",
+    eventDate: item.eventDate || null,
     status: "pending",
     createdAt: new Date().toISOString()
   };
@@ -1820,7 +1835,8 @@ function normalizePublishingState(publishing) {
   return {
     drafts: Array.isArray(publishing?.drafts) ? publishing.drafts : [],
     postedItemIds: Array.isArray(publishing?.postedItemIds) ? publishing.postedItemIds : [],
-    postedItems: Array.isArray(publishing?.postedItems) ? publishing.postedItems : []
+    postedItems: Array.isArray(publishing?.postedItems) ? publishing.postedItems : [],
+    staleDraftsExpired: 0
   };
 }
 
@@ -1834,13 +1850,9 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
   ];
 
   for (const tier of tiers) {
-    for (const item of candidates) {
-      if (selectedIds.has(item.id)) continue;
-      if (!tier(item)) continue;
-      selected.push(item);
-      selectedIds.add(item.id);
-      if (selected.length >= limit) return selected;
-    }
+    const tierCandidates = candidates.filter((item) => !selectedIds.has(item.id) && tier(item));
+    addDraftCandidatesByKind(tierCandidates, selected, selectedIds, limit);
+    if (selected.length >= limit) return selected;
   }
 
   return selected;
@@ -1848,6 +1860,25 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
 
 function hasPendingDraft(publishing, itemId) {
   return publishing.drafts.some((draft) => draft.itemId === itemId && draft.status === "pending");
+}
+
+function addDraftCandidatesByKind(candidates, selected, selectedIds, limit) {
+  const preferredKinds = ["concert", "sport", "excursion", "theatre", "show", "standup", "exhibition", "musical", "kids"];
+
+  for (const kind of preferredKinds) {
+    const match = candidates.find((item) => item.kind === kind && !selectedIds.has(item.id));
+    if (!match) continue;
+    selected.push(match);
+    selectedIds.add(match.id);
+    if (selected.length >= limit) return;
+  }
+
+  for (const item of candidates) {
+    if (selectedIds.has(item.id)) continue;
+    selected.push(item);
+    selectedIds.add(item.id);
+    if (selected.length >= limit) return;
+  }
 }
 
 function wasRecentlyPosted(publishing, itemId, env, overrideDays = null) {
@@ -2105,7 +2136,55 @@ async function getRuntime(env) {
 }
 
 async function getPublishing(env) {
-  return normalizePublishingState(await getJson(env, "publishing", { drafts: [], postedItemIds: [], postedItems: [] }));
+  const publishing = expireStalePendingDrafts(
+    normalizePublishingState(await getJson(env, "publishing", { drafts: [], postedItemIds: [], postedItems: [] })),
+    env
+  );
+
+  if (publishing.staleDraftsExpired > 0) {
+    await putJson(env, "publishing", {
+      drafts: publishing.drafts,
+      postedItemIds: publishing.postedItemIds,
+      postedItems: publishing.postedItems
+    });
+  }
+
+  return {
+    drafts: publishing.drafts,
+    postedItemIds: publishing.postedItemIds,
+    postedItems: publishing.postedItems
+  };
+}
+
+function expireStalePendingDrafts(publishing, env, now = new Date()) {
+  const ttlHours = Math.max(12, Number(env?.DRAFT_PENDING_TTL_HOURS || 30) || 30);
+  const ttlMs = ttlHours * 60 * 60 * 1000;
+  const nowTime = now.getTime();
+  let staleDraftsExpired = 0;
+
+  const drafts = publishing.drafts.map((draft) => {
+    if (!draft || typeof draft !== "object") return draft;
+    if (draft.status !== "pending") return draft;
+
+    const timestamp = draft.updatedAt || draft.createdAt;
+    const draftTime = timestamp ? new Date(timestamp).getTime() : Number.NaN;
+    if (Number.isNaN(draftTime)) return draft;
+    if ((nowTime - draftTime) < ttlMs) return draft;
+
+    staleDraftsExpired += 1;
+    return {
+      ...draft,
+      status: "expired",
+      updatedAt: now.toISOString()
+    };
+  });
+
+  return {
+    drafts,
+    postedItemIds: publishing.postedItemIds,
+    postedItems: publishing.postedItems,
+    staleDraftsExpired
+  };
 }
 
 async function resolveManagerChatId(env) {
