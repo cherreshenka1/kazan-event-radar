@@ -500,13 +500,20 @@ h1 {
 }
 
 .detail-source-note {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   color: var(--hint);
   font-size: 0.93rem;
 }
 
 .detail-source-note a {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.16);
   color: var(--accent);
+  font-weight: 600;
   text-decoration: none;
 }
 

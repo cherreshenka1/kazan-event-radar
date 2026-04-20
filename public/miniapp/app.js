@@ -591,10 +591,9 @@ function safeEventDetailCard(item) {
   const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
   const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
   const venueLabel = eventVenueText(item);
-  const sourceLabel = item.sourceName || item.sources?.[0]?.name || "Прямой источник";
   const sourceUrl = item.url || item.sources?.find((source) => source?.url)?.url || "";
   const fallbackImage = eventVisualUrl(item, "detail");
-  const imageUrl = item.imageUrl || fallbackImage;
+  const imageUrl = primaryItemImage(item, fallbackImage);
 
   return card([
     mediaImage(imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage),
@@ -605,13 +604,12 @@ function safeEventDetailCard(item) {
       ${dateLabel ? factBlock("Дата", dateLabel) : ""}
       ${timeLabel ? factBlock("Время", timeLabel) : ""}
       ${venueLabel ? factBlock("Место", venueLabel) : ""}
-      ${sourceLabel ? factBlock("Источник", sourceLabel) : ""}
     </div>`,
-    sourceUrl ? `<p class="detail-source-note">Источник: <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(sourceLabel)}</a></p>` : "",
+    sourceUrl ? `<p class="detail-source-note"><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Источник</a></p>` : "",
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
       `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
-      sourceUrl ? actionButton("Подробнее у источника", "open", { url: sourceUrl }, "primary") : "",
+      sourceUrl ? actionButton("Источник", "open", { url: sourceUrl }, "primary") : "",
       ...(item.ticketLinks || []).slice(0, 4).map((link) => actionButton(link.name, "open", { url: link.url }))
     ])
   ], "active");
@@ -624,7 +622,7 @@ function safeEventPreviewCard(item) {
     eventVenueText(item)
   ].filter(Boolean).join(" · ");
   const fallbackImage = eventVisualUrl(item, "compact");
-  const imageUrl = item.imageUrl || fallbackImage;
+  const imageUrl = primaryItemImage(item, fallbackImage);
   const isOpened = item.id === state.openEventId;
 
   return card([
@@ -1742,18 +1740,56 @@ function eventCardSummary(item) {
 
 function eventDetailSummary(item) {
   return [
-    buildSafeEventHeadline(item),
-    buildSafeEventScheduleLine(item),
-    buildSafeEventMoodLine(item),
-    "Подробности и билеты лучше открыть у официального источника."
+    ...buildEventLeadParagraphs(item, 2),
+    buildSafeEventMoodLine(item)
   ].filter(Boolean).join("\n\n");
 }
 
 function eventPreviewSummary(item) {
-  return trim([
-    buildSafeEventHeadline(item),
-    buildSafeEventScheduleLine(item)
-  ].filter(Boolean).join(" "), 170);
+  return trim(buildEventLeadParagraphs(item, 1)[0] || buildSafeEventMoodLine(item), 170);
+}
+
+function buildEventLeadParagraphs(item, maxParagraphs = 2) {
+  const titleFingerprint = compactTextFingerprint(eventCardTitle(item) || "");
+  const sourceText = normalizeEventLeadText(item.shortSummary || item.subtitle || item.rawSummary || item.summary || "");
+  const sentences = sourceText
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map((part) => trim(part, 190))
+    .filter(Boolean) || [];
+  const paragraphs = [];
+
+  for (const sentence of sentences) {
+    const fingerprint = compactTextFingerprint(sentence);
+    if (!fingerprint || fingerprint === titleFingerprint) continue;
+    if (paragraphs.some((entry) => compactTextFingerprint(entry) === fingerprint)) continue;
+    paragraphs.push(sentence);
+    if (paragraphs.length >= maxParagraphs) return paragraphs;
+  }
+
+  if (!paragraphs.length && sourceText) {
+    const fallback = trim(sourceText, 190);
+    if (compactTextFingerprint(fallback) !== titleFingerprint) {
+      paragraphs.push(fallback);
+    }
+  }
+
+  return paragraphs.slice(0, maxParagraphs);
+}
+
+function normalizeEventLeadText(value) {
+  return String(value || "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/Подробности[^.]*$/iu, "")
+    .trim();
+}
+
+function compactTextFingerprint(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[«»"']/g, "")
+    .replace(/[^a-zа-яё0-9]+/giu, " ")
+    .trim();
 }
 
 function buildSafeEventHeadline(item) {

@@ -1746,7 +1746,7 @@ async function createDraft(env, item) {
   return draft;
 }
 
-async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
+async function sendDraftPostLegacy(env, chatId, draft, replyMarkup = null) {
   const resolvedDraft = await hydrateDraftForSend(env, draft);
   const photoUrl = resolvedDraft.photoUrl || buildChannelPhotoUrl(resolvedDraft, env);
   const caption = trimTelegramCaption(resolvedDraft.text || "");
@@ -1811,7 +1811,7 @@ async function markDraft(env, draftId, status) {
   return draft;
 }
 
-function formatChannelPost(item) {
+function formatChannelPostLegacy(item) {
   const eventDate = item.eventDate ? new Date(item.eventDate) : null;
   const when = eventDate && !Number.isNaN(eventDate.getTime()) ? formatChannelDateLabel(eventDate, item.eventHasExplicitTime) : "дату уточняйте у организатора";
   const paragraphs = buildSafeEventSummary(item)
@@ -1911,7 +1911,7 @@ function splitDraftParagraphs(value) {
   ].filter(Boolean);
 }
 
-function buildChannelPhotoUrl(item, env) {
+function buildChannelPhotoUrlLegacy(item, env) {
   const assetPath = channelImagePathForKind(item.kind);
 
   for (const baseUrl of channelPhotoBaseUrls(env)) {
@@ -1978,6 +1978,114 @@ function extractTelegramImageUrl(chunk) {
 
   const urlMatch = style.match(/url\(['"]?([^'")]+)['"]?\)/);
   return urlMatch?.[1] || null;
+}
+
+async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
+  const resolvedDraft = await hydrateDraftForSend(env, draft);
+  const photoUrl = resolvedDraft.photoUrl || buildChannelPhotoUrl(resolvedDraft, env);
+  const caption = trimTelegramCaption(resolvedDraft.text || "");
+
+  if (photoUrl) {
+    await telegramApi(env, "sendPhoto", {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      parse_mode: "HTML",
+      reply_markup: replyMarkup || undefined
+    });
+    return;
+  }
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    text: caption,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup || undefined
+  });
+}
+
+function formatChannelPost(item) {
+  const eventDate = item.eventDate ? new Date(item.eventDate) : null;
+  const title = buildShortEventTitleSafe(item.title || item.summary || "Событие в Казани") || "Событие в Казани";
+  const when = eventDate && !Number.isNaN(eventDate.getTime())
+    ? `Когда: ${formatChannelDateLabel(eventDate, item.eventHasExplicitTime)}`
+    : "Когда: дату уточняйте у организатора";
+  const where = item.venueTitle ? `Где: ${normalizeText(item.venueTitle)}` : "";
+  const metaBlock = [when, where].filter(Boolean).map((line) => escapeHtml(line)).join("\n");
+  const paragraphs = buildChannelPostParagraphs(item).map((part) => escapeHtml(part));
+  const sourceLine = item.url ? `<a href="${escapeHtml(item.url)}">Источник</a>` : "";
+
+  return [
+    `<b>${escapeHtml(title)}</b>`,
+    metaBlock,
+    ...paragraphs,
+    sourceLine
+  ].filter(Boolean).join("\n\n");
+}
+
+function buildChannelPostParagraphs(item) {
+  const titleFingerprint = normalizeFingerprintTextSafe(buildShortEventTitleSafe(item.title || item.summary || "Событие"));
+  const summarySource = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
+  const paragraphs = [];
+
+  for (const part of splitDraftParagraphs(summarySource)) {
+    const fingerprint = normalizeFingerprintTextSafe(part);
+    if (!fingerprint || fingerprint === titleFingerprint) continue;
+    if (paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === fingerprint)) continue;
+    paragraphs.push(trim(part, 220));
+  }
+
+  const moodLine = item.kind === "sport"
+    ? "Подойдет для живой атмосферы, если хочется пойти на матч и заранее понять логистику."
+    : buildSafeEventMoodLineSafe(item);
+
+  if (moodLine && !paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === normalizeFingerprintTextSafe(moodLine))) {
+    paragraphs.push(trim(moodLine, 220));
+  }
+
+  return paragraphs.slice(0, 3);
+}
+
+function buildChannelPhotoUrl(item, env) {
+  const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
+  if (directPhotoUrl) return directPhotoUrl;
+
+  const assetPath = channelImagePathForKind(item.kind);
+
+  for (const baseUrl of channelPhotoBaseUrls(env)) {
+    try {
+      return new URL(assetPath, baseUrl).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
+function buildChannelDirectPhotoUrl(item, env) {
+  const directUrl = firstChannelImageUrl(item);
+  if (!directUrl) return "";
+
+  const apiBase = normalizeBaseUrl(env.PUBLIC_API_URL || "https://kazan-event-radar-api.4ereshny333.workers.dev");
+  if (!apiBase) return directUrl;
+
+  try {
+    return new URL(`api/image?url=${encodeURIComponent(directUrl)}`, apiBase).toString();
+  } catch {
+    return directUrl;
+  }
+}
+
+function firstChannelImageUrl(item) {
+  const candidates = [
+    item?.imageUrl,
+    item?.photoUrl,
+    ...(Array.isArray(item?.photoLinks) ? item.photoLinks.map((link) => link?.url) : [])
+  ];
+
+  return candidates.find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
 }
 
 async function sendMiniAppEntry(chatId, env, text) {
