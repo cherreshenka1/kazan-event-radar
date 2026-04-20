@@ -38,6 +38,7 @@
     "events:refresh:full": "node scripts/refresh-events-pipeline.mjs --full --with-kassir --headless --kassir-headless --max-links=0 --chunk-size=6 --pause-ms=1800 --retries=3",
     "catalog:sources": "node scripts/validate-catalog-sources.mjs",
     "catalog:build": "node scripts/build-catalog-import-overrides.mjs",
+    "photos:manifest": "node scripts/build-photo-manifest.mjs",
     "catalog:refresh": "node scripts/refresh-catalog-imports.mjs",
     "catalog:refresh:stale": "node scripts/refresh-catalog-imports.mjs --stale-only",
     "catalog:refresh:pipeline": "node scripts/refresh-catalog-pipeline.mjs --deploy",

@@ -84,3 +84,13 @@
 - `public/miniapp/photos/roadtrip/bulgar/`
 - `public/miniapp/photos/roadtrip/raifa/`
 - `public/miniapp/photos/roadtrip/kamskoye_ustye/`
+
+## Обновление манифеста
+
+После добавления новых локальных фотографий обновите манифест:
+
+```powershell
+npm run photos:manifest
+```
+
+После этого Mini App начнёт использовать новые фото автоматически.

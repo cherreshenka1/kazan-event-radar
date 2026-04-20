@@ -47,6 +47,7 @@ const heroEyebrowNode = document.querySelector("#heroEyebrow");
 const heroTitleNode = document.querySelector("#heroTitle");
 const heroTextNode = document.querySelector("#heroText");
 const heroBadgesNode = document.querySelector("#heroBadges");
+const PHOTO_MANIFEST = window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST || {};
 const SECTION_VISUALS = {
   events: "./brand/section-events.png",
   places: "./brand/section-parks.png",
@@ -678,7 +679,7 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
   const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
   const summary = trim(item.description || item.reviewSummary || item.cuisine || item.subtitle || item.title, 140);
   const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
-  const previewImage = primaryItemImage(item, fallbackImage);
+  const previewImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
 
   return `
     <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="${action}" ${attrs}>
@@ -697,7 +698,8 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
 
 function placeDetailCard(sectionId, item) {
   const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
-  const primaryImage = primaryItemImage(item, fallbackImage);
+  const primaryImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
   const highlightsTitle = sectionId === "active" ? "Что внутри" : "Что посмотреть";
   const detailBadges = buildCatalogDetailBadges(sectionId, item);
   const quickFacts = buildPlaceQuickFacts(sectionId, item);
@@ -719,7 +721,7 @@ function placeDetailCard(sectionId, item) {
       ${item.reviewRating ? factBlock("Рейтинг", `${item.reviewRating} / 5 · ${item.reviewCount || "без числа отзывов"}`) : ""}
       ${item.foodNearby ? factBlock("Где перекусить", item.foodNearby) : ""}
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
-      ${item.photoLinks?.length ? factButtonsBlock("Подборка фото", item.photoLinks) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
@@ -734,7 +736,8 @@ function foodDetailCard(item) {
   const detailBadges = buildCatalogDetailBadges("food", item);
   const quickFacts = buildFoodQuickFacts(item);
   const fallbackImage = SECTION_VISUALS.food;
-  const primaryImage = primaryItemImage(item, fallbackImage);
+  const primaryImage = getSectionPrimaryImage("food", item, fallbackImage);
+  const photoLinks = getSectionPhotoLinks("food", item);
   return card([
     primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
     `<div class="detail-topline">
@@ -746,7 +749,7 @@ function foodDetailCard(item) {
     quickFacts.length ? detailQuickGrid(quickFacts) : "",
     richTextBlock(item.description),
     `<div class="fact-grid">
-      ${item.photoLinks?.length ? factButtonsBlock("Подборка фото", item.photoLinks) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
       ${item.cuisine ? factBlock("Кухня", item.cuisine) : ""}
       ${item.signatureDishes?.length ? factListBlock("Ключевые блюда", item.signatureDishes) : ""}
       ${item.interior ? factBlock("Интерьер", item.interior) : ""}
@@ -790,9 +793,10 @@ function buildCatalogCollectionText(sectionId, selected) {
 
 function buildCatalogCollectionBadges(sectionId, items, selected) {
   const badges = [];
+  const photoCount = getSectionPhotoLinks(sectionId, selected).length;
 
   if (items?.length) badges.push(`${items.length} в подборке`);
-  if (selected?.photoLinks?.length) badges.push(`${selected.photoLinks.length} фото`);
+  if (photoCount) badges.push(`${photoCount} фото`);
   if (selected?.mapUrl) badges.push(sectionId === "food" ? "Есть карта" : "Есть маршрут");
   if (sectionId === "food" && selected?.reviewUrl) badges.push("Есть отзывы");
   if (sectionId === "roadtrip") badges.push("На авто удобнее");
@@ -802,13 +806,14 @@ function buildCatalogCollectionBadges(sectionId, items, selected) {
 
 function buildCatalogSectionStats(sectionId, items, selected) {
   const stats = [];
+  const photoCount = getSectionPhotoLinks(sectionId, selected).length;
 
   if (items?.length) {
     stats.push(sectionId === "food" ? `${items.length} мест для еды` : `${items.length} точек в разделе`);
   }
 
   if (selected?.subtitle) stats.push(selected.subtitle);
-  if (selected?.photoLinks?.length) stats.push(`${selected.photoLinks.length} фото`);
+  if (photoCount) stats.push(`${photoCount} фото`);
   if (selected?.reviewUrl) stats.push("Есть отзывы");
   if (selected?.mapUrl) stats.push(sectionId === "food" ? "Карта под рукой" : "Маршрут под рукой");
 
@@ -886,7 +891,7 @@ function buildFoodQuickFacts(item) {
 function routePreviewCard(route, isActive) {
   const badges = buildRoutePreviewBadges(route).slice(0, 3);
   const summary = trim(route.description || route.foodNearby || route.howToGet || route.subtitle || route.title, 150);
-  const previewImage = primaryItemImage(route, SECTION_VISUALS.routes);
+  const previewImage = getSectionPrimaryImage("routes", route, SECTION_VISUALS.routes);
 
   return `
     <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="route-item" data-id="${escapeHtml(route.id)}">
@@ -906,7 +911,8 @@ function routePreviewCard(route, isActive) {
 function routeDetailCard(route) {
   const detailBadges = buildRouteDetailBadges(route);
   const quickFacts = buildRouteQuickFacts(route);
-  const primaryImage = primaryItemImage(route, SECTION_VISUALS.routes);
+  const primaryImage = getSectionPrimaryImage("routes", route, SECTION_VISUALS.routes);
+  const photoLinks = getSectionPhotoLinks("routes", route);
 
   return card([
     primaryImage ? mediaImage(primaryImage, route.title, "", SECTION_VISUALS.routes) : "",
@@ -922,7 +928,7 @@ function routeDetailCard(route) {
       ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
       ${route.foodNearby ? factBlock("Где сделать остановку на еду", route.foodNearby) : ""}
       ${route.howToGet ? factBlock("Старт и логистика", route.howToGet) : ""}
-      ${route.photoLinks?.length ? factButtonsBlock("Подборка фото", route.photoLinks) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(routeFavoriteId(route.id)), "favorite-route", { id: route.id }, isFavorite(routeFavoriteId(route.id)) ? "primary" : ""),
@@ -1260,7 +1266,8 @@ function getFavoriteSnapshot(item) {
     const current = getSectionItems(item.sectionId).find((value) => value.id === item.itemId);
     const sectionName = sectionLabel(item.sectionId);
     const fallbackImage = SECTION_VISUALS[item.sectionId] || SECTION_VISUALS.places;
-    const imageUrl = primaryItemImage(current || item, fallbackImage) || item.imageUrl || fallbackImage;
+    const photoLinks = getSectionPhotoLinks(item.sectionId, current || item);
+    const imageUrl = getSectionPrimaryImage(item.sectionId, current || item, fallbackImage) || item.imageUrl || fallbackImage;
     const isFood = item.sectionId === "food";
     const highlights = isFood
       ? (current?.signatureDishes || [])
@@ -1296,7 +1303,7 @@ function getFavoriteSnapshot(item) {
       howToGet: current?.howToGet || "",
       interior: current?.interior || "",
       highlights,
-      photoLinks: current?.photoLinks || [],
+      photoLinks,
       cuisine: current?.cuisine || "",
       bestFor: current?.bestFor || "",
       addedAt: item.addedAt || ""
@@ -1309,7 +1316,8 @@ function getFavoriteSnapshot(item) {
     const duration = current?.duration || item.duration || "";
     const summary = trim(current?.description || current?.foodNearby || current?.howToGet || item.summary || item.subtitle || item.title, 180);
     const fallbackImage = SECTION_VISUALS.routes;
-    const imageUrl = primaryItemImage(current || item, fallbackImage) || item.imageUrl || fallbackImage;
+    const photoLinks = getSectionPhotoLinks("routes", current || item);
+    const imageUrl = getSectionPrimaryImage("routes", current || item, fallbackImage) || item.imageUrl || fallbackImage;
 
     return {
       id: item.id,
@@ -1326,7 +1334,7 @@ function getFavoriteSnapshot(item) {
       mapUrl: current?.mapUrl || item.mapUrl || "",
       howToGet: current?.howToGet || "",
       highlights: current?.stops || [],
-      photoLinks: current?.photoLinks || [],
+      photoLinks,
       duration,
       level,
       addedAt: item.addedAt || ""
@@ -1670,12 +1678,42 @@ function mediaImage(url, alt, extraClass = "", fallbackUrl = "") {
 }
 
 function primaryItemImage(item, fallbackUrl = "") {
-  return firstPhotoUrl(item) || item?.imageUrl || fallbackUrl || "";
+  return firstPhotoUrl(item) || item?.imageUrl || item?.externalPreviewUrl || fallbackUrl || "";
 }
 
 function firstPhotoUrl(item) {
   if (!Array.isArray(item?.photoLinks)) return "";
   return item.photoLinks.find((link) => String(link?.url || "").trim())?.url || "";
+}
+
+function getSectionPrimaryImage(sectionId, item, fallbackUrl = "") {
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  return photoLinks[0]?.url || item?.imageUrl || item?.externalPreviewUrl || fallbackUrl || "";
+}
+
+function getSectionPhotoLinks(sectionId, item) {
+  if (!item?.id || !sectionId) {
+    return getFallbackPhotoLinks(item);
+  }
+
+  const manifestLinks = PHOTO_MANIFEST?.[sectionId]?.[item.id];
+  if (Array.isArray(manifestLinks) && manifestLinks.length) {
+    return manifestLinks;
+  }
+
+  return getFallbackPhotoLinks(item);
+}
+
+function getFallbackPhotoLinks(item) {
+  const candidates = [item?.imageUrl, item?.externalPreviewUrl]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  return candidates.map((url, index) => ({
+    label: `Фото ${index + 1}`,
+    url
+  }));
 }
 
 function resolveMediaUrl(url) {

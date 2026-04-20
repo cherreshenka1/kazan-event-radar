@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import sourceConfig from "../config/sources.json" with { type: "json" };
 import { mergeImportedPayloadToKv } from "./lib/import-payload-to-kv.mjs";
+import { buildLocalSnapshotPayload } from "./lib/local-import-snapshot.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,7 +105,7 @@ async function main() {
     }
 
     const deduped = dedupeImportedEvents(collected);
-    const payload = {
+    const uploadPayload = {
       source: "yandex_browser",
       mode: importMode,
       runMode,
@@ -113,14 +114,17 @@ async function main() {
       reportedImportedCount: deduped.length,
       items: deduped
     };
+    const snapshotPayload = await buildLocalSnapshotPayload(OUTPUT_PATH, uploadPayload, {
+      mode: runMode
+    });
 
-    await writeOutputSnapshot(OUTPUT_PATH, payload, console.log, "Yandex browser events");
+    await writeOutputSnapshot(OUTPUT_PATH, snapshotPayload, console.log, "Yandex browser events");
     console.log(`Output: ${OUTPUT_PATH}`);
 
     let uploadResult = null;
     if (shouldUpload) {
       if (deduped.length) {
-        uploadResult = await mergeImportedPayloadToKv(payload, {
+        uploadResult = await mergeImportedPayloadToKv(uploadPayload, {
           log: console.log
         });
         markEventsUploaded(syncState, collected, new Date().toISOString());
@@ -140,6 +144,7 @@ async function main() {
       sourceStats: stats,
       collectedItems: collected.length,
       dedupedItems: deduped.length,
+      snapshotItems: snapshotPayload.items.length,
       uploadedItems: uploadResult?.imported || 0,
       outputPath: path.relative(ROOT, OUTPUT_PATH)
     });
