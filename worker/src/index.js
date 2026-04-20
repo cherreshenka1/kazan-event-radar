@@ -1,6 +1,7 @@
 import sourceConfig from "../../config/sources.json" with { type: "json" };
 import ticketPlatformsConfig from "../../config/ticket-platforms.json" with { type: "json" };
 import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
+import { renderAdminDashboard } from "../../src/lib/adminDashboard.js";
 
 const DAILY_DRAFTS_CRON = "0 6 * * *";
 const HOURLY_SCAN_CRON = "15 * * * *";
@@ -201,12 +202,20 @@ async function handleRequest(request, env) {
   }
 
   if (url.pathname === "/health") {
-    const meta = await getEventMeta(env);
+    const [meta, eventsRefresh, catalogRefresh] = await Promise.all([
+      getEventMeta(env),
+      getJson(env, "system:eventsRefreshReport", null),
+      getJson(env, "system:catalogRefreshReport", null)
+    ]);
     return json({
       ok: true,
       service: "kazan-event-radar-worker",
       enabledSources: EVENT_SOURCES.length,
-      lastScanAt: meta?.lastScanAt || null
+      lastScanAt: meta?.lastScanAt || null,
+      eventItems: meta?.eventItems || meta?.totalItems || 0,
+      eventsRefreshAt: eventsRefresh?.finishedAt || null,
+      catalogRefreshAt: catalogRefresh?.finishedAt || null,
+      catalogSections: Array.isArray(catalogRefresh?.sections) ? catalogRefresh.sections.length : 0
     }, 200, env);
   }
 
@@ -2198,18 +2207,29 @@ async function track(env, event) {
 async function analyticsSummary(env) {
   const events = await getJson(env, "analytics:events", []);
   const uniqueUsers = new Set(events.map((event) => event.userHash).filter(Boolean));
+  const [eventMeta, eventsRefresh, catalogRefresh] = await Promise.all([
+    getEventMeta(env),
+    getJson(env, "system:eventsRefreshReport", null),
+    getJson(env, "system:catalogRefreshReport", null)
+  ]);
+
   return {
     totalEvents: events.length,
     uniqueUsers: uniqueUsers.size,
     byType: groupCount(events, "type"),
     byAction: groupCount(events, "action"),
-    recentEvents: events.slice(-100).reverse()
+    recentEvents: events.slice(-100).reverse(),
+    system: {
+      updatedAt: new Date().toISOString(),
+      eventMeta,
+      eventsRefresh,
+      catalogRefresh
+    }
   };
 }
 
 function renderAnalyticsPage(summary) {
-  const rows = summary.recentEvents.map((event) => `<tr><td>${escapeHtml(event.ts)}</td><td>${escapeHtml(event.type)}</td><td>${escapeHtml(event.action)}</td><td>${escapeHtml(event.label || "")}</td><td>${escapeHtml(event.userHash || "")}</td></tr>`).join("");
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kazan Analytics</title><style>body{font-family:Segoe UI,sans-serif;background:#07111f;color:#f8fafc;margin:0}main{max-width:1100px;margin:auto;padding:24px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card,table{background:#101f33;border:1px solid rgba(255,255,255,.12);border-radius:16px}.card{padding:16px}.metric{font-size:36px;color:#86efac;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}</style></head><body><main><h1>Kazan Event Radar Analytics</h1><div class="cards"><div class="card">Events<div class="metric">${summary.totalEvents}</div></div><div class="card">Users<div class="metric">${summary.uniqueUsers}</div></div><div class="card">Types<pre>${escapeHtml(JSON.stringify(summary.byType, null, 2))}</pre></div><div class="card">Actions<pre>${escapeHtml(JSON.stringify(summary.byAction, null, 2))}</pre></div></div><table><thead><tr><th>Time</th><th>Type</th><th>Action</th><th>Label</th><th>User hash</th></tr></thead><tbody>${rows}</tbody></table></main></body></html>`;
+  return renderAdminDashboard(summary);
 }
 
 async function getEventMeta(env, items = null) {

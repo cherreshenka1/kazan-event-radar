@@ -1,13 +1,20 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { renderAdminDashboard } from "../lib/adminDashboard.js";
 import { analyticsStore } from "../storage/analyticsStore.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT = path.resolve(__dirname, "..", "..");
 
 export function registerAdminRoutes(app) {
   app.get("/admin/analytics", requireAdminAuth, async (_req, res) => {
-    const summary = await analyticsStore.summary();
-    res.type("html").send(renderAnalyticsPage(summary));
+    res.type("html").send(renderAdminDashboard(await buildAdminSummary()));
   });
 
   app.get("/admin/analytics.json", requireAdminAuth, async (_req, res) => {
-    res.json(await analyticsStore.summary());
+    res.json(await buildAdminSummary());
   });
 }
 
@@ -40,62 +47,80 @@ function requestAuth(res) {
   return res.status(401).send("Authentication required.");
 }
 
-function renderAnalyticsPage(summary) {
-  const recent = summary.recentEvents.map((event) => `
-    <tr>
-      <td>${escapeHtml(new Date(event.ts).toLocaleString("ru-RU"))}</td>
-      <td>${escapeHtml(event.type)}</td>
-      <td>${escapeHtml(event.action)}</td>
-      <td>${escapeHtml(event.label || "")}</td>
-      <td>${escapeHtml(event.source || "")}</td>
-      <td>${escapeHtml(event.userHash || "")}</td>
-    </tr>
-  `).join("");
+async function buildAdminSummary() {
+  const analytics = await analyticsStore.summary();
+  const [eventsRefresh, catalogRefresh, eventMeta] = await Promise.all([
+    readJson(path.join(ROOT, "data", "playwright", "refresh-report.json"), null),
+    readJson(path.join(ROOT, "data", "catalog-imports", "refresh-report.json"), null),
+    readLocalEventMeta()
+  ]);
 
-  return `<!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kazan Event Radar Analytics</title>
-    <style>
-      body { margin: 0; font-family: Inter, Segoe UI, sans-serif; background: #07111f; color: #f8fafc; }
-      main { width: min(1120px, 100%); margin: 0 auto; padding: 28px 16px; }
-      h1 { margin: 0 0 18px; }
-      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 18px 0; }
-      .card, table { border: 1px solid rgba(255,255,255,.12); border-radius: 18px; background: #101f33; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
-      .card { padding: 18px; }
-      .metric { font-size: 2.2rem; font-weight: 800; color: #86efac; }
-      table { width: 100%; border-collapse: collapse; overflow: hidden; }
-      th, td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; font-size: .92rem; vertical-align: top; }
-      th { color: #bbf7d0; }
-      pre { white-space: pre-wrap; word-break: break-word; color: #dbeafe; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Kazan Event Radar Analytics</h1>
-      <div class="cards">
-        <section class="card"><div>Всего событий</div><div class="metric">${summary.totalEvents}</div></section>
-        <section class="card"><div>Уникальных пользователей</div><div class="metric">${summary.uniqueUsers}</div></section>
-        <section class="card"><div>По типам</div><pre>${escapeHtml(JSON.stringify(summary.byType, null, 2))}</pre></section>
-        <section class="card"><div>По действиям</div><pre>${escapeHtml(JSON.stringify(summary.byAction, null, 2))}</pre></section>
-      </div>
-      <h2>Последние события</h2>
-      <table>
-        <thead><tr><th>Время</th><th>Тип</th><th>Действие</th><th>Метка</th><th>Источник</th><th>User hash</th></tr></thead>
-        <tbody>${recent}</tbody>
-      </table>
-    </main>
-  </body>
-</html>`;
+  return {
+    ...analytics,
+    system: {
+      updatedAt: new Date().toISOString(),
+      eventMeta,
+      eventsRefresh,
+      catalogRefresh
+    }
+  };
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+async function readLocalEventMeta() {
+  const snapshotFiles = [
+    path.join(ROOT, "data", "playwright", "yandex-browser-events.json"),
+    path.join(ROOT, "data", "playwright", "mts-live-events.json"),
+    path.join(ROOT, "data", "playwright", "kassir-browser-events.json"),
+    path.join(ROOT, "data", "playwright", "official-sport-events.json")
+  ];
+
+  const snapshots = (await Promise.all(snapshotFiles.map((filePath) => readJson(filePath, null))))
+    .filter(Boolean);
+
+  if (snapshots.length === 0) {
+    return null;
+  }
+
+  const sourceMap = new Map();
+  let lastScanAt = null;
+  let collectedItems = 0;
+
+  for (const snapshot of snapshots) {
+    const syncedAt = snapshot.syncedAt || null;
+    if (syncedAt && (!lastScanAt || new Date(syncedAt).getTime() > new Date(lastScanAt).getTime())) {
+      lastScanAt = syncedAt;
+    }
+
+    const itemCount = Array.isArray(snapshot.items) ? snapshot.items.length : 0;
+    collectedItems += itemCount;
+
+    for (const source of Array.isArray(snapshot.sourceStats) ? snapshot.sourceStats : []) {
+      const sourceId = source.id || source.name || `source-${sourceMap.size + 1}`;
+      sourceMap.set(sourceId, {
+        id: source.id || sourceId,
+        name: source.name || source.id || sourceId,
+        importedItems: Number(source.importedItems || 0),
+        collectedLinks: Number(source.collectedLinks || 0),
+        queuedLinks: Number(source.queuedLinks || 0)
+      });
+    }
+  }
+
+  return {
+    lastScanAt,
+    reason: "local_snapshot_files",
+    enabledSources: sourceMap.size,
+    collectedItems,
+    totalItems: collectedItems,
+    eventItems: collectedItems,
+    sources: Array.from(sourceMap.values())
+  };
+}
+
+async function readJson(filePath, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
 }

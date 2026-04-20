@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { writeRemoteJson } from "./lib/remote-kv-json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,7 @@ async function main() {
     generatedOverrides: await readGeneratedOverridesSummary()
   };
 
+  report.kvSync = await syncReportToKv("system:catalogRefreshReport", report);
   await writeReport(report);
   console.log(`Catalog refresh report: ${REPORT_PATH}`);
 
@@ -198,6 +200,24 @@ async function readGeneratedOverridesSummary() {
 
 async function writeReport(report) {
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+}
+
+async function syncReportToKv(key, report) {
+  try {
+    await writeRemoteJson(key, report);
+    return {
+      ok: true,
+      key,
+      syncedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      key,
+      syncedAt: null,
+      error: error.message || String(error)
+    };
+  }
 }
 
 function parseCliOptions(args) {
