@@ -626,8 +626,12 @@ async function importExternalEvents(env, payload = {}) {
   const existing = (await getJson(env, "events:items", []))
     .filter((item) => PERSISTED_EVENT_TYPES.has(item.type))
     .filter((item) => importMode === "replace_source" ? item.type !== sourceType : true);
-  const nextItems = await mergeImportedEventItems(existing, prepared);
-  const metaSources = normalizeImportedMetaSources(payload.sourceStats, sourceKey, sourceName, importMode, reportedImportedCount);
+  const mergedItems = await mergeImportedEventItems(existing, prepared);
+  const nextItems = pruneImportedItemsToAllowedWindow(mergedItems, env);
+  const previousMeta = await getJson(env, "events:meta", null);
+  const incomingMetaSources = normalizeImportedMetaSources(payload.sourceStats, sourceKey, sourceName, importMode, reportedImportedCount);
+  const derivedMetaSources = inferImportedMetaSourcesFromItems(nextItems);
+  const metaSources = mergeImportedMetaSources(derivedMetaSources, previousMeta?.sources, incomingMetaSources);
 
   const meta = {
     lastScanAt: payload.syncedAt || new Date().toISOString(),
@@ -679,6 +683,142 @@ function normalizeImportedMetaSources(sourceStats, sourceKey, sourceName, import
     mode: importMode,
     count: fallbackCount
   }];
+}
+
+function mergeImportedMetaSources(...sourceGroups) {
+  const merged = new Map();
+
+  for (const group of sourceGroups) {
+    for (const source of group || []) {
+      const normalized = normalizeImportedMetaSourceEntry(source);
+      if (!normalized) continue;
+      const key = normalized.id || normalized.name;
+      const current = merged.get(key) || {};
+      merged.set(key, {
+        ...current,
+        ...normalized
+      });
+    }
+  }
+
+  return [...merged.values()].sort((left, right) => {
+    const countDiff = Number(right?.count || 0) - Number(left?.count || 0);
+    if (countDiff) return countDiff;
+    return String(left?.name || left?.id || "").localeCompare(String(right?.name || right?.id || ""), "ru");
+  });
+}
+
+function normalizeImportedMetaSourceEntry(source) {
+  if (!source || typeof source !== "object") return null;
+
+  const id = source.id || source.sourceId || "";
+  const name = source.name || source.sourceName || resolveConfiguredSourceName(id) || id || "";
+  if (!id && !name) return null;
+
+  return {
+    id,
+    name,
+    status: source.status || "ok",
+    mode: source.mode || "merge",
+    count: Math.max(0, Number(source.count ?? source.importedItems ?? 0)),
+    collectedLinks: Math.max(0, Number(source.collectedLinks ?? 0)),
+    queuedLinks: Math.max(0, Number(source.queuedLinks ?? 0)),
+    skippedKnownLinks: Math.max(0, Number(source.skippedKnownLinks ?? 0))
+  };
+}
+
+function pruneImportedItemsToAllowedWindow(items, env) {
+  return (items || [])
+    .map((item) => normalizePersistedImportedEventItem(item))
+    .filter((item) => isAllowedEventItem(item, env));
+}
+
+function normalizePersistedImportedEventItem(item) {
+  if (!item || typeof item !== "object") return item;
+
+  const primarySourceId = normalizeText(item?.sourceId || item?.sourceIds?.[0] || "");
+  const section = resolveImportedEventSection(item, primarySourceId);
+  const kind = normalizeEventKind(section || item?.kind || "events");
+
+  return {
+    ...item,
+    sourceId: primarySourceId || item?.sourceId || "",
+    sourceName: normalizeText(item?.sourceName || item?.sourceNames?.[0] || resolveConfiguredSourceName(primarySourceId) || ""),
+    section,
+    kind,
+    categories: [...new Set(
+      ["events", ...(Array.isArray(item?.categories) ? item.categories : []), kind]
+        .map((value) => normalizeText(value))
+        .filter(Boolean)
+    )],
+    subtitle: normalizeText(item?.subtitle || ""),
+    summary: normalizeText(item?.summary || item?.rawSummary || item?.shortSummary || ""),
+    shortSummary: normalizeText(item?.shortSummary || item?.summary || item?.rawSummary || ""),
+    venueTitle: normalizeText(item?.venueTitle || ""),
+    venueUrl: item?.venueUrl ? normalizeAbsoluteUrl(item.venueUrl, true) : "",
+    imageUrl: item?.imageUrl ? normalizeAbsoluteUrl(item.imageUrl, true) : null,
+    url: canonicalEventUrl(item?.url),
+    dateText: normalizeText(item?.dateText || ""),
+    sourceLabel: normalizeText(item?.sourceLabel || "")
+  };
+}
+
+function resolveImportedEventSection(item, primarySourceId = "") {
+  const explicitSection = normalizeText(item?.section || "");
+  if (explicitSection) return explicitSection;
+
+  const categorySection = (Array.isArray(item?.categories) ? item.categories : [])
+    .map((value) => normalizeText(value))
+    .find((value) => value && value !== "events");
+  if (categorySection) return categorySection;
+
+  const sourceIds = [primarySourceId, ...(Array.isArray(item?.sourceIds) ? item.sourceIds : [])]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
+
+  for (const sourceId of sourceIds) {
+    const configuredSection = resolveConfiguredSourceSection(sourceId);
+    if (configuredSection) return configuredSection;
+  }
+
+  const yandexSection = resolveYandexSection(item?.url, "");
+  if (yandexSection) return yandexSection;
+
+  return normalizeEventKind(item?.kind || "");
+}
+
+function inferImportedMetaSourcesFromItems(items) {
+  const counts = new Map();
+
+  for (const item of items || []) {
+    if (!PERSISTED_EVENT_TYPES.has(item?.type)) continue;
+    const sourceIds = Array.isArray(item?.sourceIds) && item.sourceIds.length
+      ? item.sourceIds
+      : [item?.sourceId].filter(Boolean);
+    const sourceNames = Array.isArray(item?.sourceNames) ? item.sourceNames : [];
+
+    sourceIds.forEach((sourceId, index) => {
+      const id = normalizeText(sourceId);
+      if (!id) return;
+      const name = normalizeText(sourceNames[index] || item?.sourceName || resolveConfiguredSourceName(id) || id);
+      const current = counts.get(id) || {
+        id,
+        name,
+        status: "ok",
+        mode: "merge",
+        count: 0
+      };
+      current.count += 1;
+      if (!current.name && name) current.name = name;
+      counts.set(id, current);
+    });
+  }
+
+  return [...counts.values()].sort((left, right) => {
+    const countDiff = Number(right?.count || 0) - Number(left?.count || 0);
+    if (countDiff) return countDiff;
+    return String(left?.name || left?.id || "").localeCompare(String(right?.name || right?.id || ""), "ru");
+  });
 }
 
 async function mergeImportedEventItems(existingItems, preparedItems) {
@@ -752,16 +892,21 @@ function prepareImportedEventItem(raw, sourceKey, sourceType, sourceName) {
     sourceId: raw?.sourceId || sourceKey,
     sourceName: raw?.sourceName || sourceName,
     type: sourceType,
+    section,
     kind,
     title,
+    subtitle: normalizeText(raw?.subtitle || ""),
     rawSummary,
     summary: rawSummary,
     shortSummary: rawSummary,
     url,
-    imageUrl: raw?.imageUrl ? canonicalEventUrl(raw.imageUrl) : null,
+    imageUrl: raw?.imageUrl ? normalizeAbsoluteUrl(raw.imageUrl, true) : null,
     eventDate: timing.eventDate,
     eventHasExplicitTime: timing.eventHasExplicitTime,
+    dateText: normalizeText(raw?.dateText || ""),
     venueTitle: normalizeText(raw?.venueTitle || ""),
+    venueUrl: raw?.venueUrl ? normalizeAbsoluteUrl(raw.venueUrl, true) : "",
+    sourceLabel: normalizeText(raw?.sourceLabel || ""),
     publishedAt: null,
     categories: ["events", kind],
     baseScore: Number(raw?.baseScore || 56),
@@ -783,6 +928,20 @@ function mapImportedSourceName(sourceKey) {
     yandex_browser: "Yandex Afisha Browser",
     kassir_browser: "Kassir Browser"
   }[sourceKey] || "Browser Import";
+}
+
+function resolveConfiguredSourceName(sourceId) {
+  const normalizedId = normalizeText(sourceId);
+  if (!normalizedId) return "";
+  const configuredSource = (sourceConfig.sources || []).find((source) => normalizeText(source?.id) === normalizedId);
+  return normalizeText(configuredSource?.name || "");
+}
+
+function resolveConfiguredSourceSection(sourceId) {
+  const normalizedId = normalizeText(sourceId);
+  if (!normalizedId) return "";
+  const configuredSource = (sourceConfig.sources || []).find((source) => normalizeText(source?.id) === normalizedId);
+  return normalizeText(configuredSource?.section || "");
 }
 
 function normalizeImportedEventDate(value) {
@@ -3099,6 +3258,9 @@ export const IMPORT_INTERNALS = {
   shouldRejectEventItem,
   itemId,
   mergeImportedEventItems,
+  pruneImportedItemsToAllowedWindow,
+  inferImportedMetaSourcesFromItems,
   normalizeImportedMetaSources,
+  mergeImportedMetaSources,
   isAllowedEventItem
 };

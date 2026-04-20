@@ -23,6 +23,7 @@ export async function mergeImportedPayloadToKv(payload = {}, options = {}) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   const reportedImportedCount = Math.max(0, Number(payload.reportedImportedCount || 0)) || items.length;
   const existingItems = await readRemoteJson("events:items", []);
+  const existingMeta = await readRemoteJson("events:meta", null);
 
   if (!items.length) {
     return {
@@ -47,7 +48,10 @@ export async function mergeImportedPayloadToKv(payload = {}, options = {}) {
   }
 
   log(`Prepared imported items: ${prepared.length}/${items.length}`);
-  const nextItems = await IMPORT_INTERNALS.mergeImportedEventItems(existing, prepared);
+  const mergedItems = await IMPORT_INTERNALS.mergeImportedEventItems(existing, prepared);
+  const nextItems = IMPORT_INTERNALS.pruneImportedItemsToAllowedWindow(mergedItems, buildAllowedWindowEnv());
+  const incomingSources = IMPORT_INTERNALS.normalizeImportedMetaSources(payload.sourceStats, sourceKey, sourceName, importMode, reportedImportedCount);
+  const derivedSources = IMPORT_INTERNALS.inferImportedMetaSourcesFromItems(nextItems);
   const meta = {
     lastScanAt: payload.syncedAt || new Date().toISOString(),
     reason: `import:${sourceKey}:${importMode}`,
@@ -55,7 +59,7 @@ export async function mergeImportedPayloadToKv(payload = {}, options = {}) {
     collectedItems: reportedImportedCount,
     totalItems: nextItems.length,
     eventItems: nextItems.filter((item) => (item.categories?.includes("events") || item.eventDate) && IMPORT_INTERNALS.isAllowedEventItem(item, buildAllowedWindowEnv())).length,
-    sources: IMPORT_INTERNALS.normalizeImportedMetaSources(payload.sourceStats, sourceKey, sourceName, importMode, reportedImportedCount)
+    sources: IMPORT_INTERNALS.mergeImportedMetaSources(derivedSources, existingMeta?.sources, incomingSources)
   };
 
   await writeRemoteJson("events:items", nextItems);
