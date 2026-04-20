@@ -1,0 +1,134 @@
+name: Refresh Event Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Refresh mode
+        required: true
+        default: incremental
+        type: choice
+        options:
+          - incremental
+          - full
+      include_kassir:
+        description: Include Kassir refresh
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    - cron: "15 3 * * *"
+    - cron: "45 2 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Locate browser
+        shell: bash
+        run: |
+          BROWSER_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$BROWSER_PATH" ]; then
+            echo "::error::No Chrome/Chromium executable found on runner."
+            exit 1
+          fi
+          echo "PLAYWRIGHT_BROWSER_PATH=$BROWSER_PATH" >> "$GITHUB_ENV"
+          echo "Browser path: $BROWSER_PATH"
+
+      - name: Write Cloudflare credentials
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID secret."
+            exit 1
+          fi
+          printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\n' "$CF_API_TOKEN" "$CF_ACCOUNT_ID" > .cloudflare.env
+
+      - name: Restore browser auth states
+        shell: bash
+        env:
+          YANDEX_AUTH_STATE_B64: ${{ secrets.YANDEX_AUTH_STATE_B64 }}
+          KASSIR_AUTH_STATE_B64: ${{ secrets.KASSIR_AUTH_STATE_B64 }}
+        run: |
+          mkdir -p data/playwright
+          if [ -z "$YANDEX_AUTH_STATE_B64" ]; then
+            echo "::error::Missing YANDEX_AUTH_STATE_B64 secret."
+            exit 1
+          fi
+          if [ -z "$KASSIR_AUTH_STATE_B64" ]; then
+            echo "::error::Missing KASSIR_AUTH_STATE_B64 secret."
+            exit 1
+          fi
+          printf '%s' "$YANDEX_AUTH_STATE_B64" | base64 --decode > data/playwright/github-yandex-state.json
+          printf '%s' "$KASSIR_AUTH_STATE_B64" | base64 --decode > data/playwright/github-kassir-state.json
+          echo "PLAYWRIGHT_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-yandex-state.json" >> "$GITHUB_ENV"
+          echo "KASSIR_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-kassir-state.json" >> "$GITHUB_ENV"
+
+      - name: Resolve refresh mode
+        id: mode
+        shell: bash
+        run: |
+          MODE="incremental"
+          INCLUDE_KASSIR="true"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ inputs.mode }}"
+            INCLUDE_KASSIR="${{ inputs.include_kassir }}"
+          fi
+
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "45 2 * * 1" ]; then
+            MODE="full"
+          fi
+
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "include_kassir=$INCLUDE_KASSIR" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh events
+        shell: bash
+        run: |
+          ARGS=("--headless" "--kassir-headless" "--max-links=0" "--chunk-size=6" "--pause-ms=1800" "--retries=3")
+
+          if [ "${{ steps.mode.outputs.mode }}" = "full" ]; then
+            ARGS+=("--full")
+          else
+            ARGS+=("--incremental")
+          fi
+
+          if [ "${{ steps.mode.outputs.include_kassir }}" = "true" ]; then
+            ARGS+=("--with-kassir")
+          else
+            ARGS+=("--skip-kassir")
+          fi
+
+          node scripts/refresh-events-pipeline.mjs "${ARGS[@]}"
+
+      - name: Upload refresh report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-refresh-report
+          path: |
+            data/playwright/refresh-report.json
+            data/playwright/yandex-browser-events.json
+            data/playwright/mts-live-events.json
+            data/playwright/kassir-browser-events.json
+            data/playwright/official-sport-events.json
+          if-no-files-found: warn

@@ -34,9 +34,14 @@
     "afisha:browser:with-kassir": "node scripts/sync-browser-events.mjs --with-kassir",
     "afisha:browser:refresh": "node scripts/sync-browser-events.mjs --incremental --with-kassir --headless --kassir-headless --max-links=0 --chunk-size=6 --pause-ms=1800 --retries=3",
     "afisha:browser:year": "node scripts/sync-browser-events.mjs --incremental --with-kassir --headless --kassir-headless --max-links=0 --chunk-size=6 --pause-ms=1800 --retries=3",
+    "events:refresh": "node scripts/refresh-events-pipeline.mjs --incremental --with-kassir --headless --kassir-headless --max-links=0 --chunk-size=6 --pause-ms=1800 --retries=3",
+    "events:refresh:full": "node scripts/refresh-events-pipeline.mjs --full --with-kassir --headless --kassir-headless --max-links=0 --chunk-size=6 --pause-ms=1800 --retries=3",
     "catalog:sources": "node scripts/validate-catalog-sources.mjs",
     "catalog:build": "node scripts/build-catalog-import-overrides.mjs",
     "catalog:refresh": "node scripts/refresh-catalog-imports.mjs",
+    "catalog:refresh:stale": "node scripts/refresh-catalog-imports.mjs --stale-only",
+    "catalog:refresh:pipeline": "node scripts/refresh-catalog-pipeline.mjs --deploy",
+    "catalog:refresh:local": "node scripts/refresh-catalog-pipeline.mjs --no-deploy",
     "catalog:food": "node scripts/import-food-catalog.mjs",
     "catalog:sights": "node scripts/import-sights-catalog.mjs",
     "catalog:parks": "node scripts/import-parks-catalog.mjs",
@@ -48,6 +53,7 @@
     "sports:official": "node scripts/import-official-sport-events.mjs",
     "set-token": "powershell -ExecutionPolicy Bypass -File scripts/set-telegram-token.ps1",
     "set-analytics-password": "powershell -ExecutionPolicy Bypass -File scripts/set-analytics-password.ps1",
+    "github:secrets:auth": "powershell -ExecutionPolicy Bypass -File scripts/export-github-auth-secrets.ps1",
     "worker:whoami": "npx wrangler whoami --config worker/wrangler.toml --env-file .cloudflare.env",
     "worker:kv:create": "npx wrangler kv namespace create KAZAN_KV --config worker/wrangler.toml --env-file .cloudflare.env",
     "worker:kv:create:preview": "npx wrangler kv namespace create KAZAN_KV --preview --config worker/wrangler.toml --env-file .cloudflare.env",
@@ -55,7 +61,7 @@
     "worker:deploy": "npx wrangler deploy --config worker/wrangler.toml --env-file .cloudflare.env",
     "worker:set-webhook": "node worker/scripts/set-webhook.js",
     "worker:set-miniapp-api": "node worker/scripts/set-miniapp-api.js",
-    "check": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem src,public,worker,scripts -Recurse -Include *.js,*.mjs | ForEach-Object { node --check $_.FullName }\""
+    "check": "node scripts/check-syntax.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

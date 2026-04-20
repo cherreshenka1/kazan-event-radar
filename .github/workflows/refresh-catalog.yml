@@ -1,0 +1,73 @@
+name: Refresh Catalog Sections
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_worker:
+        description: Deploy worker after refresh
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    - cron: "35 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Cloudflare credentials
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID secret."
+            exit 1
+          fi
+          printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\n' "$CF_API_TOKEN" "$CF_ACCOUNT_ID" > .cloudflare.env
+
+      - name: Resolve deploy mode
+        id: mode
+        shell: bash
+        run: |
+          DEPLOY="true"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            DEPLOY="${{ inputs.deploy_worker }}"
+          fi
+          echo "deploy=$DEPLOY" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh catalog
+        shell: bash
+        run: |
+          if [ "${{ steps.mode.outputs.deploy }}" = "true" ]; then
+            node scripts/refresh-catalog-pipeline.mjs --deploy --stale-only
+          else
+            node scripts/refresh-catalog-pipeline.mjs --no-deploy --stale-only
+          fi
+
+      - name: Upload catalog refresh report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-refresh-report
+          path: |
+            data/catalog-imports/refresh-report.json
+            data/catalog-imports/normalized/*.json
+            src/data/catalog-imports.generated.js
+          if-no-files-found: warn

@@ -51,7 +51,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Riviera Water Park",
         "externalSummary": "Riviera Water Park",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -122,7 +122,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Парк развлечений MazaPark",
         "externalSummary": "Парк развлечений MazaPark",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -193,7 +193,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Первый термальный комплекс в Казани",
         "externalSummary": "Первый термальный комплекс в Казани! 12 бань, 6 бассейнов, индивидуальные бани, SPA, рестораны, детские зоны и многое другое для вашего комфортного отдыха и оздоровления. Узнайте больше!",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -264,7 +264,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Веревочный парк Sky park",
         "externalSummary": "Веревочный парк Sky park",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -335,7 +335,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "URAM Extreme Park",
         "externalSummary": "URAM Extreme Park",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -406,7 +406,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Прокат и аренда SUP-бордов в Казани",
         "externalSummary": "Прокат сап-бордов (sup-board) в Казани. Посуточно. Бронируйте доски заранее!",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:31.779Z",
+          "generatedAt": "2026-04-20T08:29:24.263Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-active-items.json",
           "sourcePriority": [
@@ -482,7 +482,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "A Day in Kazan. Version 1",
         "externalSummary": "A Day in Kazan. Version 1",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:26.077Z",
+          "generatedAt": "2026-04-20T08:29:17.540Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-excursions-items.json",
           "sourcePriority": [
@@ -552,7 +552,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "LIKE my photo! A guide to the most photogenic places in Kazan",
         "externalSummary": "Even the shortest trip cannot be considered complete without the most integral part of it: photos, so you can share your experiences with relatives and friends, browse through your camera roll during a slow weekday, or see how many people ‘Like’ them on social media. As you head to Kazan, arm yourself with a camera, and be sure to visit the places that thousands of tourists have missed. Check o...",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:26.077Z",
+          "generatedAt": "2026-04-20T08:29:17.540Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-excursions-items.json",
           "sourcePriority": [
@@ -622,7 +622,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Tatar Atlantis: A Guide to the Old Tatar Quarter (Staro-Tatarskaya Sloboda)",
         "externalSummary": "The Old Tatar Quarter is the soul of Kazan's historic district. As you walk through this area, you’ll uncover the rich history of Tatar culture, with around 70 monuments dating from the 18th to the early 20th centuries.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:26.077Z",
+          "generatedAt": "2026-04-20T08:29:17.540Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-excursions-items.json",
           "sourcePriority": [
@@ -692,7 +692,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "A Guide to the Restaurant Streets of Kazan",
         "externalSummary": "The capital of Tatarstan, Kazan, is a city rich in gastronomic traditions. Here you can enjoy classic national cuisine, international culinary hits, and original chef creations. The best part? You don't have to travel far to experience Kazan’s diverse food scene—just head to one of the city's renowned restaurant streets. This guide is here to help you navigate your way around Kazan’s most",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:26.077Z",
+          "generatedAt": "2026-04-20T08:29:17.540Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-excursions-items.json",
           "sourcePriority": [
@@ -775,7 +775,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Национальный комплекс «Туган Авылым»",
         "externalSummary": "Мастер-классы, экскурсии, банкетные залы, рестораны",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:10.431Z",
+          "generatedAt": "2026-04-20T08:28:59.353Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-food-items.json",
           "sourcePriority": [
@@ -854,7 +854,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Гостинично-ресторанный комплекс \"Татарская Усадьба\" в Казани",
         "externalSummary": "Гостинично-ресторанный комплекс Татарская Усадьба в Казани на берегу озера Кабан. Ресторан на 300 мест, 2 летние веранды на 80 мест и 2 VIP зала. Для удобства гостей предоставляется стоянка, детский номер, бесплатный Wi-Fi, летний двор, винный завод и служба доставки на дом. Бронирование номеров и столиков по телефону: +7 (987) 225-04-33.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:10.431Z",
+          "generatedAt": "2026-04-20T08:28:59.353Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-food-items.json",
           "sourcePriority": [
@@ -933,7 +933,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Чирэм",
         "externalSummary": "Казань - Чирэм",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:10.431Z",
+          "generatedAt": "2026-04-20T08:28:59.353Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-food-items.json",
           "sourcePriority": [
@@ -1012,7 +1012,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Ресторан «Гусь»",
         "externalSummary": "Татарские национальные блюда в историческом центре Казани",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:10.431Z",
+          "generatedAt": "2026-04-20T08:28:59.353Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-food-items.json",
           "sourcePriority": [
@@ -1091,7 +1091,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Бистро Артель",
         "externalSummary": "Артель — современное бистро на улице Муштари, где традиции татарской кухни объединяются с авторскими решениями шеф-повара.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:10.431Z",
+          "generatedAt": "2026-04-20T08:28:59.353Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-food-items.json",
           "sourcePriority": [
@@ -1176,7 +1176,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Отель «Ногай», Казань",
         "externalSummary": "На главной пешеходной улице города — месте, где бьётся культурное и историческое сердце Казани, расположился четырёхзвёздочный отель «Ногай». Это часть живой истории: здание, в котором он находится, — знаменитый Дом печати, памятник архитектуры 1930-х годов, яркий образец советского конструктивизма.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:17.491Z",
+          "generatedAt": "2026-04-20T08:29:07.368Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-hotels-items.json",
           "sourcePriority": [
@@ -1254,7 +1254,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Kazan Palace by Tasigo",
         "externalSummary": "Kazan Palace by Tasigo",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:17.491Z",
+          "generatedAt": "2026-04-20T08:29:07.368Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-hotels-items.json",
           "sourcePriority": [
@@ -1332,7 +1332,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Luciano Hotel",
         "externalSummary": "Luciano Hotel",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:17.491Z",
+          "generatedAt": "2026-04-20T08:29:07.368Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-hotels-items.json",
           "sourcePriority": [
@@ -1410,7 +1410,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Cort Inn Казань Кремль 4*",
         "externalSummary": "ГОСТИНИЦА CORT INN КАЗАНЬ КРЕМЛЬ: бронируйте проживание на Яндекс Путешествиях и получайте до 15% кешбэка баллами Плюса за каждую поездку. Сравните стоимость размещения и выберите лучшее предложение на ваши даты. Расположение на карте, отзывы посетителей, фото номеров и правила проживания.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:17.491Z",
+          "generatedAt": "2026-04-20T08:29:07.368Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-hotels-items.json",
           "sourcePriority": [
@@ -1487,7 +1487,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Парк Черное озеро",
         "externalSummary": "Парк Черное озеро",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1554,7 +1554,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Gorky Park",
         "externalSummary": "Gorky Park",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1621,7 +1621,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Uritsky Park",
         "externalSummary": "Uritsky Park",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1688,7 +1688,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Park Pobedy (Victory Park)",
         "externalSummary": "Park Pobedy (Victory Park)",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1755,7 +1755,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Gorkinsko-Ometyevsky Forest",
         "externalSummary": "Gorkinsko-Ometyevsky Forest",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1821,7 +1821,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Фуксовский сад",
         "externalSummary": "Фуксовский сад",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:07.375Z",
+          "generatedAt": "2026-04-20T08:28:55.996Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-parks-items.json",
           "sourcePriority": [
@@ -1897,7 +1897,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -1967,7 +1967,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -2037,7 +2037,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -2107,7 +2107,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -2177,7 +2177,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -2247,7 +2247,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
           "Для некоторых точек есть автобусы или экскурсии"
         ],
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:38.955Z",
+          "generatedAt": "2026-04-20T08:29:31.891Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-roadtrip-items.json",
           "sourcePriority": [
@@ -2343,7 +2343,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "A Day in Kazan. Version 1",
         "externalSummary": "A Day in Kazan. Version 1",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:28.748Z",
+          "generatedAt": "2026-04-20T08:29:20.430Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-routes-items.json",
           "sourcePriority": [
@@ -2418,7 +2418,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Tatar Atlantis: A Guide to the Old Tatar Quarter (Staro-Tatarskaya Sloboda)",
         "externalSummary": "The Old Tatar Quarter is the soul of Kazan's historic district. As you walk through this area, you’ll uncover the rich history of Tatar culture, with around 70 monuments dating from the 18th to the early 20th centuries.",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:28.748Z",
+          "generatedAt": "2026-04-20T08:29:20.430Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-routes-items.json",
           "sourcePriority": [
@@ -2493,7 +2493,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "A Day in Kazan. Version 2",
         "externalSummary": "A Day in Kazan. Version 2",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:28.748Z",
+          "generatedAt": "2026-04-20T08:29:20.430Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-routes-items.json",
           "sourcePriority": [
@@ -2567,7 +2567,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "YOLO: Places to Visit for Young People in Kazan",
         "externalSummary": "Kazan is a vibrant, rapidly growing city with a thousand-year history that remains youthful and energetic. Consistently ranked among the top five cities in Russia for young people, Kazan offers a wealth of opportunities for teenagers, students, and young families. The city boasts excellent universities, a thriving cultural scene, top-tier urban infrastructure, and a packed calendar of events an...",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:28.748Z",
+          "generatedAt": "2026-04-20T08:29:20.430Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-routes-items.json",
           "sourcePriority": [
@@ -2642,7 +2642,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Bauman Street",
         "externalSummary": "Bauman Street",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:28.748Z",
+          "generatedAt": "2026-04-20T08:29:20.430Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-routes-items.json",
           "sourcePriority": [
@@ -2718,7 +2718,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Музей-заповедник «Казанский Кремль»",
         "externalSummary": "Музей-заповедник «Казанский Кремль»",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
@@ -2786,7 +2786,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Мечеть Кул Шариф",
         "externalSummary": "Здание мечети облицовано белым мрамором, купол и вершины минаретов имеют окраску бирюзового цвета. Фасад главного здания украшен бронзовыми металлическими надписями арабской вязью и гранями порталов. Информация для посетителей Режим работы 8:00-20:00 – ежедневно 11:30-13:30 – каждую пятницу мечеть закрывается на джума-намаз Во время посещения мечети необходимо надеть платок (для женщины), закры...",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
@@ -2856,7 +2856,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Bauman Street",
         "externalSummary": "Bauman Street",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
@@ -2925,7 +2925,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Old Tatar Quarter",
         "externalSummary": "Old Tatar Quarter",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
@@ -2993,7 +2993,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Центр семьи Казан",
         "externalSummary": "Центр семьи Казан",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
@@ -3061,7 +3061,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Дворец земледельцев",
         "externalSummary": "Дворец земледельцев",
         "importMeta": {
-          "generatedAt": "2026-04-18T17:08:01.896Z",
+          "generatedAt": "2026-04-20T08:28:49.966Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-sights-items.json",
           "sourcePriority": [
