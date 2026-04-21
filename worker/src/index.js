@@ -1449,7 +1449,7 @@ function normalizeEventKind(section) {
     spectacle_popular: "theatre",
     monoperformance: "theatre",
     show: "show",
-    festival: "show",
+    festival: "festival",
     circus_show: "show",
     show_and_musicals: "show",
     standup: "standup",
@@ -1592,7 +1592,23 @@ function matchesEventCategory(item, category = "all") {
     return (item.sourceCount || 1) > 1 || (item.priorityScore || item.score || 0) >= 80;
   }
 
+  if (category === "festival") {
+    return item.kind === "festival" || isFestivalEventItem(item);
+  }
+
   return item.kind === category;
+}
+
+function isFestivalEventItem(item) {
+  const haystack = normalizeFingerprintTextSafe([
+    item?.title || "",
+    item?.summary || "",
+    item?.shortSummary || "",
+    item?.sourceName || "",
+    item?.url || ""
+  ].join(" "));
+
+  return haystack.includes("фестив") || haystack.includes("festival");
 }
 
 function normalizeExternalImportMode(value) {
@@ -1654,7 +1670,7 @@ function buildEventFilters(searchParams, env) {
 }
 
 function formatEventFilterLabel(filters) {
-  return `${formatMoscowDate(filters.from)} - ${formatMoscowDate(filters.to)}`;
+  return `${formatMoscowDayMonth(filters.from)} - ${formatMoscowDayMonth(filters.to)}`;
 }
 
 function attachTicketLinks(item) {
@@ -1796,6 +1812,7 @@ function eventKindLabel(kind) {
     concert: "Концерт",
     theatre: "Спектакль",
     show: "Шоу",
+    festival: "Фестиваль",
     standup: "Стендап",
     exhibition: "Выставка",
     excursion: "Экскурсия",

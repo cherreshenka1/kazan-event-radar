@@ -2,7 +2,7 @@
 const config = window.KAZAN_EVENT_RADAR_CONFIG || {};
 const apiBaseUrl = (config.apiBaseUrl || "").replace(/\/$/, "");
 const params = new URLSearchParams(window.location.search);
-const EVENTS_FETCH_LIMIT = 600;
+const EVENTS_FETCH_LIMIT = 1000;
 
 if (tg) {
   tg.ready();
@@ -419,12 +419,7 @@ function renderEvents() {
     ),
     eventCategoryChips(),
     eventFilterPanel(),
-    statBar([
-      `Период: ${state.periodLabel}`,
-      state.events.length ? `Показано карточек: ${state.events.length} из ${state.totalEvents}` : "По фильтру пока пусто",
-      state.totalEvents ? `Уникальных событий: ${state.totalEvents}` : "",
-      state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Обновление скоро"
-    ]),
+    statBar(buildEventStats()),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`
       : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты."),
@@ -477,6 +472,16 @@ function renderActive() {
 
 function renderRoadtrip() {
   renderSectionExplorer("roadtrip", "Выберите направление для поездки.");
+}
+
+function buildEventStats() {
+  const hiddenCount = Math.max(0, Number(state.totalEvents || 0) - state.events.length);
+  return [
+    `Период: ${state.periodLabel}`,
+    state.events.length ? `Показано: ${state.events.length}` : "По фильтру пока пусто",
+    hiddenCount ? `Ещё по фильтру: ${hiddenCount}` : "",
+    state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Обновление скоро"
+  ];
 }
 
 function renderSectionExplorer(sectionId, emptyText) {
@@ -600,19 +605,18 @@ function safeEventDetailCard(item) {
     mediaImage(imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
-    richTextBlock(eventDetailSummary(item)),
+    richTextBlock(eventDetailSummary(item), "event-copy"),
     `<div class="fact-grid">
       ${dateLabel ? factBlock("Дата", dateLabel) : ""}
       ${timeLabel ? factBlock("Время", timeLabel) : ""}
       ${venueLabel ? factBlock("Место", venueLabel) : ""}
     </div>`,
-    sourceUrl ? `<p class="detail-source-note"><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Источник</a></p>` : "",
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
       `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
-      sourceUrl ? actionButton("Источник", "open", { url: sourceUrl }, "primary") : "",
       ...(item.ticketLinks || []).slice(0, 4).map((link) => actionButton(link.name, "open", { url: link.url }))
-    ])
+    ]),
+    sourceUrl ? sourceNote(sourceUrl) : ""
   ], "active");
 }
 
@@ -1589,6 +1593,7 @@ function eventCategoryChips() {
     { id: "standup", label: "Стендап" },
     { id: "sport", label: "Спорт" },
     { id: "exhibition", label: "Выставки" },
+    { id: "kids", label: "Детям" },
     { id: "excursion", label: "Экскурсии" }
   ];
 
@@ -1659,6 +1664,10 @@ function factButtonsBlock(title, links) {
     .join("")}</div></section>`;
 }
 
+function sourceNote(url) {
+  return `<p class="detail-source-note">Подробности и билеты: <button type="button" class="inline-source-link" data-action="open" data-url="${escapeHtml(url)}">источник</button></p>`;
+}
+
 function badge(value) {
   return `<span class="meta-badge">${escapeHtml(value)}</span>`;
 }
@@ -1725,7 +1734,7 @@ function resolveMediaUrl(url) {
   return `${apiBaseUrl}/api/image?url=${encodeURIComponent(raw)}`;
 }
 
-function richTextBlock(text) {
+function richTextBlock(text, extraClass = "") {
   const paragraphs = String(text || "")
     .split(/\n+/)
     .map((part) => part.trim())
@@ -1733,10 +1742,11 @@ function richTextBlock(text) {
 
   if (!paragraphs.length) return "";
 
-  return `<div class="card-copy">${paragraphs.map((part) => `<p>${escapeHtml(part)}</p>`).join("")}</div>`;
+  return `<div class="card-copy ${extraClass}">${paragraphs.map((part) => `<p>${escapeHtml(part)}</p>`).join("")}</div>`;
 }
 
 function eventTypeLabel(item) {
+  if (isFestivalLikeEvent(item)) return "Фестиваль";
   if (item.kind === "concert") return "Концерт";
   if (item.kind === "theatre") return "Спектакль";
   if (item.kind === "show") return "Шоу";
@@ -1761,6 +1771,11 @@ function eventTypeLabel(item) {
   return "Концерт";
 }
 
+function isFestivalLikeEvent(item) {
+  const text = compactTextFingerprint(`${item?.title || ""} ${item?.summary || ""} ${item?.shortSummary || ""} ${item?.sourceName || ""} ${item?.url || ""}`);
+  return text.includes("фестив") || text.includes("festival");
+}
+
 function eventCardTitle(item) {
   const base = trim(firstMeaningfulLine(item.title || item.summary || "Событие"), 84)
     .replace(/^\d{1,2}[.:]\d{2}\s*/u, "")
@@ -1778,7 +1793,8 @@ function eventCardSummary(item) {
 
 function eventDetailSummary(item) {
   return [
-    ...buildEventLeadParagraphs(item, 2),
+    ...buildEventLeadParagraphs(item, 3),
+    buildSafeEventScheduleLine(item),
     buildSafeEventMoodLine(item)
   ].filter(Boolean).join("\n\n");
 }
@@ -2107,11 +2123,11 @@ function getPresetRange(rangeId) {
   }
 
   if (rangeId === "3days") {
-    return { from, to: addDays(from, 2, to) };
+    return { from, to: addDays(from, 3, to) };
   }
 
   if (rangeId === "week") {
-    return { from, to: addDays(from, 6, to) };
+    return { from, to: addDays(from, 7, to) };
   }
 
   return { from, to };

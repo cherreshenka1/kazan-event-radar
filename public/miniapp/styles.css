@@ -2,8 +2,8 @@
   color-scheme: light;
   --bg: #c4d0dc;
   --text: #102033;
-  --hint: #415468;
-  --card: #e6edf4;
+  --hint: #2f4358;
+  --card: #e9f0f7;
   --accent: #2563eb;
   --accent-text: #ffffff;
   --border: rgba(16, 32, 51, 0.12);
@@ -26,7 +26,7 @@ body {
   font-family: "Segoe UI", "SF Pro Text", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   background:
     radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 30rem),
-    linear-gradient(180deg, #d7e0e9 0%, var(--bg) 52%);
+    linear-gradient(180deg, #d2dce7 0%, var(--bg) 52%);
   color: var(--text);
   line-height: 1.58;
 }
@@ -409,6 +409,7 @@ h1 {
 
 .detail-title {
   font-size: clamp(1.45rem, 3.2vw, 2.2rem);
+  margin-bottom: 14px;
 }
 
 .media-frame {
@@ -478,6 +479,11 @@ h1 {
   gap: 10px;
 }
 
+.card-copy.event-copy {
+  gap: 12px;
+  margin-top: 4px;
+}
+
 .card-copy p {
   margin: 0;
   text-indent: 1.2em;
@@ -500,27 +506,31 @@ h1 {
 }
 
 .detail-source-note {
-  margin: 14px 0 0;
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
   color: var(--hint);
   font-size: 0.93rem;
 }
 
-.detail-source-note a {
+.inline-source-link {
   display: inline-flex;
   align-items: center;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12);
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--accent);
   font-weight: 600;
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .event-modal-shell {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   display: flex;
   align-items: flex-end;
   justify-content: center;
