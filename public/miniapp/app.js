@@ -320,6 +320,8 @@ function buildEventsPath() {
 }
 
 async function loadFavorites() {
+  if (!tg?.initData) return [];
+
   try {
     const response = await api("/api/favorites");
     return response.favorites || [];
@@ -350,7 +352,7 @@ function renderHero() {
     events: {
       eyebrow: "Kazan Event Radar",
       title: "Казань без лишнего поиска",
-      text: "Только будущие события из Яндекс Афиши, MTS Live и Kassir. Короткие карточки, фильтр по датам и быстрый переход к источнику без лишнего шума.",
+      text: "Будущие события, короткие карточки, удобный фильтр по датам и быстрый переход к полной информации без лишнего шума.",
       badges: [
         state.periodLabel || "Будущие события",
         state.events.length ? `${state.events.length} карточек` : "Афиша обновляется"
@@ -414,7 +416,7 @@ function renderEvents() {
   contentNode.innerHTML = [
     sectionHeader(
       "Актуальная афиша",
-      "Только будущие события. Коротко, по делу и с быстрым переходом к источнику и билетам.",
+      "Только будущие события. Коротко, по делу и с удобным открытием полной карточки и ссылкой на детали.",
       SECTION_VISUALS.events
     ),
     eventCategoryChips(),
@@ -549,15 +551,14 @@ function eventDetailCard(item) {
   const sourceButtons = (item.sources || [])
     .filter((source) => source?.url)
     .slice(0, 1)
-    .map((source) => actionButton(source.name || "Источник", "open", { url: source.url }));
+    .map((source) => actionButton("Источник", "open", { url: source.url }));
   const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
   const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
   const venueLabel = eventVenueText(item);
-  const sourceLabel = item.sourceName || item.sources?.[0]?.name || "Прямой источник";
   const fallbackImage = eventVisualUrl(item, "detail");
 
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage) : mediaImage(fallbackImage, eventCardTitle(item) || "Событие"),
+    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     eventCardSummary(item) ? richTextBlock(splitSummaryParagraphs(eventCardSummary(item), 4)) : "",
@@ -565,7 +566,6 @@ function eventDetailCard(item) {
       ${dateLabel ? factBlock("Дата", dateLabel) : ""}
       ${timeLabel ? factBlock("Время", timeLabel) : ""}
       ${venueLabel ? factBlock("Место", venueLabel) : ""}
-      ${sourceLabel ? factBlock("Источник", sourceLabel) : ""}
     </div>`,
     actions([
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
@@ -581,7 +581,7 @@ function eventPreviewCard(item) {
   const meta = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)].filter(Boolean).join(" В· ");
   const fallbackImage = eventVisualUrl(item, "compact");
   return card([
-    item.imageUrl ? mediaImage(item.imageUrl, eventCardTitle(item) || "Событие", "compact", fallbackImage) : mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact"),
+    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -599,10 +599,9 @@ function safeEventDetailCard(item) {
   const venueLabel = eventVenueText(item);
   const sourceUrl = item.url || item.sources?.find((source) => source?.url)?.url || "";
   const fallbackImage = eventVisualUrl(item, "detail");
-  const imageUrl = primaryItemImage(item, fallbackImage);
 
   return card([
-    mediaImage(imageUrl, eventCardTitle(item) || "Событие", "", fallbackImage),
+    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     richTextBlock(eventDetailSummary(item), "event-copy"),
@@ -627,11 +626,10 @@ function safeEventPreviewCard(item) {
     eventVenueText(item)
   ].filter(Boolean).join(" · ");
   const fallbackImage = eventVisualUrl(item, "compact");
-  const imageUrl = primaryItemImage(item, fallbackImage);
   const isOpened = item.id === state.openEventId;
 
   return card([
-    mediaImage(imageUrl, eventCardTitle(item) || "Событие", "compact", fallbackImage),
+    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -1091,13 +1089,12 @@ function eventFavoritePayload(item) {
     type: "event",
     id: item.id,
     title: eventCardTitle(item) || item.title || "Событие",
-    subtitle: eventVenueText(item) || item.sourceName || "",
+    subtitle: eventVenueText(item) || "",
     summary: eventPreviewSummary(item),
-    imageUrl: item.imageUrl || eventVisualUrl(item, "detail"),
+    imageUrl: eventVisualUrl(item, "detail"),
     url: item.url,
     eventDate: item.eventDate,
     eventHasExplicitTime: item.eventHasExplicitTime,
-    sourceName: item.sourceName,
     venueTitle: item.venueTitle || eventVenueText(item)
   };
 }
@@ -1199,7 +1196,6 @@ function favoriteDetailCard(item) {
       ${snapshot.reviewSummary ? factBlock("По отзывам", snapshot.reviewSummary) : ""}
       ${snapshot.howToGet ? factBlock("Как добраться", snapshot.howToGet) : ""}
       ${snapshot.interior ? factBlock("Интерьер", snapshot.interior) : ""}
-      ${snapshot.sourceLabel ? factBlock("Источник", snapshot.sourceLabel) : ""}
       ${snapshot.highlights?.length ? factListBlock(highlightTitle, snapshot.highlights) : ""}
       ${snapshot.photoLinks?.length ? factButtonsBlock("Подборка фото", snapshot.photoLinks) : ""}
     </div>`,
@@ -1239,7 +1235,6 @@ function getFavoriteSnapshot(item) {
       current?.eventHasExplicitTime ?? item.eventHasExplicitTime ?? true
     );
     const venue = current ? eventVenueText(current) : (item.venueTitle || "");
-    const sourceLabel = current?.sourceName || current?.sources?.[0]?.name || item.sourceName || "Источник";
     const typeLabel = current ? eventTypeLabel(current) : favoriteTypeLabel(item.type, item.sectionId);
     const title = current ? (eventCardTitle(current) || item.title || "Событие") : (item.title || "Событие");
     const summary = current ? eventPreviewSummary(current) : trim(item.summary || item.title || "", 170);
@@ -1252,14 +1247,13 @@ function getFavoriteSnapshot(item) {
       title,
       summary,
       description: current ? eventDetailSummary(current) : summary,
-      imageUrl: current?.imageUrl || item.imageUrl || (current ? eventVisualUrl(current, "detail") : SECTION_VISUALS.events),
+      imageUrl: current ? eventVisualUrl(current, "detail") : (item.imageUrl || SECTION_VISUALS.events),
       fallbackImage: current ? eventVisualUrl(current, "detail") : SECTION_VISUALS.events,
       metaLine: [dateLabel, timeLabel, venue].filter(Boolean).join(" · "),
       eventDate: current?.eventDate || item.eventDate || "",
       dateLabel,
       timeLabel,
       venue,
-      sourceLabel,
       sourceUrl: current?.url || item.url || "",
       mapUrl: item.mapUrl || "",
       addedAt: item.addedAt || ""
@@ -1380,7 +1374,7 @@ function buildFavoriteCollectionText(selected) {
   }
 
   const snapshot = getFavoriteSnapshot(selected);
-  return `Сейчас в фокусе ${snapshot.title}. Внутри собраны только главные ориентиры: краткое описание, логистика, карта и быстрый переход к источнику.`;
+  return `Сейчас в фокусе ${snapshot.title}. Внутри собраны только главные ориентиры: краткое описание, логистика, карта и быстрый переход к деталям.`;
 }
 
 function buildFavoriteCollectionBadges(items, selected) {
@@ -1403,7 +1397,7 @@ function buildFavoriteCollectionBadges(items, selected) {
 
 function buildFavoritePreviewBadges(snapshot) {
   if (snapshot.type === "event") {
-    return [snapshot.dateLabel, snapshot.timeLabel, snapshot.venue || snapshot.sourceLabel].filter(Boolean);
+    return [snapshot.dateLabel, snapshot.timeLabel, snapshot.venue].filter(Boolean);
   }
 
   if (snapshot.type === "route") {
@@ -1552,8 +1546,8 @@ function syncUrl() {
     if (state.selectedRouteId) next.set("route", state.selectedRouteId);
   }
 
-  if (state.activeTab === "events" && (state.openEventId || state.selectedEventId)) {
-    next.set("event", state.openEventId || state.selectedEventId);
+  if (state.activeTab === "events" && state.openEventId) {
+    next.set("event", state.openEventId);
   }
 
   if (state.activeTab === "favorites" && state.selectedFavoriteId) {
@@ -1805,7 +1799,7 @@ function eventPreviewSummary(item) {
 
 function buildEventLeadParagraphs(item, maxParagraphs = 2) {
   const titleFingerprint = compactTextFingerprint(eventCardTitle(item) || "");
-  const sourceText = normalizeEventLeadText(item.shortSummary || item.subtitle || item.rawSummary || item.summary || "");
+  const sourceText = normalizeEventLeadText(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
   const sentences = sourceText
     .match(/[^.!?]+[.!?]?/g)
     ?.map((part) => trim(part, 190))
@@ -1833,8 +1827,10 @@ function buildEventLeadParagraphs(item, maxParagraphs = 2) {
 function normalizeEventLeadText(value) {
   return String(value || "")
     .replace(/https?:\/\/\S+/gi, "")
+    .replace(/В афише Казани[^.?!]*[.?!]/giu, "")
     .replace(/\s+/g, " ")
     .replace(/Подробности[^.]*$/iu, "")
+    .replace(/Подробности и билеты[^.]*$/iu, "")
     .trim();
 }
 
@@ -1942,7 +1938,7 @@ function buildEventPosterSvg(item, variant = "detail") {
       ${titleNodes}
       ${metaNodes}
       <rect x="72" y="563" width="366" height="54" rx="27" fill="rgba(9,18,31,0.4)" stroke="rgba(255,255,255,0.12)"/>
-      <text x="96" y="598" fill="#F8FAFC" font-size="24" font-weight="600" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">Подробнее у источника</text>
+      <text x="96" y="598" fill="#F8FAFC" font-size="24" font-weight="600" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">Полная карточка события</text>
       <path d="M1020 102c0-16.569 13.431-30 30-30h52c16.569 0 30 13.431 30 30v52c0 16.569-13.431 30-30 30h-52c-16.569 0-30-13.431-30-30z" fill="rgba(9,18,31,0.28)" stroke="rgba(255,255,255,0.12)"/>
       <path d="M1048 148l24-24m0 0h-19m19 0v19" stroke="#F8FAFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>

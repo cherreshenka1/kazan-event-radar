@@ -1695,7 +1695,9 @@ function applySafeEventCopy(item) {
     ...item,
     title: buildShortEventTitleSafe(item.title || item.summary || "Событие"),
     rawSummary,
-    imageUrl: item.imageUrl || null
+    imageUrl: item.imageUrl || item.externalPreviewUrl || null,
+    externalPreviewUrl: item.externalPreviewUrl || item.imageUrl || null,
+    previewOrigin: item.previewOrigin || "source"
   };
 
   return {
@@ -1707,7 +1709,7 @@ function applySafeEventCopy(item) {
 
 function buildSafeEventSummary(item) {
   return [
-    buildSafeEventHeadlineSafe(item),
+    buildSafeEventDetailLineSafe(item),
     buildSafeEventScheduleLineSafe(item),
     item.kind === "sport"
       ? "Подойдет для живой атмосферы, если хочется пойти на матч и заранее понять логистику."
@@ -1718,7 +1720,7 @@ function buildSafeEventSummary(item) {
 
 function buildSafeEventShortSummary(item) {
   const compact = [
-    buildSafeEventHeadlineSafe(item),
+    buildSafeEventDetailLineSafe(item),
     buildSafeEventScheduleLineSafe(item)
   ].filter(Boolean).join(" ");
 
@@ -1748,6 +1750,121 @@ function buildSafeEventScheduleLineSafe(item) {
   return `Дата: ${dateLabel}.`;
 }
 
+function buildSafeEventDetailLine(item) {
+  const detail = extractSafeEventHighlight(item);
+  if (!detail) return "";
+
+  const prefix = {
+    concert: "В программе",
+    theatre: "В центре вечера",
+    show: "Главное в программе",
+    festival: "В программе",
+    standup: "По формату",
+    exhibition: "Внутри",
+    excursion: "На маршруте",
+    musical: "В постановке",
+    kids: "Формат события",
+    sport: "В афише матча"
+  }[item.kind] || "Главное";
+
+  return ensureSentence(`${prefix}: ${detail}`);
+}
+
+function extractSafeEventHighlight(item) {
+  const sourceText = cleanEventSummary(item.rawSummary || item.subtitle || item.summary || "");
+  if (!sourceText) return "";
+
+  const title = buildShortEventTitleSafe(item.title || item.summary || "");
+  const titleFingerprint = normalizeFingerprintTextSafe(title);
+  const titlePattern = title ? new RegExp(escapeRegExp(title), "giu") : null;
+  const sentences = sourceText
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean) || [];
+
+  for (const sentence of sentences) {
+    const cleaned = sanitizeSafeEventHighlight(sentence, {
+      titlePattern,
+      venueTitle: item.venueTitle || ""
+    });
+    if (!cleaned) continue;
+    const cleanedFingerprint = normalizeFingerprintTextSafe(cleaned);
+    if (titleFingerprint && cleanedFingerprint === titleFingerprint) continue;
+    return cleaned;
+  }
+
+  return sanitizeSafeEventHighlight(sourceText, {
+    titlePattern,
+    venueTitle: item.venueTitle || ""
+  });
+}
+
+function sanitizeSafeEventHighlight(value, options = {}) {
+  const titlePattern = options.titlePattern || null;
+  const venueTitle = normalizeText(options.venueTitle || "");
+  const venuePattern = venueTitle ? new RegExp(escapeRegExp(venueTitle), "giu") : null;
+
+  const originalText = normalizeText(String(value || ""));
+  let text = originalText
+    .replace(/https?:\/\/\S+/giu, "")
+    .replace(/читать полностью.*$/giu, "")
+    .replace(/подробнее.*$/giu, "")
+    .replace(/купить билеты.*$/giu, "")
+    .replace(/покупайте билеты онлайн.*$/giu, "")
+    .replace(/удобная схема зала.*$/giu, "")
+    .replace(/описание, даты проведения и фотографии.*$/giu, "")
+    .replace(/фото, описание.*$/giu, "")
+    .replace(/на Яндекс Афише.*$/giu, "")
+    .replace(/на МТС Live.*$/giu, "")
+    .replace(/в Казани на Яндекс Афише.*$/giu, "")
+    .replace(/^источник:\s*/giu, "")
+    .replace(/^официальный матч[^:]*:\s*/giu, "")
+    .replace(/^билеты на\s+/giu, "")
+    .trim();
+
+  const cleanedWithoutEntities = text;
+
+  if (titlePattern) {
+    text = text.replace(titlePattern, "").trim();
+  }
+
+  text = text
+    .replace(/^\([^)]{1,40}\)\s*[—–-]?\s*/u, "")
+    .replace(/^\(?г\.\s*[А-ЯЁA-Z][^)]{1,30}\)?\s*[—–-]?\s*/u, "")
+    .replace(/^[А-ЯЁA-Z][^)]{1,30}\)\s*[—–-]?\s*/u, "");
+
+  if (venuePattern) {
+    text = text.replace(venuePattern, "").trim();
+  }
+
+  text = text
+    .replace(/^[—–\-:;,.\s]+/u, "")
+    .replace(/[—–\-:;,.\s]+$/u, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (text.length < 24) {
+    text = cleanedWithoutEntities
+      .replace(/^[—–\-:;,.\s]+/u, "")
+      .replace(/[—–\-:;,.\s]+$/u, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  const fingerprint = normalizeFingerprintTextSafe(text);
+  if (!text || text.length < 24) {
+    const fallback = trim(originalText, 176);
+    return fallback.length >= 24 ? fallback : "";
+  }
+  if (text.length > 180) text = trim(text, 176);
+  if (!fingerprint) return "";
+  if (/^(подробности|источник|билеты|описание)$/iu.test(text)) return "";
+  if (/^(дата|место|площадка|адрес|когда|где)\s*:/iu.test(text)) return "";
+  if (/яндекс афиш|mts live|удобная схема зала|покупайте билеты онлайн/iu.test(text)) return "";
+
+  return text;
+}
+
 function buildSafeEventMoodLineSafe(item) {
   return {
     concert: "Подойдет для вечернего выхода, если хочется живого выступления и понятной логистики.",
@@ -1761,16 +1878,42 @@ function buildSafeEventMoodLineSafe(item) {
   }[item.kind] || "Можно добавить в личный план, если хочется собрать насыщенный выход по городу.";
 }
 
+function buildCustomSafeEventSummary(item) {
+  const moodLine = item.kind === "sport"
+    ? "Подойдёт для живой атмосферы, если хочется заранее понять формат матча и логистику вечера."
+    : buildSafeEventMoodLineSafe(item);
+
+  return [
+    buildSafeEventDetailLineSafe(item),
+    buildSafeEventScheduleLineSafe(item),
+    moodLine,
+    "Полные условия посещения и билеты лучше проверить по ссылке в источнике."
+  ].filter(Boolean).join("\n\n");
+}
+
+function buildCustomSafeEventShortSummary(item) {
+  const compact = [
+    buildSafeEventDetailLineSafe(item),
+    buildSafeEventScheduleLineSafe(item)
+  ].filter(Boolean).join(" ");
+
+  return trim(compact || "Короткая карточка события доступна внутри.", 190);
+}
+
 function applySafeEventCopySafe(item) {
   return applySafeEventCopy(item);
 }
 
 function buildSafeEventSummarySafe(item) {
-  return buildSafeEventSummary(item);
+  return buildCustomSafeEventSummary(item);
 }
 
 function buildSafeEventShortSummarySafe(item) {
-  return buildSafeEventShortSummary(item);
+  return buildCustomSafeEventShortSummary(item);
+}
+
+function buildSafeEventDetailLineSafe(item) {
+  return buildSafeEventDetailLine(item);
 }
 
 function buildShortEventTitleSafe(value) {
@@ -2210,15 +2353,11 @@ function formatChannelPost(item) {
 }
 
 function buildChannelPostParagraphs(item) {
-  const titleFingerprint = normalizeFingerprintTextSafe(buildShortEventTitleSafe(item.title || item.summary || "Событие"));
-  const summarySource = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
   const paragraphs = [];
+  const detailLine = buildSafeEventDetailLineSafe(item);
 
-  for (const part of splitDraftParagraphs(summarySource)) {
-    const fingerprint = normalizeFingerprintTextSafe(part);
-    if (!fingerprint || fingerprint === titleFingerprint) continue;
-    if (paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === fingerprint)) continue;
-    paragraphs.push(trim(part, 220));
+  if (detailLine) {
+    paragraphs.push(trim(detailLine, 220));
   }
 
   const moodLine = item.kind === "sport"
@@ -2227,6 +2366,22 @@ function buildChannelPostParagraphs(item) {
 
   if (moodLine && !paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === normalizeFingerprintTextSafe(moodLine))) {
     paragraphs.push(trim(moodLine, 220));
+  }
+
+  const fallbackText = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
+  if (paragraphs.length < 2 && fallbackText) {
+    for (const part of splitDraftParagraphs(fallbackText)) {
+      const normalized = sanitizeSafeEventHighlight(part, {
+        titlePattern: buildShortEventTitleSafe(item.title || item.summary || "")
+          ? new RegExp(escapeRegExp(buildShortEventTitleSafe(item.title || item.summary || "")), "giu")
+          : null,
+        venueTitle: item.venueTitle || ""
+      });
+      if (!normalized) continue;
+      if (paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === normalizeFingerprintTextSafe(normalized))) continue;
+      paragraphs.push(trim(ensureSentence(normalized), 220));
+      if (paragraphs.length >= 3) break;
+    }
   }
 
   return paragraphs.slice(0, 3);
@@ -2790,14 +2945,25 @@ function areLikelySameEvent(current, candidate) {
     return true;
   }
 
+  const currentLoose = buildLooseEventSignature(current);
+  const candidateLoose = buildLooseEventSignature(candidate);
+  if (currentLoose && candidateLoose && currentLoose === candidateLoose) {
+    return true;
+  }
+
   const currentTitleKey = normalizeComparableEntity(current.title);
   const candidateTitleKey = normalizeComparableEntity(candidate.title);
-  const currentVenueKey = normalizeComparableEntity(current.venueTitle);
-  const candidateVenueKey = normalizeComparableEntity(candidate.venueTitle);
+  const currentVenueKey = normalizeComparableVenue(current.venueTitle);
+  const candidateVenueKey = normalizeComparableVenue(candidate.venueTitle);
+  const summariesMatch = haveMatchingComparableSummaries(current, candidate);
+  const bothHaveComparableSummary = hasMeaningfulComparableSummary(current) && hasMeaningfulComparableSummary(candidate);
 
   if (currentTitleKey && candidateTitleKey && currentTitleKey === candidateTitleKey) {
-    if (!currentVenueKey || !candidateVenueKey || currentVenueKey === candidateVenueKey) {
-      return true;
+    if (!currentVenueKey || !candidateVenueKey) {
+      return summariesMatch || !bothHaveComparableSummary;
+    }
+    if (currentVenueKey === candidateVenueKey) {
+      return summariesMatch || !bothHaveComparableSummary;
     }
   }
 
@@ -2819,16 +2985,18 @@ function areLikelySameEvent(current, candidate) {
   }
 
   if (!currentVenueKey || !candidateVenueKey) {
-    return true;
+    return summariesMatch || !bothHaveComparableSummary;
   }
 
   if (currentVenueKey === candidateVenueKey) {
-    return true;
+    return summariesMatch || !bothHaveComparableSummary;
   }
 
   const currentVenueTokens = tokenizeFingerprint(current.venueTitle || "");
   const candidateVenueTokens = tokenizeFingerprint(candidate.venueTitle || "");
-  return countTokenOverlap(currentVenueTokens, candidateVenueTokens) >= 1;
+  const venueOverlap = countTokenOverlap(currentVenueTokens, candidateVenueTokens);
+  if (!venueOverlap) return false;
+  return summariesMatch || !bothHaveComparableSummary;
 }
 
 function areMergeCompatibleKinds(left, right) {
@@ -2870,15 +3038,63 @@ function buildComparableTokens(item) {
 function buildExactEventSignature(item) {
   const dateKey = formatDateInput(item?.eventDate);
   const titleKey = normalizeComparableEntity(item?.title);
-  const venueKey = normalizeComparableEntity(item?.venueTitle);
+  const venueKey = normalizeComparableVenue(item?.venueTitle);
   if (!dateKey || !titleKey || !venueKey) return "";
 
   const timeKey = item?.eventHasExplicitTime ? formatTimeKey(item.eventDate) : "no-time";
   return `exact:${dateKey}:${timeKey}:${titleKey}:${venueKey}`;
 }
 
+function buildLooseEventSignature(item) {
+  const dateKey = formatDateInput(item?.eventDate);
+  const titleKey = normalizeComparableEntity(item?.title);
+  const venueKey = normalizeComparableVenue(item?.venueTitle);
+  const summaryKey = buildComparableSummaryKey(item);
+  if (!dateKey || !titleKey || !venueKey || !summaryKey) return "";
+
+  return `loose:${dateKey}:${titleKey}:${venueKey}:${summaryKey}`;
+}
+
 function normalizeComparableEntity(value) {
   return normalizeFingerprintTextSafe(value).replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс)\b/giu, "").trim();
+}
+
+function normalizeComparableVenue(value) {
+  return normalizeFingerprintTextSafe(value)
+    .replace(/\b(лдс|мвц|дк|кц|кз|гбук|гбу|дворец спорта|концерт холл|пространство|площадка|сцена)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildComparableSummaryTokens(item) {
+  const detail = extractSafeEventHighlight(item) || cleanEventSummary(item?.rawSummary || item?.summary || item?.shortSummary || "");
+  if (!detail) return [];
+
+  const ignoredTokens = new Set([
+    ...tokenizeFingerprint(item?.title || ""),
+    ...tokenizeFingerprint(item?.venueTitle || "")
+  ]);
+  const detailTokens = tokenizeFingerprint(detail).filter((token) => !ignoredTokens.has(token));
+  return detailTokens.length ? detailTokens : tokenizeFingerprint(detail);
+}
+
+function buildComparableSummaryKey(item) {
+  const tokens = buildComparableSummaryTokens(item);
+  return tokens.slice(0, 8).sort().join("-");
+}
+
+function hasMeaningfulComparableSummary(item) {
+  return buildComparableSummaryTokens(item).length >= 2;
+}
+
+function haveMatchingComparableSummaries(left, right) {
+  const leftTokens = buildComparableSummaryTokens(left);
+  const rightTokens = buildComparableSummaryTokens(right);
+  if (!leftTokens.length || !rightTokens.length) return false;
+
+  const overlap = countTokenOverlap(leftTokens, rightTokens);
+  const shortest = Math.max(1, Math.min(leftTokens.length, rightTokens.length));
+  return overlap >= Math.min(4, shortest) || overlap / shortest >= 0.75;
 }
 
 function formatTimeKey(value) {
@@ -3071,6 +3287,12 @@ function trim(value, maxLength) {
   const normalized = normalizeText(value);
   if (!maxLength || normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+}
+
+function ensureSentence(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+  return /[.!?…]$/u.test(normalized) ? normalized : `${normalized}.`;
 }
 
 function cryptoRandomId() {
