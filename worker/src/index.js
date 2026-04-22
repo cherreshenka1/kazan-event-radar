@@ -2057,6 +2057,7 @@ async function deliverDueReminders(env) {
 
 async function createDraft(env, item) {
   const publishing = await getPublishing(env);
+  const draftIdentity = buildDraftCandidateIdentity(item);
   const draft = {
     id: cryptoRandomId(),
     itemId: item.id,
@@ -2066,6 +2067,13 @@ async function createDraft(env, item) {
     photoUrl: buildChannelPhotoUrl(item, env),
     kind: item.kind || "event",
     eventDate: item.eventDate || null,
+    eventSignature: draftIdentity.primary,
+    eventExactSignature: draftIdentity.exact,
+    eventLooseSignature: draftIdentity.loose,
+    dateKey: draftIdentity.dateKey,
+    titleKey: draftIdentity.titleKey,
+    venueKey: draftIdentity.venueKey,
+    summaryKey: draftIdentity.summaryKey,
     status: "pending",
     createdAt: new Date().toISOString()
   };
@@ -2132,7 +2140,14 @@ async function markDraft(env, draftId, status) {
     publishing.postedItems.unshift({
       itemId: draft.itemId,
       draftId,
-      postedAt: draft.updatedAt
+      postedAt: draft.updatedAt,
+      eventSignature: draft.eventSignature || "",
+      eventExactSignature: draft.eventExactSignature || "",
+      eventLooseSignature: draft.eventLooseSignature || "",
+      dateKey: draft.dateKey || "",
+      titleKey: draft.titleKey || "",
+      venueKey: draft.venueKey || "",
+      summaryKey: draft.summaryKey || ""
     });
   }
   await putJson(env, "publishing", publishing);
@@ -2171,14 +2186,16 @@ function normalizePublishingState(publishing) {
 function selectDraftCandidates(candidates, publishing, limit, env) {
   const selected = [];
   const selectedIds = new Set();
-  const tiers = [
-    (item) => !hasPendingDraft(publishing, item.id) && !wasRecentlyPosted(publishing, item.id, env),
-    (item) => !hasPendingDraft(publishing, item.id) && !wasRecentlyPosted(publishing, item.id, env, 3),
-    (item) => !hasPendingDraft(publishing, item.id)
-  ];
+  const tiers = buildDraftSelectionCooldowns(env);
 
-  for (const tier of tiers) {
-    const tierCandidates = candidates.filter((item) => !selectedIds.has(item.id) && tier(item));
+  for (const cooldownDays of tiers) {
+    const tierCandidates = candidates.filter((item) => {
+      if (selectedIds.has(item.id)) return false;
+      if (hasPendingDraft(publishing, item)) return false;
+      if (isAlreadySelectedDraftCandidate(selected, item)) return false;
+      if (cooldownDays > 0 && wasRecentlyPosted(publishing, item, env, cooldownDays)) return false;
+      return true;
+    });
     addDraftCandidatesByKind(tierCandidates, selected, selectedIds, limit);
     if (selected.length >= limit) return selected;
   }
@@ -2186,15 +2203,16 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
   return selected;
 }
 
-function hasPendingDraft(publishing, itemId) {
-  return publishing.drafts.some((draft) => draft.itemId === itemId && draft.status === "pending");
+function hasPendingDraft(publishing, item) {
+  const identity = buildDraftCandidateIdentity(item);
+  return publishing.drafts.some((draft) => draft.status === "pending" && matchesStoredDraftIdentity(draft, item?.id, identity));
 }
 
 function addDraftCandidatesByKind(candidates, selected, selectedIds, limit) {
   const preferredKinds = ["concert", "sport", "excursion", "theatre", "show", "standup", "exhibition", "musical", "kids"];
 
   for (const kind of preferredKinds) {
-    const match = candidates.find((item) => item.kind === kind && !selectedIds.has(item.id));
+    const match = candidates.find((item) => item.kind === kind && !selectedIds.has(item.id) && !isAlreadySelectedDraftCandidate(selected, item));
     if (!match) continue;
     selected.push(match);
     selectedIds.add(match.id);
@@ -2203,23 +2221,109 @@ function addDraftCandidatesByKind(candidates, selected, selectedIds, limit) {
 
   for (const item of candidates) {
     if (selectedIds.has(item.id)) continue;
+    if (isAlreadySelectedDraftCandidate(selected, item)) continue;
     selected.push(item);
     selectedIds.add(item.id);
     if (selected.length >= limit) return;
   }
 }
 
-function wasRecentlyPosted(publishing, itemId, env, overrideDays = null) {
+function wasRecentlyPosted(publishing, item, env, overrideDays = null) {
   const cooldownDays = overrideDays != null
     ? Number(overrideDays)
     : Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14);
-  const posted = (publishing.postedItems || []).find((item) => item.itemId === itemId);
+  const identity = buildDraftCandidateIdentity(item);
+  const posted = (publishing.postedItems || []).find((postedItem) => matchesStoredDraftIdentity(postedItem, item?.id, identity));
   if (!posted?.postedAt) return false;
 
   const postedTime = new Date(posted.postedAt).getTime();
   if (Number.isNaN(postedTime)) return false;
 
   return (Date.now() - postedTime) < (cooldownDays * 24 * 60 * 60 * 1000);
+}
+
+function buildDraftSelectionCooldowns(env) {
+  const values = [
+    Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14),
+    Number(env.DRAFT_REPOST_SOFT_COOLDOWN_DAYS || 7),
+    3,
+    1,
+    0
+  ];
+
+  const seen = new Set();
+  return values
+    .map((value) => (Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0))
+    .filter((value) => {
+      const key = String(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildDraftCandidateIdentity(item) {
+  const exact = buildExactEventSignature(item);
+  const loose = buildLooseEventSignature(item);
+  const dateKey = formatDateInput(item?.eventDate);
+  const titleKey = normalizeComparableEntity(item?.title);
+  const venueKey = normalizeComparableVenue(item?.venueTitle);
+  const summaryKey = buildComparableSummaryKey(item);
+  const fallback = [dateKey, titleKey, venueKey, summaryKey].filter(Boolean).join(":");
+
+  return {
+    primary: loose || exact || (fallback ? `draft:${fallback}` : ""),
+    exact,
+    loose,
+    dateKey,
+    titleKey,
+    venueKey,
+    summaryKey
+  };
+}
+
+function matchesStoredDraftIdentity(stored, itemId, identity) {
+  if (!stored || typeof stored !== "object") return false;
+  if (itemId && stored.itemId === itemId) return true;
+
+  const storedSignatures = [
+    stored.eventSignature,
+    stored.eventLooseSignature,
+    stored.eventExactSignature
+  ].filter(Boolean);
+
+  if (identity?.primary && storedSignatures.includes(identity.primary)) return true;
+  if (identity?.loose && storedSignatures.includes(identity.loose)) return true;
+  if (identity?.exact && storedSignatures.includes(identity.exact)) return true;
+
+  if (!identity?.dateKey || !identity?.titleKey || !identity?.venueKey) return false;
+  if (stored.dateKey !== identity.dateKey || stored.titleKey !== identity.titleKey || stored.venueKey !== identity.venueKey) {
+    return false;
+  }
+
+  if (!stored.summaryKey || !identity.summaryKey) return true;
+  return stored.summaryKey === identity.summaryKey;
+}
+
+function isAlreadySelectedDraftCandidate(selected, candidate) {
+  if (!Array.isArray(selected) || !candidate) return false;
+  const candidateIdentity = buildDraftCandidateIdentity(candidate);
+
+  return selected.some((current) => {
+    if (!current) return false;
+    if (current.id && candidate.id && current.id === candidate.id) return true;
+
+    const currentIdentity = buildDraftCandidateIdentity(current);
+    if (candidateIdentity.primary && currentIdentity.primary && candidateIdentity.primary === currentIdentity.primary) {
+      return true;
+    }
+
+    if (candidateIdentity.loose && currentIdentity.loose && candidateIdentity.loose === currentIdentity.loose) {
+      return true;
+    }
+
+    return areLikelySameEvent(current, candidate);
+  });
 }
 
 function splitDraftParagraphs(value) {
