@@ -2310,18 +2310,22 @@ function extractTelegramImageUrl(chunk) {
 
 async function sendDraftPost(env, chatId, draft, replyMarkup = null) {
   const resolvedDraft = await hydrateDraftForSend(env, draft);
-  const photoUrl = resolvedDraft.photoUrl || buildChannelPhotoUrl(resolvedDraft, env);
   const caption = trimTelegramCaption(resolvedDraft.text || "");
+  const photoCandidates = await resolveChannelPhotoCandidates(resolvedDraft, env);
 
-  if (photoUrl) {
-    await telegramApi(env, "sendPhoto", {
-      chat_id: chatId,
-      photo: photoUrl,
-      caption,
-      parse_mode: "HTML",
-      reply_markup: replyMarkup || undefined
-    });
-    return;
+  for (const photoUrl of photoCandidates) {
+    try {
+      await telegramApi(env, "sendPhoto", {
+        chat_id: chatId,
+        photo: photoUrl,
+        caption,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup || undefined
+      });
+      return;
+    } catch (error) {
+      console.warn(`Failed to send draft preview ${photoUrl}: ${error.message}`);
+    }
   }
 
   await telegramApi(env, "sendMessage", {
@@ -2388,9 +2392,61 @@ function buildChannelPostParagraphs(item) {
 }
 
 function buildChannelPhotoUrl(item, env) {
-  const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
-  if (directPhotoUrl) return directPhotoUrl;
+  const generatedPreviewUrl = buildGeneratedChannelPhotoUrl(item, env);
+  if (generatedPreviewUrl) return generatedPreviewUrl;
 
+  const assetPath = channelImagePathForKind(item.kind);
+
+  for (const baseUrl of channelPhotoBaseUrls(env)) {
+    try {
+      return new URL(assetPath, baseUrl).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
+async function resolveChannelPhotoCandidates(item, env) {
+  const candidates = [];
+  const generatedPreviewUrl = buildGeneratedChannelPhotoUrl(item, env);
+
+  if (generatedPreviewUrl && await remoteAssetExists(generatedPreviewUrl)) {
+    candidates.push(generatedPreviewUrl);
+  }
+
+  if (String(env.CHANNEL_ALLOW_SOURCE_IMAGES || "").trim() === "1") {
+    const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
+    if (directPhotoUrl) {
+      candidates.push(directPhotoUrl);
+    }
+  }
+
+  const fallbackPhotoUrl = buildFallbackChannelPhotoUrl(item, env);
+  if (fallbackPhotoUrl) {
+    candidates.push(fallbackPhotoUrl);
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function buildGeneratedChannelPhotoUrl(item, env) {
+  const previewPath = generatedEventPreviewPath(item);
+  if (!previewPath) return "";
+
+  for (const baseUrl of channelPhotoBaseUrls(env)) {
+    try {
+      return new URL(previewPath, baseUrl).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
+function buildFallbackChannelPhotoUrl(item, env) {
   const assetPath = channelImagePathForKind(item.kind);
 
   for (const baseUrl of channelPhotoBaseUrls(env)) {
@@ -2426,6 +2482,71 @@ function firstChannelImageUrl(item) {
   ];
 
   return candidates.find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
+}
+
+function generatedEventPreviewPath(item) {
+  const previewKey = buildEventPreviewKey(item);
+  if (!previewKey) return "";
+  return `generated/events/${previewKey}.jpg`;
+}
+
+function buildEventPreviewKey(item) {
+  const dateKey = formatDateInput(item?.eventDate) || "undated";
+  const titleKey = normalizeEventPreviewEntity(item?.title || item?.summary || item?.shortSummary || "");
+  const venueKey = normalizeEventPreviewVenue(item?.venueTitle || "");
+  const kindKey = normalizeEventPreviewEntity(item?.kind || "event");
+  const base = [dateKey, titleKey, venueKey, kindKey].filter(Boolean).join("|");
+  if (!base) return "";
+  return `${dateKey}-${hashEventPreviewKey(base)}`;
+}
+
+function hashEventPreviewKey(value) {
+  let hash = 2166136261;
+
+  for (const char of String(value || "")) {
+    hash ^= char.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function normalizeEventPreviewEntity(value) {
+  return normalizeFingerprintTextSafe(value)
+    .replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс|матч|турнир|билеты|казань|афиша)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeEventPreviewVenue(value) {
+  return normalizeFingerprintTextSafe(value)
+    .replace(/\b(г казань|казань|лдс|мвц|крк|дк|кск|арена|концерт холл|пространство|площадка|сцена)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function remoteAssetExists(url) {
+  if (!url) return false;
+
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow"
+    });
+    if (response.ok) return true;
+  } catch {
+    // Ignore HEAD failures and try GET below.
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow"
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function sendMiniAppEntry(chatId, env, text) {
@@ -2957,13 +3078,24 @@ function areLikelySameEvent(current, candidate) {
   const candidateVenueKey = normalizeComparableVenue(candidate.venueTitle);
   const summariesMatch = haveMatchingComparableSummaries(current, candidate);
   const bothHaveComparableSummary = hasMeaningfulComparableSummary(current) && hasMeaningfulComparableSummary(candidate);
+  const currentSummaryText = normalizeComparableSummaryText(current);
+  const candidateSummaryText = normalizeComparableSummaryText(candidate);
+  const summaryTextMatch = Boolean(
+    currentSummaryText
+    && candidateSummaryText
+    && (
+      currentSummaryText === candidateSummaryText
+      || currentSummaryText.includes(candidateSummaryText)
+      || candidateSummaryText.includes(currentSummaryText)
+    )
+  );
 
   if (currentTitleKey && candidateTitleKey && currentTitleKey === candidateTitleKey) {
     if (!currentVenueKey || !candidateVenueKey) {
-      return summariesMatch || !bothHaveComparableSummary;
+      return summariesMatch || summaryTextMatch || !bothHaveComparableSummary;
     }
     if (currentVenueKey === candidateVenueKey) {
-      return summariesMatch || !bothHaveComparableSummary;
+      return summariesMatch || summaryTextMatch || !bothHaveComparableSummary;
     }
   }
 
@@ -2985,18 +3117,18 @@ function areLikelySameEvent(current, candidate) {
   }
 
   if (!currentVenueKey || !candidateVenueKey) {
-    return summariesMatch || !bothHaveComparableSummary;
+    return summariesMatch || summaryTextMatch || !bothHaveComparableSummary;
   }
 
   if (currentVenueKey === candidateVenueKey) {
-    return summariesMatch || !bothHaveComparableSummary;
+    return summariesMatch || summaryTextMatch || !bothHaveComparableSummary;
   }
 
   const currentVenueTokens = tokenizeFingerprint(current.venueTitle || "");
   const candidateVenueTokens = tokenizeFingerprint(candidate.venueTitle || "");
   const venueOverlap = countTokenOverlap(currentVenueTokens, candidateVenueTokens);
   if (!venueOverlap) return false;
-  return summariesMatch || !bothHaveComparableSummary;
+  return summariesMatch || summaryTextMatch || !bothHaveComparableSummary;
 }
 
 function areMergeCompatibleKinds(left, right) {
@@ -3081,6 +3213,16 @@ function buildComparableSummaryTokens(item) {
 function buildComparableSummaryKey(item) {
   const tokens = buildComparableSummaryTokens(item);
   return tokens.slice(0, 8).sort().join("-");
+}
+
+function normalizeComparableSummaryText(item) {
+  const detail = extractSafeEventHighlight(item) || cleanEventSummary(item?.rawSummary || item?.summary || item?.shortSummary || "");
+  if (!detail) return "";
+
+  return normalizeFingerprintTextSafe(detail)
+    .replace(/\b(дата и место|дата|место|когда|где|по формату|подойдет|полные условия посещения и билеты лучше проверить по ссылке в источнике)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function hasMeaningfulComparableSummary(item) {

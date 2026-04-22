@@ -48,6 +48,7 @@ const heroTitleNode = document.querySelector("#heroTitle");
 const heroTextNode = document.querySelector("#heroText");
 const heroBadgesNode = document.querySelector("#heroBadges");
 const PHOTO_MANIFEST = window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST || {};
+const EVENT_PREVIEWS = window.KAZAN_EVENT_RADAR_EVENT_PREVIEWS || {};
 const SECTION_VISUALS = {
   events: "./brand/section-events.png",
   places: "./brand/section-parks.png",
@@ -555,10 +556,11 @@ function eventDetailCard(item) {
   const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
   const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
   const venueLabel = eventVenueText(item);
-  const fallbackImage = eventVisualUrl(item, "detail");
+  const previewImage = eventVisualUrl(item, "detail");
+  const fallbackImage = eventFallbackVisualUrl(item, "detail");
 
   return card([
-    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "", fallbackImage),
+    mediaImage(previewImage, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     eventCardSummary(item) ? richTextBlock(splitSummaryParagraphs(eventCardSummary(item), 4)) : "",
@@ -578,10 +580,11 @@ function eventDetailCard(item) {
 }
 
 function eventPreviewCard(item) {
-  const meta = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)].filter(Boolean).join(" В· ");
-  const fallbackImage = eventVisualUrl(item, "compact");
+  const meta = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)].filter(Boolean).join(" · ");
+  const previewImage = eventVisualUrl(item, "compact");
+  const fallbackImage = eventFallbackVisualUrl(item, "compact");
   return card([
-    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
+    mediaImage(previewImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -598,10 +601,11 @@ function safeEventDetailCard(item) {
   const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
   const venueLabel = eventVenueText(item);
   const sourceUrl = item.url || item.sources?.find((source) => source?.url)?.url || "";
-  const fallbackImage = eventVisualUrl(item, "detail");
+  const previewImage = eventVisualUrl(item, "detail");
+  const fallbackImage = eventFallbackVisualUrl(item, "detail");
 
   return card([
-    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "", fallbackImage),
+    mediaImage(previewImage, eventCardTitle(item) || "Событие", "", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h2 class="detail-title">${escapeHtml(eventCardTitle(item) || "Событие")}</h2>`,
     richTextBlock(eventDetailSummary(item), "event-copy"),
@@ -625,11 +629,12 @@ function safeEventPreviewCard(item) {
     formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime),
     eventVenueText(item)
   ].filter(Boolean).join(" · ");
-  const fallbackImage = eventVisualUrl(item, "compact");
+  const previewImage = eventVisualUrl(item, "compact");
+  const fallbackImage = eventFallbackVisualUrl(item, "compact");
   const isOpened = item.id === state.openEventId;
 
   return card([
-    mediaImage(fallbackImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
+    mediaImage(previewImage, eventCardTitle(item) || "Событие", "compact", fallbackImage),
     `<div class="preview-label">${escapeHtml(eventTypeLabel(item))}</div>`,
     `<h3>${escapeHtml(eventCardTitle(item) || "Событие")}</h3>`,
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
@@ -1092,6 +1097,7 @@ function eventFavoritePayload(item) {
     subtitle: eventVenueText(item) || "",
     summary: eventPreviewSummary(item),
     imageUrl: eventVisualUrl(item, "detail"),
+    fallbackImage: eventFallbackVisualUrl(item, "detail"),
     url: item.url,
     eventDate: item.eventDate,
     eventHasExplicitTime: item.eventHasExplicitTime,
@@ -1248,7 +1254,7 @@ function getFavoriteSnapshot(item) {
       summary,
       description: current ? eventDetailSummary(current) : summary,
       imageUrl: current ? eventVisualUrl(current, "detail") : (item.imageUrl || SECTION_VISUALS.events),
-      fallbackImage: current ? eventVisualUrl(current, "detail") : SECTION_VISUALS.events,
+      fallbackImage: current ? eventFallbackVisualUrl(current, "detail") : (item.fallbackImage || SECTION_VISUALS.events),
       metaLine: [dateLabel, timeLabel, venue].filter(Boolean).join(" · "),
       eventDate: current?.eventDate || item.eventDate || "",
       dateLabel,
@@ -1884,12 +1890,72 @@ function quoteEventTitle(value) {
 }
 
 function eventVisualUrl(item, variant = "detail") {
+  const generatedPreview = eventGeneratedPreviewUrl(item);
+  if (generatedPreview) return generatedPreview;
+  return eventFallbackVisualUrl(item, variant);
+}
+
+function eventFallbackVisualUrl(item, variant = "detail") {
   const cacheKey = `${variant}:${item.id || item.title || "event"}`;
   if (!eventVisualCache.has(cacheKey)) {
     eventVisualCache.set(cacheKey, `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(buildEventPosterSvg(item, variant))}`);
   }
 
   return eventVisualCache.get(cacheKey);
+}
+
+function eventGeneratedPreviewUrl(item) {
+  const previewKey = buildEventPreviewKey(item);
+  if (!previewKey) return "";
+  const previewUrl = EVENT_PREVIEWS?.[previewKey]?.url || "";
+  return previewUrl || "";
+}
+
+function buildEventPreviewKey(item) {
+  const dateKey = formatEventPreviewDateKey(item?.eventDate || item?.publishedAt);
+  const titleKey = normalizeEventPreviewEntity(item?.title || item?.summary || item?.shortSummary || "");
+  const venueKey = normalizeEventPreviewVenue(item?.venueTitle || eventVenueText(item) || "");
+  const kindKey = normalizeEventPreviewEntity(item?.kind || "event");
+  const base = [dateKey, titleKey, venueKey, kindKey].filter(Boolean).join("|");
+  if (!base) return "";
+  return `${dateKey || "undated"}-${hashEventPreviewKey(base)}`;
+}
+
+function formatEventPreviewDateKey(value) {
+  if (!value) return "undated";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "undated";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function hashEventPreviewKey(value) {
+  let hash = 2166136261;
+
+  for (const char of String(value || "")) {
+    hash ^= char.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function normalizeEventPreviewEntity(value) {
+  return compactTextFingerprint(value)
+    .replace(/\b(концерт|спектакль|шоу|экскурсия|стендап|выставка|мюзикл|лекция|мастер класс|матч|турнир|билеты|казань|афиша)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeEventPreviewVenue(value) {
+  return compactTextFingerprint(value)
+    .replace(/\b(г казань|казань|лдс|мвц|крк|дк|кск|арена|концерт холл|пространство|площадка|сцена)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function buildEventPosterSvg(item, variant = "detail") {

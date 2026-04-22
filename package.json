@@ -21,6 +21,7 @@
     "events:upload": "node scripts/upload-imported-events-via-kv.mjs",
     "events:upload:http": "node scripts/upload-imported-events.mjs",
     "events:upload:kv": "node scripts/upload-imported-events-via-kv.mjs",
+    "events:previews": "node scripts/build-event-previews.mjs",
     "kassir:browser:open": "powershell -ExecutionPolicy Bypass -File scripts/playwright-cli.ps1 open https://kzn.kassir.ru --headed",
     "kassir:browser:warmup": "node scripts/warmup-kassir-profile.mjs",
     "kassir:browser:state-save": "powershell -ExecutionPolicy Bypass -File scripts/playwright-cli.ps1 state-save data/playwright/kassir-state.json",
