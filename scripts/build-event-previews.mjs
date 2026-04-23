@@ -22,7 +22,8 @@ await main().catch((error) => {
 async function main() {
   const items = await loadEventItems();
   if (!items.length) {
-    throw new Error("No event items available for preview generation.");
+    console.log("No event items available for preview generation. Keeping existing previews.");
+    return;
   }
 
   const previewMap = buildPreviewSourceMap(items);
