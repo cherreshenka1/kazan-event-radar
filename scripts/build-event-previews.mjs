@@ -51,10 +51,11 @@ async function main() {
       expectedFiles.add(fileName);
 
       const customBackground = await resolveOverrideImage(previewKey);
+      const backgroundUrl = resolvePreviewBackgroundUrl(item, customBackground);
       const shouldReuse = !cliOptions.force && await fileExists(outputPath);
 
       if (!shouldReuse) {
-        const html = buildPosterHtml(item, customBackground);
+        const html = buildPosterHtml(item, backgroundUrl);
         await page.setContent(html, { waitUntil: "load" });
         await page.waitForFunction(() => window.__posterReady === true, null, { timeout: 15000 });
         await page.screenshot({
@@ -71,7 +72,8 @@ async function main() {
         url: `./generated/events/${fileName}`,
         title: item.posterTitle || item.title || "",
         updatedAt: new Date().toISOString(),
-        customBackground: Boolean(customBackground)
+        customBackground: Boolean(customBackground),
+        sourceBackground: !customBackground && Boolean(item.imageUrl)
       };
     }
   } finally {
@@ -93,11 +95,13 @@ async function main() {
 
 async function loadEventItems() {
   const apiItems = cliOptions.skipApi ? [] : await fetchApiItems(cliOptions.apiUrl || DEFAULT_API_URL);
-  if (apiItems.length) {
-    return apiItems;
+  const snapshotItems = await loadSnapshotItems();
+
+  if (apiItems.length && snapshotItems.length) {
+    return [...apiItems, ...snapshotItems];
   }
 
-  return loadSnapshotItems();
+  return apiItems.length ? apiItems : snapshotItems;
 }
 
 async function fetchApiItems(url) {
@@ -243,15 +247,22 @@ async function resolveOverrideImage(previewKey) {
   return pathToFileURL(path.join(targetDir, imageFile)).toString();
 }
 
-function buildPosterHtml(item, customBackgroundUrl = "") {
+function resolvePreviewBackgroundUrl(item, overrideUrl = "") {
+  if (overrideUrl) return overrideUrl;
+  const imageUrl = normalizeText(item?.imageUrl || "");
+  return /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+}
+
+function buildPosterHtml(item, backgroundUrl = "") {
   const palette = posterPalette(item.kind);
   const summary = escapeHtml(trim(ensureSentence(extractPreviewLead(item)), 210));
   const metaLine = escapeHtml(buildMetaLine(item));
   const title = escapeHtml(item.posterTitle || item.title || "Событие в Казани");
   const label = escapeHtml(eventKindLabel(item.kind).toUpperCase());
-  const backgroundMarkup = customBackgroundUrl
+  const hasPhotoBackground = Boolean(backgroundUrl);
+  const backgroundMarkup = hasPhotoBackground
     ? `
-      <img class="poster-photo" src="${escapeHtml(customBackgroundUrl)}" alt="" aria-hidden="true" />
+      <img class="poster-photo" src="${escapeHtml(backgroundUrl)}" alt="" aria-hidden="true" />
       <div class="poster-photo-overlay"></div>
     `
     : `<div class="poster-glow"></div>`;
@@ -306,9 +317,9 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
             position: absolute;
             inset: 0;
             background:
-              linear-gradient(180deg, rgba(7, 14, 27, 0.18) 0%, rgba(7, 14, 27, 0.52) 42%, rgba(7, 14, 27, 0.78) 100%),
-              linear-gradient(135deg, rgba(7, 14, 27, 0.84) 0%, rgba(7, 14, 27, 0.42) 50%, rgba(7, 14, 27, 0.66) 100%);
-            backdrop-filter: blur(6px);
+              linear-gradient(180deg, rgba(7, 14, 27, 0.06) 0%, rgba(7, 14, 27, 0.38) 48%, rgba(7, 14, 27, 0.76) 100%),
+              linear-gradient(135deg, rgba(7, 14, 27, 0.52) 0%, rgba(7, 14, 27, 0.14) 42%, rgba(7, 14, 27, 0.58) 100%);
+            backdrop-filter: blur(3px);
           }
 
           .poster-glow {
@@ -332,13 +343,13 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
           }
 
           .poster-panel {
-            width: min(760px, 100%);
-            padding: 42px 44px 38px;
+            width: min(720px, 100%);
+            padding: 36px 40px 34px;
             border-radius: 34px;
-            background: rgba(6, 14, 27, 0.58);
+            background: rgba(6, 14, 27, 0.46);
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 24px 70px rgba(2, 6, 23, 0.28);
-            backdrop-filter: blur(22px);
+            backdrop-filter: blur(18px);
           }
 
           .poster-topline {
@@ -346,12 +357,12 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
             align-items: center;
             gap: 12px;
             margin-bottom: 18px;
-            padding: 12px 18px;
+            padding: 10px 16px;
             border-radius: 999px;
             background: rgba(11, 18, 33, 0.34);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: #d9f7e9;
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             letter-spacing: 0.14em;
             text-transform: uppercase;
@@ -361,13 +372,13 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
             display: inline-flex;
             align-items: center;
             max-width: fit-content;
-            margin-bottom: 18px;
-            padding: 10px 18px;
+            margin-bottom: 16px;
+            padding: 9px 16px;
             border-radius: 999px;
             background: rgba(11, 18, 33, 0.46);
             border: 1px solid rgba(255,255,255,0.12);
             color: var(--badge);
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
@@ -375,28 +386,28 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
 
           h1 {
             margin: 0;
-            max-width: 620px;
-            font-size: 60px;
-            line-height: 1.02;
+            max-width: 590px;
+            font-size: 54px;
+            line-height: 1.04;
             font-weight: 760;
             letter-spacing: -0.03em;
           }
 
           .poster-meta {
-            margin-top: 22px;
-            max-width: 630px;
+            margin-top: 18px;
+            max-width: 600px;
             color: rgba(226, 232, 240, 0.95);
-            font-size: 26px;
-            line-height: 1.35;
+            font-size: 24px;
+            line-height: 1.32;
             font-weight: 500;
           }
 
           .poster-summary {
-            margin-top: 18px;
-            max-width: 620px;
+            margin-top: 16px;
+            max-width: 580px;
             color: rgba(226, 232, 240, 0.92);
-            font-size: 24px;
-            line-height: 1.48;
+            font-size: 22px;
+            line-height: 1.46;
             font-weight: 450;
           }
 
@@ -405,12 +416,12 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
             align-items: center;
             gap: 14px;
             max-width: fit-content;
-            padding: 16px 22px;
+            padding: 14px 20px;
             border-radius: 999px;
-            background: rgba(6, 14, 27, 0.54);
+            background: rgba(6, 14, 27, 0.44);
             border: 1px solid rgba(255,255,255,0.12);
             color: #f8fafc;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 650;
             box-shadow: 0 18px 45px rgba(2, 6, 23, 0.22);
           }
