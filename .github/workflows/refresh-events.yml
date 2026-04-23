@@ -18,7 +18,6 @@ on:
         type: boolean
   schedule:
     - cron: "15 3 * * *"
-    - cron: "45 2 * * 1"
 
 permissions:
   contents: read
@@ -77,8 +76,23 @@ jobs:
             echo "::error::Missing KASSIR_AUTH_STATE_B64 secret."
             exit 1
           fi
-          printf '%s' "$YANDEX_AUTH_STATE_B64" | base64 --decode > data/playwright/github-yandex-state.json
-          printf '%s' "$KASSIR_AUTH_STATE_B64" | base64 --decode > data/playwright/github-kassir-state.json
+          printf '%s' "$YANDEX_AUTH_STATE_B64" | base64 --decode > data/playwright/github-yandex-state.bin
+          printf '%s' "$KASSIR_AUTH_STATE_B64" | base64 --decode > data/playwright/github-kassir-state.bin
+
+          if [ "$(xxd -p -l 2 data/playwright/github-yandex-state.bin)" = "1f8b" ]; then
+            gunzip -c data/playwright/github-yandex-state.bin > data/playwright/github-yandex-state.json
+            rm data/playwright/github-yandex-state.bin
+          else
+            mv data/playwright/github-yandex-state.bin data/playwright/github-yandex-state.json
+          fi
+
+          if [ "$(xxd -p -l 2 data/playwright/github-kassir-state.bin)" = "1f8b" ]; then
+            gunzip -c data/playwright/github-kassir-state.bin > data/playwright/github-kassir-state.json
+            rm data/playwright/github-kassir-state.bin
+          else
+            mv data/playwright/github-kassir-state.bin data/playwright/github-kassir-state.json
+          fi
+
           echo "PLAYWRIGHT_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-yandex-state.json" >> "$GITHUB_ENV"
           echo "KASSIR_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-kassir-state.json" >> "$GITHUB_ENV"
 
@@ -92,10 +106,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             MODE="${{ inputs.mode }}"
             INCLUDE_KASSIR="${{ inputs.include_kassir }}"
-          fi
-
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "45 2 * * 1" ]; then
-            MODE="full"
           fi
 
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"

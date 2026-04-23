@@ -171,7 +171,7 @@ export default {
   async scheduled(event, env) {
     if (event.cron === DAILY_DRAFTS_CRON) {
       try {
-        await prepareDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), {
+        await ensureDailyDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), {
           refresh: false,
           reason: "daily_drafts"
         });
@@ -337,6 +337,22 @@ async function handleRequest(request, env) {
     await requireAdmin(request, env);
     const result = await scanSources(env, { reason: "admin_reindex" });
     return json({ ok: true, meta: result.meta }, 200, env);
+  }
+
+  if (url.pathname === "/internal/run-drafts" && request.method === "POST") {
+    await requireAutomationToken(request, env);
+    const body = request.headers.get("content-type")?.includes("application/json")
+      ? await request.json().catch(() => ({}))
+      : {};
+    const limit = Number(url.searchParams.get("limit") || body.limit || env.DRAFTS_PER_DAY || 10);
+    const refresh = parseBooleanFlag(url.searchParams.get("refresh"), body.refresh, false);
+    const force = parseBooleanFlag(url.searchParams.get("force"), body.force, false);
+    const result = await ensureDailyDraftBatch(env, limit, {
+      refresh,
+      force,
+      reason: force ? "internal_drafts_force" : "internal_drafts"
+    });
+    return json({ ok: true, ...result }, 200, env);
   }
 
   if (url.pathname === "/admin/import-events" && request.method === "POST") {
@@ -531,19 +547,90 @@ async function prepareDraftBatch(env, limit, options = {}) {
   const drafts = [];
   for (const [index, item] of selected.entries()) {
     const draft = await createDraft(env, item);
-    drafts.push(draft);
-    await sendDraftPost(env, managerId, {
-      ...draft,
-      text: [`Черновик ${index + 1}/${selected.length} для канала`, "", draft.text].join("\n")
-    }, {
-      inline_keyboard: [
-        [{ text: "Опубликовать", callback_data: `pub:approve:${draft.id}` }],
-        [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
-      ]
+    try {
+      await sendDraftPost(env, managerId, {
+        ...draft,
+        text: [`Черновик ${index + 1}/${selected.length} для канала`, "", draft.text].join("\n")
+      }, {
+        inline_keyboard: [
+          [{ text: "Опубликовать", callback_data: `pub:approve:${draft.id}` }],
+          [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
+        ]
+      });
+      drafts.push(draft);
+    } catch (error) {
+      console.warn(`Failed to deliver draft ${draft.id}: ${error.message}`);
+      await markDraft(env, draft.id, "failed");
+    }
+  }
+
+  if (selected.length > 0 && drafts.length === 0) {
+    await telegramApi(env, "sendMessage", {
+      chat_id: managerId,
+      text: "Не удалось доставить черновики менеджеру. Проверьте связь бота с Telegram и повторите запуск."
     });
   }
 
   return drafts;
+}
+
+async function ensureDailyDraftBatch(env, limit, options = {}) {
+  const target = Math.max(1, Number(limit || env.DRAFTS_PER_DAY || 10) || 10);
+  const now = options.now ? new Date(options.now) : new Date();
+  const force = options.force === true;
+  const publishing = await getPublishing(env);
+  const preparedToday = force ? 0 : getPreparedDraftCountForDate(publishing, now);
+
+  if (!force && preparedToday >= target) {
+    return {
+      drafts: [],
+      count: 0,
+      preparedToday,
+      target,
+      skippedReason: "already_prepared_today"
+    };
+  }
+
+  const remaining = force ? target : Math.max(0, target - preparedToday);
+  if (remaining <= 0) {
+    return {
+      drafts: [],
+      count: 0,
+      preparedToday,
+      target,
+      skippedReason: "nothing_remaining"
+    };
+  }
+
+  const drafts = await prepareDraftBatch(env, remaining, options);
+  if (!drafts.length) {
+    return {
+      drafts,
+      count: 0,
+      preparedToday,
+      target,
+      skippedReason: "no_candidates"
+    };
+  }
+
+  const refreshedPublishing = await getPublishing(env);
+  const currentToday = force ? 0 : getPreparedDraftCountForDate(refreshedPublishing, now);
+  refreshedPublishing.lastDraftBatchAt = now.toISOString();
+  refreshedPublishing.lastDraftBatchCount = currentToday + drafts.length;
+  await putJson(env, "publishing", {
+    drafts: refreshedPublishing.drafts,
+    postedItemIds: refreshedPublishing.postedItemIds,
+    postedItems: refreshedPublishing.postedItems,
+    lastDraftBatchAt: refreshedPublishing.lastDraftBatchAt,
+    lastDraftBatchCount: refreshedPublishing.lastDraftBatchCount
+  });
+
+  return {
+    drafts,
+    count: drafts.length,
+    preparedToday: refreshedPublishing.lastDraftBatchCount,
+    target
+  };
 }
 
 async function scanSources(env, options = {}) {
@@ -2179,6 +2266,8 @@ function normalizePublishingState(publishing) {
     drafts: Array.isArray(publishing?.drafts) ? publishing.drafts : [],
     postedItemIds: Array.isArray(publishing?.postedItemIds) ? publishing.postedItemIds : [],
     postedItems: Array.isArray(publishing?.postedItems) ? publishing.postedItems : [],
+    lastDraftBatchAt: publishing?.lastDraftBatchAt || null,
+    lastDraftBatchCount: Math.max(0, Number(publishing?.lastDraftBatchCount || 0) || 0),
     staleDraftsExpired: 0
   };
 }
@@ -2244,9 +2333,9 @@ function wasRecentlyPosted(publishing, item, env, overrideDays = null) {
 
 function buildDraftSelectionCooldowns(env) {
   const values = [
-    Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 14),
-    Number(env.DRAFT_REPOST_SOFT_COOLDOWN_DAYS || 7),
-    3,
+    Number(env.DRAFT_REPOST_COOLDOWN_DAYS || 4),
+    Number(env.DRAFT_REPOST_SOFT_COOLDOWN_DAYS || 2),
+    1,
     1,
     0
   ];
@@ -2746,6 +2835,34 @@ async function requireAdmin(request, env) {
   if (user !== expectedUser || password !== expectedPassword) throw new AuthError();
 }
 
+async function requireAutomationToken(request, env) {
+  const expectedToken = String(env.AUTOMATION_TOKEN || "").trim();
+  if (!expectedToken) throw new HttpError("AUTOMATION_TOKEN is not configured.", 503);
+
+  const authHeader = request.headers.get("authorization") || "";
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const providedToken = String(
+    request.headers.get("x-automation-token")
+    || request.headers.get("x-internal-token")
+    || (bearerMatch ? bearerMatch[1] : "")
+  ).trim();
+
+  if (!providedToken || providedToken !== expectedToken) {
+    throw new HttpError("Forbidden", 403);
+  }
+}
+
+function parseBooleanFlag(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const normalized = String(value).trim().toLowerCase();
+    if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+    if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  }
+
+  return false;
+}
+
 async function track(env, event) {
   const events = await getJson(env, "analytics:events", []);
   events.push({
@@ -2821,7 +2938,13 @@ async function getRuntime(env) {
 
 async function getPublishing(env) {
   const publishing = expireStalePendingDrafts(
-    normalizePublishingState(await getJson(env, "publishing", { drafts: [], postedItemIds: [], postedItems: [] })),
+    normalizePublishingState(await getJson(env, "publishing", {
+      drafts: [],
+      postedItemIds: [],
+      postedItems: [],
+      lastDraftBatchAt: null,
+      lastDraftBatchCount: 0
+    })),
     env
   );
 
@@ -2829,15 +2952,25 @@ async function getPublishing(env) {
     await putJson(env, "publishing", {
       drafts: publishing.drafts,
       postedItemIds: publishing.postedItemIds,
-      postedItems: publishing.postedItems
+      postedItems: publishing.postedItems,
+      lastDraftBatchAt: publishing.lastDraftBatchAt,
+      lastDraftBatchCount: publishing.lastDraftBatchCount
     });
   }
 
   return {
     drafts: publishing.drafts,
     postedItemIds: publishing.postedItemIds,
-    postedItems: publishing.postedItems
+    postedItems: publishing.postedItems,
+    lastDraftBatchAt: publishing.lastDraftBatchAt,
+    lastDraftBatchCount: publishing.lastDraftBatchCount
   };
+}
+
+function getPreparedDraftCountForDate(publishing, value = new Date()) {
+  if (!publishing?.lastDraftBatchAt) return 0;
+  if (formatDateInput(publishing.lastDraftBatchAt) !== formatDateInput(value)) return 0;
+  return Math.max(0, Number(publishing.lastDraftBatchCount || 0) || 0);
 }
 
 function expireStalePendingDrafts(publishing, env, now = new Date()) {

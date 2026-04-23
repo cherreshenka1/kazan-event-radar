@@ -1,0 +1,50 @@
+name: Send Daily Channel Drafts
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Number of drafts to prepare
+        required: true
+        default: "10"
+      force:
+        description: Ignore today's already prepared count
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "5 6 * * *"
+    - cron: "35 6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-drafts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily drafts in worker
+        shell: bash
+        env:
+          WORKER_URL: https://kazan-event-radar-api.4ereshny333.workers.dev
+          AUTOMATION_TOKEN: ${{ secrets.WORKER_AUTOMATION_TOKEN }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: |
+          if [ -z "$AUTOMATION_TOKEN" ]; then
+            echo "::error::Missing WORKER_AUTOMATION_TOKEN secret."
+            exit 1
+          fi
+
+          LIMIT="${INPUT_LIMIT:-10}"
+          FORCE="${INPUT_FORCE:-false}"
+
+          URL="$WORKER_URL/internal/run-drafts?limit=$LIMIT"
+          if [ "$FORCE" = "true" ]; then
+            URL="$URL&force=1"
+          fi
+
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "x-automation-token: $AUTOMATION_TOKEN" \
+            "$URL"
