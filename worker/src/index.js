@@ -954,7 +954,9 @@ async function mergeImportedEventItems(existingItems, preparedItems) {
     indexById.set(finalized.id, nextItems.length - 1);
   }
 
-  return pruneExpiredEventItems(nextItems).sort((a, b) => {
+  const collapsedItems = await collapseDuplicateItems(pruneExpiredEventItems(nextItems));
+
+  return collapsedItems.sort((a, b) => {
     const updatedDiff = String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
     if (updatedDiff) return updatedDiff;
     return compareEventPriority(a, b);
@@ -1504,9 +1506,10 @@ function extractMetaContent(html, name) {
 function shouldRejectEventItem(item) {
   const title = String(item.title || "");
   const summary = String(item.summary || item.rawSummary || "");
+  const rawSummary = String(item.rawSummary || "");
   const haystack = normalizeFingerprintTextSafe(`${title} ${summary}`);
 
-  if (TATAR_SPECIFIC_LETTERS.test(`${title} ${summary}`)) {
+  if (TATAR_SPECIFIC_LETTERS.test(`${title} ${summary} ${rawSummary}`)) {
     return true;
   }
 
@@ -1839,8 +1842,6 @@ function buildSafeEventScheduleLineSafe(item) {
 
 function buildSafeEventDetailLine(item) {
   const detail = extractSafeEventHighlight(item);
-  if (!detail) return "";
-
   const prefix = {
     concert: "В программе",
     theatre: "В центре вечера",
@@ -1854,7 +1855,23 @@ function buildSafeEventDetailLine(item) {
     sport: "В афише матча"
   }[item.kind] || "Главное";
 
+  if (!detail) return buildEventSpecificFallbackLineSafe(item);
+
   return ensureSentence(`${prefix}: ${detail}`);
+}
+
+function buildEventSpecificFallbackLineSafe(item) {
+  const kindLabel = item.kind === "sport" ? "Спортивное событие" : eventKindLabelSafe(item.kind);
+  const title = buildShortEventTitleSafe(item.title || item.summary || "событие");
+  const venueTitle = normalizeText(item.venueTitle || "");
+  const eventDate = item.eventDate ? new Date(item.eventDate) : null;
+  const dateLabel = eventDate && !Number.isNaN(eventDate.getTime()) ? formatMoscowDayMonth(eventDate) : "";
+  const quotedTitle = quoteEventTitleSafe(title);
+
+  if (venueTitle && dateLabel) return `${kindLabel} ${quotedTitle} пройдёт ${dateLabel} на площадке ${venueTitle}.`;
+  if (venueTitle) return `${kindLabel} ${quotedTitle} пройдёт на площадке ${venueTitle}.`;
+  if (dateLabel) return `${kindLabel} ${quotedTitle} запланирован на ${dateLabel}.`;
+  return `${kindLabel} ${quotedTitle} можно рассмотреть как один из вариантов выхода в Казани.`;
 }
 
 function extractSafeEventHighlight(item) {
@@ -2152,6 +2169,7 @@ async function createDraft(env, item) {
     text: formatChannelPost(item),
     url: item.url,
     photoUrl: buildChannelPhotoUrl(item, env),
+    photoKey: buildDraftPhotoIdentity(item),
     kind: item.kind || "event",
     eventDate: item.eventDate || null,
     eventSignature: draftIdentity.primary,
@@ -2204,7 +2222,8 @@ async function hydrateDraftForSend(env, draft) {
     title: item.title || draft.title,
     text: formatChannelPost(item),
     url: item.url || draft.url,
-    photoUrl: buildChannelPhotoUrl(item, env) || draft.photoUrl
+    photoUrl: buildChannelPhotoUrl(item, env) || draft.photoUrl,
+    photoKey: buildDraftPhotoIdentity(item) || draft.photoKey || ""
   };
 }
 
@@ -2234,7 +2253,8 @@ async function markDraft(env, draftId, status) {
       dateKey: draft.dateKey || "",
       titleKey: draft.titleKey || "",
       venueKey: draft.venueKey || "",
-      summaryKey: draft.summaryKey || ""
+      summaryKey: draft.summaryKey || "",
+      photoKey: draft.photoKey || ""
     });
   }
   await putJson(env, "publishing", publishing);
@@ -2275,6 +2295,7 @@ function normalizePublishingState(publishing) {
 function selectDraftCandidates(candidates, publishing, limit, env) {
   const selected = [];
   const selectedIds = new Set();
+  const selectedPhotoKeys = new Set();
   const tiers = buildDraftSelectionCooldowns(env);
 
   for (const cooldownDays of tiers) {
@@ -2282,10 +2303,11 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
       if (selectedIds.has(item.id)) return false;
       if (hasPendingDraft(publishing, item)) return false;
       if (isAlreadySelectedDraftCandidate(selected, item)) return false;
+      if (isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)) return false;
       if (cooldownDays > 0 && wasRecentlyPosted(publishing, item, env, cooldownDays)) return false;
       return true;
     });
-    addDraftCandidatesByKind(tierCandidates, selected, selectedIds, limit);
+    addDraftCandidatesByKind(tierCandidates, selected, selectedIds, selectedPhotoKeys, limit);
     if (selected.length >= limit) return selected;
   }
 
@@ -2297,24 +2319,63 @@ function hasPendingDraft(publishing, item) {
   return publishing.drafts.some((draft) => draft.status === "pending" && matchesStoredDraftIdentity(draft, item?.id, identity));
 }
 
-function addDraftCandidatesByKind(candidates, selected, selectedIds, limit) {
+function addDraftCandidatesByKind(candidates, selected, selectedIds, selectedPhotoKeys, limit) {
   const preferredKinds = ["concert", "sport", "excursion", "theatre", "show", "standup", "exhibition", "musical", "kids"];
 
   for (const kind of preferredKinds) {
-    const match = candidates.find((item) => item.kind === kind && !selectedIds.has(item.id) && !isAlreadySelectedDraftCandidate(selected, item));
+    const match = candidates.find((item) => (
+      item.kind === kind
+      && !selectedIds.has(item.id)
+      && !isAlreadySelectedDraftCandidate(selected, item)
+      && !isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)
+    ));
     if (!match) continue;
-    selected.push(match);
-    selectedIds.add(match.id);
+    addSelectedDraftCandidate(match, selected, selectedIds, selectedPhotoKeys);
     if (selected.length >= limit) return;
   }
 
   for (const item of candidates) {
     if (selectedIds.has(item.id)) continue;
     if (isAlreadySelectedDraftCandidate(selected, item)) continue;
-    selected.push(item);
-    selectedIds.add(item.id);
+    if (isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)) continue;
+    addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys);
     if (selected.length >= limit) return;
   }
+}
+
+function addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys) {
+  selected.push(item);
+  if (item.id) selectedIds.add(item.id);
+
+  const photoKey = buildDraftPhotoIdentity(item);
+  if (photoKey) selectedPhotoKeys.add(photoKey);
+}
+
+function isAlreadySelectedDraftPhoto(selectedPhotoKeys, item) {
+  if (!(selectedPhotoKeys instanceof Set)) return false;
+
+  const photoKey = buildDraftPhotoIdentity(item);
+  return Boolean(photoKey && selectedPhotoKeys.has(photoKey));
+}
+
+function buildDraftPhotoIdentity(item) {
+  if (!item || typeof item !== "object") return "";
+
+  const recurringVisualKey = [
+    normalizeComparableEntity(item.title || item.summary || ""),
+    normalizeComparableVenue(item.venueTitle || ""),
+    normalizeComparableEntity(item.kind || "event")
+  ].filter(Boolean).join("|");
+
+  if (recurringVisualKey) return `event-visual:${recurringVisualKey}`;
+
+  const previewKey = buildEventPreviewKey(item);
+  if (previewKey) return `preview:${previewKey}`;
+
+  const directImage = firstChannelImageUrl(item);
+  if (directImage) return `source-image:${directImage}`;
+
+  return item.id ? `item:${item.id}` : "";
 }
 
 function wasRecentlyPosted(publishing, item, env, overrideDays = null) {
@@ -2603,10 +2664,12 @@ function buildChannelPhotoUrl(item, env) {
 
 async function resolveChannelPhotoCandidates(item, env) {
   const candidates = [];
-  const generatedPreviewUrl = buildGeneratedChannelPhotoUrl(item, env);
 
-  if (generatedPreviewUrl && await remoteAssetExists(generatedPreviewUrl)) {
-    candidates.push(generatedPreviewUrl);
+  for (const generatedPreviewUrl of buildGeneratedChannelPhotoUrls(item, env)) {
+    if (await remoteAssetExists(generatedPreviewUrl)) {
+      candidates.push(generatedPreviewUrl);
+      break;
+    }
   }
 
   if (String(env.CHANNEL_ALLOW_SOURCE_IMAGES || "").trim() === "1") {
@@ -2625,18 +2688,23 @@ async function resolveChannelPhotoCandidates(item, env) {
 }
 
 function buildGeneratedChannelPhotoUrl(item, env) {
+  return buildGeneratedChannelPhotoUrls(item, env)[0] || "";
+}
+
+function buildGeneratedChannelPhotoUrls(item, env) {
   const previewPath = generatedEventPreviewPath(item);
-  if (!previewPath) return "";
+  if (!previewPath) return [];
+  const urls = [];
 
   for (const baseUrl of channelPhotoBaseUrls(env)) {
     try {
-      return new URL(previewPath, baseUrl).toString();
+      urls.push(new URL(previewPath, baseUrl).toString());
     } catch {
       continue;
     }
   }
 
-  return "";
+  return [...new Set(urls)];
 }
 
 function buildFallbackChannelPhotoUrl(item, env) {
@@ -3335,7 +3403,6 @@ function findMatchingFingerprint(grouped, candidate) {
 function areLikelySameEvent(current, candidate) {
   if (!current?.eventDate || !candidate?.eventDate) return false;
   if (formatDateInput(current.eventDate) !== formatDateInput(candidate.eventDate)) return false;
-  if (!areMergeCompatibleKinds(current.kind, candidate.kind)) return false;
 
   const currentExact = buildExactEventSignature(current);
   const candidateExact = buildExactEventSignature(candidate);
@@ -3348,6 +3415,8 @@ function areLikelySameEvent(current, candidate) {
   if (currentLoose && candidateLoose && currentLoose === candidateLoose) {
     return true;
   }
+
+  if (!areMergeCompatibleKinds(current.kind, candidate.kind)) return false;
 
   const currentTitleKey = normalizeComparableEntity(current.title);
   const candidateTitleKey = normalizeComparableEntity(candidate.title);

@@ -69,7 +69,7 @@ async function main() {
 
       manifest[previewKey] = {
         url: `./generated/events/${fileName}`,
-        title: item.title || "",
+        title: item.posterTitle || item.title || "",
         updatedAt: new Date().toISOString(),
         customBackground: Boolean(customBackground)
       };
@@ -122,16 +122,16 @@ async function loadSnapshotItems() {
     path.join(ROOT, "data", "playwright", "yandex-browser-events.json"),
     path.join(ROOT, "data", "playwright", "mts-live-events.json"),
     path.join(ROOT, "data", "playwright", "kassir-browser-events.json"),
-    path.join(ROOT, "data", "playwright", "official-sport-events.json")
+    path.join(ROOT, "data", "playwright", "official-sport-events.json"),
+    path.join(ROOT, "data", "playwright", ".tmp", "events_items.json")
   ];
   const items = [];
 
   for (const filePath of filePaths) {
     try {
       const payload = JSON.parse(await fs.readFile(filePath, "utf8"));
-      if (Array.isArray(payload?.items)) {
-        items.push(...payload.items);
-      }
+      const payloadItems = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
+      items.push(...payloadItems);
     } catch {
       // Ignore missing local snapshots and continue with other sources.
     }
@@ -147,6 +147,9 @@ function buildPreviewSourceMap(items) {
     if (!rawItem?.title || !rawItem?.eventDate) continue;
 
     const item = normalizeEventItem(rawItem);
+    if (!isPreviewDateAllowed(item.eventDate)) continue;
+    if (!isPreviewItemAllowed(item)) continue;
+
     const previewKey = buildEventPreviewKey(item);
     if (!previewKey) continue;
 
@@ -166,9 +169,11 @@ function buildPreviewSourceMap(items) {
 }
 
 function normalizeEventItem(rawItem) {
+  const title = normalizeText(rawItem?.title || rawItem?.summary || "Событие в Казани");
   return {
     id: String(rawItem?.id || ""),
-    title: buildShortEventTitle(rawItem?.title || rawItem?.summary || "Событие в Казани"),
+    title,
+    posterTitle: buildShortEventTitle(title),
     summary: cleanSummary(rawItem?.rawSummary || rawItem?.summary || rawItem?.shortSummary || rawItem?.subtitle || ""),
     shortSummary: cleanSummary(rawItem?.shortSummary || rawItem?.summary || rawItem?.subtitle || ""),
     venueTitle: normalizeText(rawItem?.venueTitle || ""),
@@ -242,7 +247,7 @@ function buildPosterHtml(item, customBackgroundUrl = "") {
   const palette = posterPalette(item.kind);
   const summary = escapeHtml(trim(ensureSentence(extractPreviewLead(item)), 210));
   const metaLine = escapeHtml(buildMetaLine(item));
-  const title = escapeHtml(item.title || "Событие в Казани");
+  const title = escapeHtml(item.posterTitle || item.title || "Событие в Казани");
   const label = escapeHtml(eventKindLabel(item.kind).toUpperCase());
   const backgroundMarkup = customBackgroundUrl
     ? `
@@ -464,7 +469,10 @@ function buildMetaLine(item) {
 
 function extractPreviewLead(item) {
   const summary = normalizeText(item.summary || item.shortSummary || "");
-  const titleFingerprint = normalizePreviewText(item.title || "");
+  const titleFingerprints = new Set([
+    normalizePreviewText(item.title || ""),
+    normalizePreviewText(item.posterTitle || "")
+  ].filter(Boolean));
   const sentences = summary
     .match(/[^.!?]+[.!?]?/g)
     ?.map((part) => normalizeText(part))
@@ -472,7 +480,7 @@ function extractPreviewLead(item) {
 
   for (const sentence of sentences) {
     const fingerprint = normalizePreviewText(sentence);
-    if (!fingerprint || fingerprint === titleFingerprint) continue;
+    if (!fingerprint || titleFingerprints.has(fingerprint)) continue;
     return sentence;
   }
 
@@ -559,6 +567,21 @@ function normalizeDateValue(value) {
   return date.toISOString();
 }
 
+function isPreviewDateAllowed(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return date >= startOfMoscowDay(now) && date <= endOfMoscowYear(now);
+}
+
+function isPreviewItemAllowed(item) {
+  const text = `${item?.title || ""} ${item?.summary || ""} ${item?.shortSummary || ""}`;
+  if (/[ӘәӨөҮүҢңҖҗҺһ]/u.test(text)) return false;
+
+  const normalized = normalizePreviewText(text);
+  return !["розыгрыш", "авиабилеты", "авиабилет", "самолет", "самолёт"].some((keyword) => normalized.includes(normalizePreviewText(keyword)));
+}
+
 function formatDateKey(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "undated";
@@ -578,6 +601,27 @@ function formatDayMonth(value) {
     day: "numeric",
     month: "long"
   }).format(date);
+}
+
+function startOfMoscowDay(value) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(value);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+  return new Date(Date.UTC(year, month - 1, day, -3, 0, 0));
+}
+
+function endOfMoscowYear(value) {
+  const year = Number(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric"
+  }).format(value));
+  return new Date(Date.UTC(year + 1, 0, 1, -3, 0, 0) - 1);
 }
 
 function formatTime(value, hasExplicitTime = false) {

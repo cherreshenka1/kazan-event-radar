@@ -288,10 +288,14 @@ async function refreshEvents() {
 }
 
 function applyEventsPayload(events, previousSelectedId = null) {
-  state.events = events.items || [];
+  const incomingItems = (Array.isArray(events.items) ? events.items : []).filter(isAllowedDisplayEventItem);
+  const rawMatchingCount = Math.max(0, Number(events.matchingItems || events.totalItems || incomingItems.length) || 0);
+  const hiddenByLimit = Math.max(0, rawMatchingCount - incomingItems.length);
+
+  state.events = dedupeEventItemsForDisplay(incomingItems);
   state.periodLabel = events.periodLabel || "Апрель 2026";
   state.syncedAt = events.syncedAt || null;
-  state.totalEvents = events.matchingItems || events.totalItems || state.events.length;
+  state.totalEvents = state.events.length + hiddenByLimit;
   state.allowedFrom = events.filters?.allowedFrom || "";
   state.allowedTo = events.filters?.allowedTo || "";
   state.defaultFrom = events.filters?.defaultFrom || "";
@@ -308,6 +312,104 @@ function applyEventsPayload(events, previousSelectedId = null) {
   if (state.openEventId && !state.events.some((item) => item.id === state.openEventId)) {
     state.openEventId = null;
   }
+}
+
+function dedupeEventItemsForDisplay(items) {
+  const grouped = new Map();
+
+  for (const item of items || []) {
+    const key = buildDisplayEventDuplicateKey(item);
+    if (!key) {
+      grouped.set(`id:${item?.id || grouped.size}`, item);
+      continue;
+    }
+
+    const current = grouped.get(key);
+    grouped.set(key, current ? mergeDisplayEventItem(current, item) : item);
+  }
+
+  return [...grouped.values()];
+}
+
+function isAllowedDisplayEventItem(item) {
+  const text = `${item?.title || ""} ${item?.summary || ""} ${item?.shortSummary || ""} ${item?.rawSummary || ""}`;
+  if (/[ӘәӨөҮүҢңҖҗҺһ]/u.test(text)) return false;
+
+  const normalized = compactTextFingerprint(text);
+  return !["розыгрыш", "авиабилеты", "авиабилет", "самолет", "самолёт"].some((keyword) => normalized.includes(compactTextFingerprint(keyword)));
+}
+
+function buildDisplayEventDuplicateKey(item) {
+  const dateKey = formatEventPreviewDateKey(item?.eventDate || item?.publishedAt);
+  const timeKey = formatEventTimeOnly(item?.eventDate, item?.eventHasExplicitTime) || "no-time";
+  const titleKey = normalizeEventPreviewEntity(item?.title || item?.summary || item?.shortSummary || "");
+  const venueKey = normalizeEventPreviewVenue(item?.venueTitle || eventVenueText(item) || "");
+  const summaryKey = normalizeEventPreviewEntity(item?.rawSummary || item?.summary || item?.shortSummary || "").slice(0, 90);
+
+  if (!dateKey || dateKey === "undated" || !titleKey) return "";
+  if (venueKey) return `${dateKey}|${timeKey}|${titleKey}|${venueKey}`;
+  if (summaryKey) return `${dateKey}|${timeKey}|${titleKey}|${summaryKey}`;
+  return `${dateKey}|${timeKey}|${titleKey}`;
+}
+
+function mergeDisplayEventItem(current, candidate) {
+  const primary = displayEventQuality(candidate) > displayEventQuality(current) ? candidate : current;
+  const secondary = primary === candidate ? current : candidate;
+
+  return {
+    ...secondary,
+    ...primary,
+    id: current?.id || candidate?.id || primary?.id,
+    title: pickDisplayText(primary?.title, secondary?.title),
+    summary: pickDisplayText(primary?.summary, secondary?.summary, { preferLonger: true }),
+    rawSummary: pickDisplayText(primary?.rawSummary, secondary?.rawSummary, { preferLonger: true }),
+    shortSummary: pickDisplayText(primary?.shortSummary, secondary?.shortSummary, { preferLonger: true }),
+    imageUrl: primary?.imageUrl || secondary?.imageUrl || "",
+    externalPreviewUrl: primary?.externalPreviewUrl || secondary?.externalPreviewUrl || "",
+    url: primary?.url || secondary?.url || "",
+    venueTitle: pickDisplayText(primary?.venueTitle, secondary?.venueTitle),
+    sources: mergeDisplaySources(current, candidate),
+    duplicateUrls: uniqueDisplayStrings([...(current?.duplicateUrls || []), ...(candidate?.duplicateUrls || []), current?.url, candidate?.url]),
+    sourceCount: Math.max(Number(current?.sourceCount || 1), Number(candidate?.sourceCount || 1), mergeDisplaySources(current, candidate).length || 1),
+    ticketLinks: mergeDisplayLinks(current?.ticketLinks, candidate?.ticketLinks)
+  };
+}
+
+function displayEventQuality(item) {
+  return [
+    item?.imageUrl || item?.externalPreviewUrl ? 40 : 0,
+    item?.eventHasExplicitTime ? 20 : 0,
+    item?.venueTitle ? 18 : 0,
+    Math.min(220, String(item?.rawSummary || item?.summary || "").length),
+    Math.min(80, String(item?.shortSummary || "").length)
+  ].reduce((sum, value) => sum + value, 0);
+}
+
+function pickDisplayText(preferred, fallback, options = {}) {
+  const preferredText = String(preferred || "").trim();
+  const fallbackText = String(fallback || "").trim();
+  if (!preferredText) return fallbackText;
+  if (!fallbackText) return preferredText;
+  if (!options.preferLonger) return preferredText;
+  return preferredText.length >= fallbackText.length ? preferredText : fallbackText;
+}
+
+function mergeDisplaySources(left, right) {
+  return mergeDisplayLinks(left?.sources, right?.sources);
+}
+
+function mergeDisplayLinks(left = [], right = []) {
+  const map = new Map();
+  for (const link of [...(left || []), ...(right || [])]) {
+    const key = link?.url || link?.id || link?.name || link?.sourceName || "";
+    if (!key) continue;
+    map.set(key, link);
+  }
+  return [...map.values()];
+}
+
+function uniqueDisplayStrings(values) {
+  return [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
 function buildEventsPath() {
@@ -1792,20 +1894,21 @@ function eventCardSummary(item) {
 }
 
 function eventDetailSummary(item) {
+  const leadParagraphs = buildEventLeadParagraphs(item, 3);
   return [
-    ...buildEventLeadParagraphs(item, 3),
+    ...(leadParagraphs.length ? leadParagraphs : [buildEventSpecificFallbackLine(item)]),
     buildSafeEventScheduleLine(item),
     buildSafeEventMoodLine(item)
   ].filter(Boolean).join("\n\n");
 }
 
 function eventPreviewSummary(item) {
-  return trim(buildEventLeadParagraphs(item, 1)[0] || buildSafeEventMoodLine(item), 170);
+  return trim(buildEventLeadParagraphs(item, 1)[0] || buildEventSpecificFallbackLine(item) || buildSafeEventMoodLine(item), 170);
 }
 
 function buildEventLeadParagraphs(item, maxParagraphs = 2) {
   const titleFingerprint = compactTextFingerprint(eventCardTitle(item) || "");
-  const sourceText = normalizeEventLeadText(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
+  const sourceText = normalizeEventLeadText(selectReadableEventSourceText(item));
   const sentences = sourceText
     .match(/[^.!?]+[.!?]?/g)
     ?.map((part) => trim(part, 190))
@@ -1828,6 +1931,12 @@ function buildEventLeadParagraphs(item, maxParagraphs = 2) {
   }
 
   return paragraphs.slice(0, maxParagraphs);
+}
+
+function selectReadableEventSourceText(item) {
+  return [item?.rawSummary, item?.summary, item?.shortSummary, item?.subtitle]
+    .map((value) => String(value || "").trim())
+    .find((value) => value && !/[ӘәӨөҮүҢңҖҗҺһ]/u.test(value)) || "";
 }
 
 function normalizeEventLeadText(value) {
@@ -1864,6 +1973,23 @@ function buildSafeEventScheduleLine(item) {
   if (dateLabel) return `Дата: ${dateLabel}.`;
   if (venueLabel) return `Площадка: ${venueLabel}.`;
   return "Точное расписание лучше заранее проверить у организатора.";
+}
+
+function buildEventSpecificFallbackLine(item) {
+  const typeLabel = eventTypeLabel(item).toLowerCase();
+  const title = eventCardTitle(item) || item.title || "событие";
+  const venue = eventVenueText(item);
+  const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
+
+  if (venue && dateLabel) return `${capitalizeText(typeLabel)} ${quoteEventTitle(title)} пройдёт ${dateLabel} на площадке ${venue}.`;
+  if (venue) return `${capitalizeText(typeLabel)} ${quoteEventTitle(title)} пройдёт на площадке ${venue}.`;
+  if (dateLabel) return `${capitalizeText(typeLabel)} ${quoteEventTitle(title)} запланирован на ${dateLabel}.`;
+  return `${capitalizeText(typeLabel)} ${quoteEventTitle(title)} можно добавить в план как один из вариантов выхода в Казани.`;
+}
+
+function capitalizeText(value) {
+  const text = String(value || "").trim();
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : "";
 }
 
 function buildSafeEventMoodLine(item) {
