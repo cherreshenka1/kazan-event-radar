@@ -5,7 +5,26 @@ import { renderAdminDashboard } from "../../src/lib/adminDashboard.js";
 
 const DAILY_DRAFTS_CRON = "0 6 * * *";
 const HOURLY_SCAN_CRON = "15 * * * *";
+const FAST_SCAN_CRON = "*/5 * * * *";
 const DEFAULT_EVENTS_API_LIMIT = 600;
+const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60;
+const DEFAULT_ANALYTICS_RATE_LIMIT = 180;
+const DEFAULT_USER_WRITE_RATE_LIMIT = 40;
+const DEFAULT_ADMIN_WRITE_RATE_LIMIT = 12;
+const DEFAULT_JSON_BODY_LIMIT = 32 * 1024;
+const DEFAULT_ANALYTICS_BODY_LIMIT = 8 * 1024;
+const ANALYTICS_EVENT_LIMIT = 5000;
+const ANALYTICS_RECENT_LIMIT = 100;
+const ANALYTICS_DAILY_WINDOW_DAYS = 14;
+const DEFAULT_STALE_EVENTS_HOURS = 18;
+const DEFAULT_STALE_CATALOG_HOURS = 72;
+const DEFAULT_PRO_FEATURES = [
+  "План поездки на 1-7 дней",
+  "Приоритет по событиям, местам и еде",
+  "Готовые дневные сценарии с логистикой",
+  "Варианты маршрута на авто и без машины",
+  "Рекомендации по темпу поездки и паузам"
+];
 const WORKER_SCAN_EXCLUDED_SOURCE_IDS = new Set([
   "yandex-festival",
   "yandex-musical",
@@ -181,9 +200,9 @@ export default {
       return;
     }
 
-    if (event.cron === HOURLY_SCAN_CRON) {
+    if (event.cron === HOURLY_SCAN_CRON || event.cron === FAST_SCAN_CRON) {
       try {
-        await scanSources(env, { reason: "scheduled_refresh" });
+        await scanSources(env, { reason: event.cron === FAST_SCAN_CRON ? "scheduled_refresh_fast" : "scheduled_refresh" });
       } catch (error) {
         console.warn(`Scheduled refresh failed: ${error.message}`);
       }
@@ -202,20 +221,34 @@ async function handleRequest(request, env) {
   }
 
   if (url.pathname === "/health") {
-    const [meta, eventsRefresh, catalogRefresh] = await Promise.all([
+    const [meta, eventsRefresh, catalogRefresh, runtime, publishing] = await Promise.all([
       getEventMeta(env),
       getJson(env, "system:eventsRefreshReport", null),
-      getJson(env, "system:catalogRefreshReport", null)
+      getJson(env, "system:catalogRefreshReport", null),
+      getRuntime(env),
+      getPublishing(env)
     ]);
+    const draftReadiness = await safeBuildDraftReadiness(env, publishing);
+    const status = buildSystemStatus(env, {
+      eventMeta: meta,
+      eventsRefresh,
+      catalogRefresh,
+      runtime,
+      publishing,
+      draftReadiness
+    });
     return json({
-      ok: true,
+      ok: status.ready,
       service: "kazan-event-radar-worker",
+      status: status.overallStatus,
       enabledSources: EVENT_SOURCES.length,
       lastScanAt: meta?.lastScanAt || null,
       eventItems: meta?.eventItems || meta?.totalItems || 0,
       eventsRefreshAt: eventsRefresh?.finishedAt || null,
       catalogRefreshAt: catalogRefresh?.finishedAt || null,
-      catalogSections: Array.isArray(catalogRefresh?.sections) ? catalogRefresh.sections.length : 0
+      catalogSections: Array.isArray(catalogRefresh?.sections) ? catalogRefresh.sections.length : 0,
+      draftReadiness,
+      warnings: status.warnings
     }, 200, env);
   }
 
@@ -225,15 +258,38 @@ async function handleRequest(request, env) {
   }
 
   if (url.pathname === "/api/config") {
+    const user = await optionalTelegramUser(request, env);
     return json({
-      user: await optionalTelegramUser(request, env),
+      user,
       miniAppUrl: env.MINI_APP_URL || null,
-      channelUrl: env.TELEGRAM_CHANNEL_INVITE_URL || null
+      channelUrl: env.TELEGRAM_CHANNEL_INVITE_URL || null,
+      pro: buildProOverview(env),
+      support: buildSupportOverview(env)
     }, 200, env);
   }
 
   if (url.pathname === "/api/catalog") {
     return json({ sections: MAIN_SECTIONS, catalog: CATALOG }, 200, env);
+  }
+
+  if (url.pathname === "/api/pro/overview") {
+    return json(await buildProDataset(env, { includePlans: false }), 200, env);
+  }
+
+  if (url.pathname === "/api/pro/itinerary") {
+    const days = clampNumber(url.searchParams.get("days") || 3, 1, 7);
+    const dataset = await buildProDataset(env, { includePlans: true });
+    const plan = dataset.plans.find((item) => item.days === days) || dataset.plans[0] || null;
+    return json({
+      generatedAt: dataset.generatedAt,
+      overview: dataset.overview,
+      hotels: dataset.hotels,
+      plan
+    }, 200, env);
+  }
+
+  if (url.pathname === "/api/pro/itineraries") {
+    return json(await buildProDataset(env, { includePlans: true }), 200, env);
   }
 
   if (url.pathname === "/api/image") {
@@ -290,7 +346,8 @@ async function handleRequest(request, env) {
 
   if (url.pathname === "/api/favorites/toggle" && request.method === "POST") {
     const user = await requireTelegramUser(request, env);
-    const body = await request.json();
+    await enforceRateLimit(env, "user-write", user.id, getPositiveNumber(env.RATE_LIMIT_USER_WRITE_PER_MINUTE, DEFAULT_USER_WRITE_RATE_LIMIT));
+    const body = await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT);
     const result = await toggleFavorite(env, user.id, body);
     await track(env, { type: "miniapp", action: "favorite_toggle", label: body.id, userId: user.id });
     return json(result, 200, env);
@@ -299,6 +356,7 @@ async function handleRequest(request, env) {
   const reminderMatch = url.pathname.match(/^\/api\/reminders\/events\/([^/]+)$/);
   if (reminderMatch && request.method === "POST") {
     const user = await requireTelegramUser(request, env);
+    await enforceRateLimit(env, "user-write", user.id, getPositiveNumber(env.RATE_LIMIT_USER_WRITE_PER_MINUTE, DEFAULT_USER_WRITE_RATE_LIMIT));
     const result = await createEventReminders(env, user.id, decodeURIComponent(reminderMatch[1]));
     await track(env, { type: "miniapp", action: "reminder_create", label: reminderMatch[1], userId: user.id });
     return json(result, 200, env);
@@ -312,7 +370,13 @@ async function handleRequest(request, env) {
 
   if (url.pathname === "/api/analytics/track" && request.method === "POST") {
     const user = await optionalTelegramUser(request, env);
-    const body = await request.json();
+    await enforceRateLimit(
+      env,
+      "analytics",
+      getRequestIdentity(request, user?.id || "anonymous"),
+      getPositiveNumber(env.RATE_LIMIT_ANALYTICS_PER_MINUTE, DEFAULT_ANALYTICS_RATE_LIMIT)
+    );
+    const body = await readJsonBody(request, DEFAULT_ANALYTICS_BODY_LIMIT);
     await track(env, {
       type: "miniapp",
       action: body.action || "unknown",
@@ -335,6 +399,12 @@ async function handleRequest(request, env) {
 
   if (url.pathname === "/admin/reindex-events" && request.method === "POST") {
     await requireAdmin(request, env);
+    await enforceRateLimit(
+      env,
+      "admin-write",
+      getRequestIdentity(request, "admin"),
+      getPositiveNumber(env.RATE_LIMIT_ADMIN_PER_MINUTE, DEFAULT_ADMIN_WRITE_RATE_LIMIT)
+    );
     const result = await scanSources(env, { reason: "admin_reindex" });
     return json({ ok: true, meta: result.meta }, 200, env);
   }
@@ -342,7 +412,7 @@ async function handleRequest(request, env) {
   if (url.pathname === "/internal/run-drafts" && request.method === "POST") {
     await requireAutomationToken(request, env);
     const body = request.headers.get("content-type")?.includes("application/json")
-      ? await request.json().catch(() => ({}))
+      ? await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT, {})
       : {};
     const limit = Number(url.searchParams.get("limit") || body.limit || env.DRAFTS_PER_DAY || 10);
     const refresh = parseBooleanFlag(url.searchParams.get("refresh"), body.refresh, false);
@@ -357,7 +427,13 @@ async function handleRequest(request, env) {
 
   if (url.pathname === "/admin/import-events" && request.method === "POST") {
     await requireAdmin(request, env);
-    const payload = await request.json();
+    await enforceRateLimit(
+      env,
+      "admin-write",
+      getRequestIdentity(request, "admin"),
+      getPositiveNumber(env.RATE_LIMIT_ADMIN_PER_MINUTE, DEFAULT_ADMIN_WRITE_RATE_LIMIT)
+    );
+    const payload = await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT);
     const result = await importExternalEvents(env, payload);
     return json(result, 200, env);
   }
@@ -523,16 +599,29 @@ async function prepareDraftBatch(env, limit, options = {}) {
     return [];
   }
 
+  const selectCandidates = async () => {
+    const candidates = (await getJson(env, "events:items", []))
+      .filter((item) => item.categories?.includes("events") || item.eventDate)
+      .filter((item) => isAllowedEventItem(item, env))
+      .sort(compareEventPriority);
+
+    const publishing = await getPublishing(env);
+    return selectDraftCandidates(candidates, publishing, limit, env);
+  };
+
   if (options.refresh !== false) {
     await scanSources(env, { reason: options.reason || "draft_batch" });
   }
-  const candidates = (await getJson(env, "events:items", []))
-    .filter((item) => item.categories?.includes("events") || item.eventDate)
-    .filter((item) => isAllowedEventItem(item, env))
-    .sort(compareEventPriority);
 
-  const publishing = await getPublishing(env);
-  const selected = selectDraftCandidates(candidates, publishing, limit, env);
+  let selected = await selectCandidates();
+  if (selected.length === 0 && options.refresh === false && options.retryRefresh !== false) {
+    try {
+      await scanSources(env, { reason: options.reason ? `${options.reason}_retry_refresh` : "draft_batch_retry_refresh" });
+      selected = await selectCandidates();
+    } catch (error) {
+      console.warn(`Draft retry refresh failed: ${error.message}`);
+    }
+  }
 
   if (selected.length === 0) {
     await telegramApi(env, "sendMessage", { chat_id: managerId, text: "Не нашел новых подходящих событий для черновиков." });
@@ -2297,9 +2386,10 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
   const selectedIds = new Set();
   const selectedPhotoKeys = new Set();
   const tiers = buildDraftSelectionCooldowns(env);
+  const rankedCandidates = rankDraftCandidates(candidates, env);
 
   for (const cooldownDays of tiers) {
-    const tierCandidates = candidates.filter((item) => {
+    const tierCandidates = rankedCandidates.filter((item) => {
       if (selectedIds.has(item.id)) return false;
       if (hasPendingDraft(publishing, item)) return false;
       if (isAlreadySelectedDraftCandidate(selected, item)) return false;
@@ -2307,7 +2397,7 @@ function selectDraftCandidates(candidates, publishing, limit, env) {
       if (cooldownDays > 0 && wasRecentlyPosted(publishing, item, env, cooldownDays)) return false;
       return true;
     });
-    addDraftCandidatesByKind(tierCandidates, selected, selectedIds, selectedPhotoKeys, limit);
+    addDraftCandidatesByKind(tierCandidates, selected, selectedIds, selectedPhotoKeys, limit, env);
     if (selected.length >= limit) return selected;
   }
 
@@ -2319,36 +2409,175 @@ function hasPendingDraft(publishing, item) {
   return publishing.drafts.some((draft) => draft.status === "pending" && matchesStoredDraftIdentity(draft, item?.id, identity));
 }
 
-function addDraftCandidatesByKind(candidates, selected, selectedIds, selectedPhotoKeys, limit) {
-  const preferredKinds = ["concert", "sport", "excursion", "theatre", "show", "standup", "exhibition", "musical", "kids"];
+function addDraftCandidatesByKind(candidates, selected, selectedIds, selectedPhotoKeys, limit, env) {
+  const preferredKinds = ["concert", "sport", "theatre", "show", "standup", "festival", "excursion", "exhibition", "musical", "kids"];
+  const rankedCandidates = Array.isArray(candidates) ? candidates : [];
+  const selectedKindCounts = buildSelectedDraftKindCounts(selected);
 
   for (const kind of preferredKinds) {
-    const match = candidates.find((item) => (
+    const match = rankedCandidates.find((item) => (
       item.kind === kind
       && !selectedIds.has(item.id)
       && !isAlreadySelectedDraftCandidate(selected, item)
       && !isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)
+      && !selectedKindCounts.get(kind)
     ));
     if (!match) continue;
-    addSelectedDraftCandidate(match, selected, selectedIds, selectedPhotoKeys);
+    addSelectedDraftCandidate(match, selected, selectedIds, selectedPhotoKeys, selectedKindCounts);
     if (selected.length >= limit) return;
   }
 
-  for (const item of candidates) {
+  for (const item of rankedCandidates) {
     if (selectedIds.has(item.id)) continue;
     if (isAlreadySelectedDraftCandidate(selected, item)) continue;
     if (isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)) continue;
-    addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys);
+    if (!canAddDraftKindUnderSoftLimit(selectedKindCounts, item.kind, limit)) continue;
+    addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys, selectedKindCounts);
+    if (selected.length >= limit) return;
+  }
+
+  for (const item of rankedCandidates) {
+    if (selectedIds.has(item.id)) continue;
+    if (isAlreadySelectedDraftCandidate(selected, item)) continue;
+    if (isAlreadySelectedDraftPhoto(selectedPhotoKeys, item)) continue;
+    addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys, selectedKindCounts);
     if (selected.length >= limit) return;
   }
 }
 
-function addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys) {
+function rankDraftCandidates(candidates, env) {
+  const now = new Date();
+  const scoreCache = new WeakMap();
+  const getScore = (item) => {
+    if (!item || typeof item !== "object") return Number.NEGATIVE_INFINITY;
+    if (!scoreCache.has(item)) {
+      scoreCache.set(item, scoreDraftCandidate(item, env, now));
+    }
+    return scoreCache.get(item);
+  };
+
+  return [...(candidates || [])].sort((left, right) => {
+    const editorialDiff = getScore(right) - getScore(left);
+    if (editorialDiff) return editorialDiff;
+    return compareEventPriority(left, right);
+  });
+}
+
+function compareDraftCandidatePriority(a, b, env, now = new Date()) {
+  const editorialDiff = scoreDraftCandidate(b, env, now) - scoreDraftCandidate(a, env, now);
+  if (editorialDiff) return editorialDiff;
+  return compareEventPriority(a, b);
+}
+
+function scoreDraftCandidate(item, env, now = new Date()) {
+  if (!item || typeof item !== "object") return Number.NEGATIVE_INFINITY;
+
+  const summary = item.summary || item.rawSummary || item.shortSummary || "";
+  const priorityBase = Number(item.priorityScore || item.score || 0) || 0;
+  const sourceCount = Math.max(1, Number(item.sourceCount || 1) || 1);
+
+  let score = 0;
+  score += Math.min(priorityBase, 220) * 3;
+  score += Math.min(sourceCount, 4) * 55;
+  score += scoreDraftDateWindow(item, now);
+  score += scoreDraftKind(item.kind);
+  score += Math.min(140, Math.round(summaryQuality(summary) / 3));
+  score += Math.min(60, Math.round(titleQuality(item.title || "") / 4));
+  score += Math.min(28, Math.round(textQuality(item.shortSummary || "") / 5));
+
+  if (item.eventHasExplicitTime) score += 18;
+  if (item.venueTitle) score += 18;
+  if (item.url) score += 12;
+  if (item.sourceLabel) score += 8;
+  if (isFestivalEventItem(item)) score += 10;
+  if (extractSafeEventHighlight(item)) score += 16;
+
+  const imageUrl = firstChannelImageUrl(item);
+  if (imageUrl) {
+    score += 34;
+  } else {
+    score -= 14;
+  }
+
+  return score;
+}
+
+function scoreDraftDateWindow(item, now = new Date()) {
+  const eventTime = item?.eventDate ? new Date(item.eventDate).getTime() : Number.NaN;
+  if (Number.isNaN(eventTime)) return -120;
+
+  const diffDays = (eventTime - now.getTime()) / (24 * 60 * 60 * 1000);
+  if (diffDays < 0.125) return -80;
+  if (diffDays < 1) return 26;
+  if (diffDays <= 3) return 78;
+  if (diffDays <= 7) return 92;
+  if (diffDays <= 21) return 74;
+  if (diffDays <= 45) return 58;
+  if (diffDays <= 90) return 30;
+  if (diffDays <= 180) return 8;
+  return -24;
+}
+
+function scoreDraftKind(kind) {
+  return {
+    concert: 90,
+    sport: 88,
+    theatre: 82,
+    standup: 76,
+    show: 74,
+    festival: 72,
+    musical: 68,
+    excursion: 60,
+    exhibition: 54,
+    kids: 36
+  }[kind] || 28;
+}
+
+function buildSelectedDraftKindCounts(selected) {
+  const counts = new Map();
+  for (const item of selected || []) {
+    const kind = normalizeDraftKind(item?.kind);
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
+  return counts;
+}
+
+function canAddDraftKindUnderSoftLimit(kindCounts, kind, limit) {
+  const normalizedKind = normalizeDraftKind(kind);
+  return (kindCounts.get(normalizedKind) || 0) < getDraftKindSoftLimit(normalizedKind, limit);
+}
+
+function getDraftKindSoftLimit(kind, limit) {
+  const baseLimit = Math.max(1, Math.ceil((Number(limit || 10) || 10) / 3));
+  return {
+    concert: baseLimit + 1,
+    sport: baseLimit,
+    theatre: baseLimit,
+    show: baseLimit,
+    standup: baseLimit,
+    festival: Math.max(1, baseLimit - 1),
+    excursion: Math.max(1, baseLimit - 1),
+    exhibition: Math.max(1, baseLimit - 1),
+    musical: Math.max(1, baseLimit - 1),
+    kids: Math.max(1, baseLimit - 1),
+    other: baseLimit
+  }[normalizeDraftKind(kind)] || baseLimit;
+}
+
+function normalizeDraftKind(kind) {
+  return normalizeKeyPart(kind || "other");
+}
+
+function addSelectedDraftCandidate(item, selected, selectedIds, selectedPhotoKeys, selectedKindCounts = null) {
   selected.push(item);
   if (item.id) selectedIds.add(item.id);
 
   const photoKey = buildDraftPhotoIdentity(item);
   if (photoKey) selectedPhotoKeys.add(photoKey);
+  if (selectedKindCounts instanceof Map) {
+    const kind = normalizeDraftKind(item?.kind);
+    selectedKindCounts.set(kind, (selectedKindCounts.get(kind) || 0) + 1);
+  }
 }
 
 function isAlreadySelectedDraftPhoto(selectedPhotoKeys, item) {
@@ -2612,37 +2841,121 @@ function formatChannelPost(item) {
 
 function buildChannelPostParagraphs(item) {
   const paragraphs = [];
-  const detailLine = buildSafeEventDetailLineSafe(item);
+  const shortTitle = buildShortEventTitleSafe(item.title || item.summary || "");
+  const titlePattern = shortTitle ? new RegExp(escapeRegExp(shortTitle), "giu") : null;
+  const titleFingerprint = normalizeFingerprintTextSafe(shortTitle);
+  const seen = new Set();
+  const pushParagraph = (value, options = {}) => {
+    const source = normalizeText(value);
+    if (!source) return false;
 
-  if (detailLine) {
-    paragraphs.push(trim(detailLine, 220));
-  }
-
-  const moodLine = item.kind === "sport"
-    ? "Подойдет для живой атмосферы, если хочется пойти на матч и заранее понять логистику."
-    : buildSafeEventMoodLineSafe(item);
-
-  if (moodLine && !paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === normalizeFingerprintTextSafe(moodLine))) {
-    paragraphs.push(trim(moodLine, 220));
-  }
-
-  const fallbackText = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
-  if (paragraphs.length < 2 && fallbackText) {
-    for (const part of splitDraftParagraphs(fallbackText)) {
-      const normalized = sanitizeSafeEventHighlight(part, {
-        titlePattern: buildShortEventTitleSafe(item.title || item.summary || "")
-          ? new RegExp(escapeRegExp(buildShortEventTitleSafe(item.title || item.summary || "")), "giu")
-          : null,
+    const normalized = options.skipSanitize
+      ? source
+      : sanitizeSafeEventHighlight(source, {
+        titlePattern,
         venueTitle: item.venueTitle || ""
       });
-      if (!normalized) continue;
-      if (paragraphs.some((entry) => normalizeFingerprintTextSafe(entry) === normalizeFingerprintTextSafe(normalized))) continue;
-      paragraphs.push(trim(ensureSentence(normalized), 220));
-      if (paragraphs.length >= 3) break;
+    const sentence = trim(ensureSentence(normalized), options.maxLength || 220);
+    const fingerprint = normalizeFingerprintTextSafe(sentence);
+
+    if (!fingerprint) return false;
+    if (titleFingerprint && fingerprint === titleFingerprint) return false;
+    if (seen.has(fingerprint)) return false;
+
+    seen.add(fingerprint);
+    paragraphs.push(sentence);
+    return true;
+  };
+
+  pushParagraph(buildChannelLeadParagraph(item), { skipSanitize: true, maxLength: 170 });
+  pushParagraph(buildChannelSupportParagraph(item), { skipSanitize: true, maxLength: 220 });
+
+  const fallbackText = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
+  if (paragraphs.length < 3 && fallbackText) {
+    for (const part of splitDraftParagraphs(fallbackText)) {
+      if (pushParagraph(part, { maxLength: 220 }) && paragraphs.length >= 3) break;
     }
   }
 
-  return paragraphs.slice(0, 3);
+  const moodLine = buildChannelMoodParagraph(item);
+  if (paragraphs.length < 4) {
+    pushParagraph(moodLine, { skipSanitize: true, maxLength: 180 });
+  }
+
+  return paragraphs.slice(0, 4);
+}
+
+function buildChannelLeadParagraph(item) {
+  return buildChannelNarrativeSentences(item)[0] || buildChannelFallbackLead(item);
+}
+
+function buildChannelSupportParagraph(item) {
+  const narrative = buildChannelNarrativeSentences(item);
+  if (narrative[1]) return narrative[1];
+
+  const fallback = buildEventSpecificFallbackLineSafe(item);
+  return fallback
+    .replace(/^(Концерт|Спектакль|Шоу|Фестиваль|Стендап|Выставка|Экскурсия|Мюзикл|Семейная программа|Спортивное событие)\s+/u, "")
+    .replace(/\s+можно рассмотреть как один из вариантов выхода в Казани\./u, " хорошо впишется в план по городу.")
+    .replace(/\s+пройд[её]т\s+/u, " пройдёт ")
+    .trim();
+}
+
+function buildChannelNarrativeSentences(item) {
+  const sourceText = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
+  const shortTitle = buildShortEventTitleSafe(item.title || item.summary || "");
+  const titlePattern = shortTitle ? new RegExp(escapeRegExp(shortTitle), "giu") : null;
+  const titleFingerprint = normalizeFingerprintTextSafe(shortTitle);
+  const seen = new Set();
+  const result = [];
+
+  for (const sentence of splitDraftParagraphs(sourceText)) {
+    const normalized = sanitizeSafeEventHighlight(sentence, {
+      titlePattern,
+      venueTitle: item.venueTitle || ""
+    });
+    const prepared = ensureSentence(trim(normalized, 190));
+    const fingerprint = normalizeFingerprintTextSafe(prepared);
+
+    if (!fingerprint || fingerprint === titleFingerprint || seen.has(fingerprint)) continue;
+    if (prepared.length < 28) continue;
+
+    seen.add(fingerprint);
+    result.push(prepared);
+    if (result.length >= 2) break;
+  }
+
+  return result;
+}
+
+function buildChannelFallbackLead(item) {
+  return {
+    concert: "Хороший вариант для вечернего выхода, если хочется живого выступления и понятной атмосферы.",
+    theatre: "Подойдёт для спокойного вечера, если хочется сильной сцены и понятной истории.",
+    show: "Яркий формат для тех, кто хочет более зрелищный и динамичный выход в городе.",
+    festival: "Подойдёт тем, кто любит большие городские события и насыщенную программу.",
+    standup: "Лёгкий формат для вечера, если хочется выбраться в город и посмеяться без перегруза.",
+    exhibition: "Спокойный культурный формат, который удобно встроить в прогулку по городу.",
+    excursion: "Хороший выбор, если хочется не просто пройтись, а добавить в день содержательный маршрут.",
+    musical: "Сценический формат для тех, кто любит музыку, постановку и яркий вечерний выход.",
+    kids: "Удобный вариант для семейного дня, если нужен понятный и комфортный формат.",
+    sport: "Сильный выбор для тех, кто любит живые эмоции, скорость и атмосферу события."
+  }[item.kind] || "Хороший вариант для выхода в город, если хочется добавить в план что-то яркое и понятное.";
+}
+
+function buildChannelMoodParagraph(item) {
+  return {
+    concert: "Подойдёт, если хочется собрать вечер вокруг одного сильного выступления и без сложной логистики.",
+    theatre: "Удобно брать в план как спокойный вечерний выход без лишнего шума.",
+    show: "Хорошо подойдёт для более яркого вечера, если хочется визуального формата и эмоций.",
+    festival: "Можно закладывать в план, если хочется провести в городе несколько насыщенных часов подряд.",
+    standup: "Хороший вариант для лёгкого вечера с друзьями или вдвоём.",
+    exhibition: "Удобно совмещать с прогулкой, кофе и другими точками в центре.",
+    excursion: "Подойдёт тем, кто хочет провести время не только приятно, но и с новым содержанием.",
+    musical: "Можно брать как главный акцент вечера, если хочется большого сценического формата.",
+    kids: "Подойдёт для семейного выхода, если нужен мягкий и понятный сценарий дня.",
+    sport: "Подойдёт для живой атмосферы, если хочется заранее продумать логистику и поймать драйв события."
+  }[item.kind] || "Можно спокойно добавить в личный план, если хочется собрать насыщенный день в городе.";
 }
 
 function buildChannelPhotoUrl(item, env) {
@@ -2665,14 +2978,11 @@ function buildChannelPhotoUrl(item, env) {
 async function resolveChannelPhotoCandidates(item, env) {
   const candidates = [];
 
-  for (const generatedPreviewUrl of buildGeneratedChannelPhotoUrls(item, env)) {
-    if (await remoteAssetExists(generatedPreviewUrl)) {
-      candidates.push(generatedPreviewUrl);
-      break;
-    }
-  }
+  candidates.push(...buildGeneratedChannelPhotoUrls(item, env));
 
-  if (String(env.CHANNEL_ALLOW_SOURCE_IMAGES || "").trim() === "1") {
+  const sourceImagesEnabled = !["0", "false", "off"].includes(String(env.CHANNEL_ALLOW_SOURCE_IMAGES || "1").trim().toLowerCase())
+    && String(env.CHANNEL_DISABLE_SOURCE_IMAGES || "").trim() !== "1";
+  if (sourceImagesEnabled) {
     const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
     if (directPhotoUrl) {
       candidates.push(directPhotoUrl);
@@ -2933,44 +3243,479 @@ function parseBooleanFlag(...values) {
 
 async function track(env, event) {
   const events = await getJson(env, "analytics:events", []);
-  events.push({
-    ts: new Date().toISOString(),
-    type: event.type,
-    action: event.action,
-    label: event.label || null,
-    source: event.source || null,
-    userHash: event.userId ? await hashUser(env, event.userId) : null,
-    metadata: event.metadata || {}
-  });
-  await putJson(env, "analytics:events", events.slice(-5000));
+  events.push(sanitizeTrackedEvent(event, env));
+  await putJson(env, "analytics:events", events.slice(-ANALYTICS_EVENT_LIMIT));
 }
 
 async function analyticsSummary(env) {
   const events = await getJson(env, "analytics:events", []);
   const uniqueUsers = new Set(events.map((event) => event.userHash).filter(Boolean));
-  const [eventMeta, eventsRefresh, catalogRefresh] = await Promise.all([
+  const [eventMeta, eventsRefresh, catalogRefresh, runtime, publishing] = await Promise.all([
     getEventMeta(env),
     getJson(env, "system:eventsRefreshReport", null),
-    getJson(env, "system:catalogRefreshReport", null)
+    getJson(env, "system:catalogRefreshReport", null),
+    getRuntime(env),
+    getPublishing(env)
   ]);
+  const draftReadiness = await safeBuildDraftReadiness(env, publishing);
+  const systemStatus = buildSystemStatus(env, {
+    eventMeta,
+    eventsRefresh,
+    catalogRefresh,
+    runtime,
+    publishing,
+    draftReadiness
+  });
+
+  const outboundEvents = events.filter((event) => isOutboundAnalyticsAction(event.action));
+  const favoritesCount = events.filter((event) => event.action === "favorite_toggle").length;
+  const reminderCount = events.filter((event) => event.action === "reminder_create").length;
+  const searchCount = events.filter((event) => String(event.action || "").includes("search")).length;
+  const eventOpenCount = events.filter((event) => event.action === "event_item_click").length;
+  const topLinks = buildTopLinkEntries(outboundEvents, 12);
+  const topLabels = topEntriesFromSelector(events, (event) => event.label, 12);
+  const topSections = topEntriesFromSelector(events, (event) => event.metadata?.section, 8);
+  const topActions = topEntriesFromSelector(events, (event) => event.action, 12);
 
   return {
     totalEvents: events.length,
     uniqueUsers: uniqueUsers.size,
     byType: groupCount(events, "type"),
     byAction: groupCount(events, "action"),
-    recentEvents: events.slice(-100).reverse(),
+    topActions,
+    topLabels,
+    topLinks,
+    topSections,
+    activity: buildDailyActivity(events, ANALYTICS_DAILY_WINDOW_DAYS),
+    totals: {
+      pageViews: events.filter((event) => event.action === "page_view").length,
+      eventOpens: eventOpenCount,
+      outboundClicks: outboundEvents.length,
+      favorites: favoritesCount,
+      reminders: reminderCount,
+      searches: searchCount
+    },
+    recentEvents: events.slice(-ANALYTICS_RECENT_LIMIT).reverse(),
+    publishing: buildPublishingSummary(publishing, draftReadiness),
+    warnings: systemStatus.warnings,
+    pro: buildProOverview(env),
     system: {
       updatedAt: new Date().toISOString(),
+      status: systemStatus.overallStatus,
+      ready: systemStatus.ready,
+      runtime,
       eventMeta,
       eventsRefresh,
-      catalogRefresh
+      catalogRefresh,
+      draftReadiness
     }
   };
 }
 
 function renderAnalyticsPage(summary) {
   return renderAdminDashboard(summary);
+}
+
+async function sanitizeTrackedEvent(event, env) {
+  return {
+    ts: new Date().toISOString(),
+    type: trim(event.type || "unknown", 40) || "unknown",
+    action: trim(event.action || "unknown", 80) || "unknown",
+    label: trim(event.label || "", 200) || null,
+    source: trim(event.source || "", 120) || null,
+    userHash: event.userId ? await hashUser(env, event.userId) : null,
+    metadata: sanitizeAnalyticsMetadata(event.metadata || {})
+  };
+}
+
+function sanitizeAnalyticsMetadata(metadata) {
+  const allowedEntries = Object.entries(metadata || {}).slice(0, 12);
+  const sanitized = {};
+
+  for (const [key, value] of allowedEntries) {
+    const normalizedKey = trim(key, 40);
+    if (!normalizedKey) continue;
+
+    if (value == null) {
+      sanitized[normalizedKey] = null;
+      continue;
+    }
+
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      sanitized[normalizedKey] = trim(String(value), 240);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      sanitized[normalizedKey] = value.slice(0, 6).map((entry) => trim(String(entry), 120));
+      continue;
+    }
+
+    sanitized[normalizedKey] = trim(JSON.stringify(value), 240);
+  }
+
+  return sanitized;
+}
+
+function buildSystemStatus(env, context = {}) {
+  const warnings = [];
+  const runtime = context.runtime || {};
+  const eventMeta = context.eventMeta || null;
+  const catalogRefresh = context.catalogRefresh || null;
+  const publishing = context.publishing || null;
+  const draftReadiness = context.draftReadiness || null;
+
+  if (!String(env.TELEGRAM_BOT_TOKEN || "").trim()) {
+    warnings.push({ level: "error", code: "telegram_bot_token", message: "TELEGRAM_BOT_TOKEN is not configured." });
+  }
+  if (!String(env.ANALYTICS_PASSWORD || "").trim()) {
+    warnings.push({ level: "error", code: "analytics_password", message: "ANALYTICS_PASSWORD is not configured." });
+  }
+  if (!String(env.AUTOMATION_TOKEN || "").trim()) {
+    warnings.push({ level: "warn", code: "automation_token", message: "AUTOMATION_TOKEN is missing, so internal jobs cannot be protected." });
+  }
+  if (!String(env.MINI_APP_URL || "").trim()) {
+    warnings.push({ level: "warn", code: "mini_app_url", message: "MINI_APP_URL is missing." });
+  }
+  if (!String(env.TELEGRAM_MANAGER_CHAT_ID || runtime.managerChatId || "").trim()) {
+    warnings.push({ level: "warn", code: "manager_chat", message: "Manager chat is not linked yet." });
+  }
+  if (!String(env.TELEGRAM_CHANNEL_ID || runtime.channelId || "").trim()) {
+    warnings.push({ level: "warn", code: "channel_id", message: "Channel is not linked yet." });
+  }
+
+  const staleEventsHours = getAgeHours(eventMeta?.lastScanAt);
+  if (staleEventsHours != null && staleEventsHours > getPositiveNumber(env.HEALTH_STALE_EVENTS_HOURS, DEFAULT_STALE_EVENTS_HOURS)) {
+    warnings.push({
+      level: "warn",
+      code: "events_stale",
+      message: `Events cache looks stale (${staleEventsHours}h since last scan).`
+    });
+  }
+
+  const staleCatalogHours = getAgeHours(catalogRefresh?.finishedAt);
+  if (staleCatalogHours != null && staleCatalogHours > getPositiveNumber(env.HEALTH_STALE_CATALOG_HOURS, DEFAULT_STALE_CATALOG_HOURS)) {
+    warnings.push({
+      level: "warn",
+      code: "catalog_stale",
+      message: `Catalog refresh looks stale (${staleCatalogHours}h since last refresh).`
+    });
+  }
+
+  if (publishing && getPreparedDraftCountForDate(publishing, new Date()) === 0) {
+    warnings.push({
+      level: "warn",
+      code: "drafts_today",
+      message: "No prepared drafts found for today."
+    });
+  }
+
+  if (draftReadiness && Number(draftReadiness.readyCount || 0) < Number(draftReadiness.target || 0)) {
+    warnings.push({
+      level: "warn",
+      code: "draft_candidates_low",
+      message: `Only ${draftReadiness.readyCount} strong draft candidates are ready for the next batch of ${draftReadiness.target}.`
+    });
+  }
+
+  if (draftReadiness && Number(draftReadiness.uniquePhotoCount || 0) < Math.min(Number(draftReadiness.target || 0), 6)) {
+    warnings.push({
+      level: "warn",
+      code: "draft_visuals_low",
+      message: `Draft visual diversity is low: ${draftReadiness.uniquePhotoCount} unique preview identities for the next batch.`
+    });
+  }
+
+  if (draftReadiness?.error) {
+    warnings.push({
+      level: "warn",
+      code: "draft_readiness_error",
+      message: `Draft readiness summary fallback is active: ${draftReadiness.error}.`
+    });
+  }
+
+  const hasErrors = warnings.some((warning) => warning.level === "error");
+  const hasWarnings = warnings.some((warning) => warning.level === "warn");
+
+  return {
+    ready: !hasErrors,
+    overallStatus: hasErrors ? "degraded" : hasWarnings ? "warning" : "ok",
+    warnings
+  };
+}
+
+function buildPublishingSummary(publishing, draftReadiness = null) {
+  const drafts = Array.isArray(publishing?.drafts) ? publishing.drafts : [];
+  const pendingDrafts = drafts.filter((draft) => draft?.status === "pending");
+  const approvedDrafts = drafts.filter((draft) => draft?.status === "approved");
+  const sentDrafts = drafts.filter((draft) => draft?.status === "sent");
+
+  return {
+    pending: pendingDrafts.length,
+    approved: approvedDrafts.length,
+    sent: sentDrafts.length,
+    totalStored: drafts.length,
+    lastBatchAt: publishing?.lastDraftBatchAt || null,
+    lastBatchCount: Math.max(0, Number(publishing?.lastDraftBatchCount || 0) || 0),
+    draftReadiness
+  };
+}
+
+async function buildDraftReadiness(env, publishing = null) {
+  const target = Math.max(1, Number(env.DRAFTS_PER_DAY || 10) || 10);
+  const items = await getJson(env, "events:items", []);
+  const candidates = items
+    .filter((item) => item && (item.categories?.includes("events") || item.eventDate))
+    .filter((item) => isAllowedEventItem(item, env))
+    .filter((item) => isValidDateValue(item?.eventDate))
+    .sort(compareEventPriority)
+    .slice(0, Math.max(target * 8, 40));
+
+  const selected = [];
+  const selectedIdentityKeys = new Set();
+  const selectedPhotoKeys = new Set();
+
+  for (const item of candidates) {
+    if (selected.length >= target) break;
+
+    const identityKey = buildLightDraftReadinessIdentity(item);
+    if (identityKey && selectedIdentityKeys.has(identityKey)) continue;
+
+    const photoKey = buildDraftPhotoIdentity(item);
+    if (photoKey && selectedPhotoKeys.has(photoKey)) continue;
+
+    selected.push(item);
+    if (identityKey) selectedIdentityKeys.add(identityKey);
+    if (photoKey) selectedPhotoKeys.add(photoKey);
+  }
+
+  const uniquePhotoCount = new Set(selected.map((item) => buildDraftPhotoIdentity(item)).filter(Boolean)).size;
+  const kinds = topEntriesFromSelector(selected, (item) => item.kind, target);
+  const nextDates = [];
+  for (const value of selected.map((item) => item?.eventDate).filter(Boolean).sort(compareDates)) {
+    const formatted = safeFormatMoscowDate(value);
+    if (!formatted || nextDates.includes(formatted)) continue;
+    nextDates.push(formatted);
+    if (nextDates.length >= 3) break;
+  }
+
+  return {
+    target,
+    eligibleCount: candidates.length,
+    readyCount: selected.length,
+    uniquePhotoCount,
+    ready: selected.length >= target,
+    kinds,
+    nextDates
+  };
+}
+
+async function safeBuildDraftReadiness(env, publishing = null) {
+  try {
+    return await buildDraftReadiness(env, publishing);
+  } catch (error) {
+    console.warn(`Draft readiness build failed: ${error.message}`);
+    return {
+      target: Math.max(1, Number(env.DRAFTS_PER_DAY || 10) || 10),
+      eligibleCount: 0,
+      readyCount: 0,
+      uniquePhotoCount: 0,
+      ready: false,
+      kinds: [],
+      nextDates: [],
+      error: trim(error.message || "unknown_error", 200)
+    };
+  }
+}
+
+function isValidDateValue(value) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp);
+}
+
+function safeFormatMoscowDate(value) {
+  try {
+    if (!isValidDateValue(value)) return "";
+    return formatMoscowDate(value);
+  } catch {
+    return "";
+  }
+}
+
+function buildLightDraftReadinessIdentity(item) {
+  const dateKey = safeDateIdentityKey(item?.eventDate);
+  const titleKey = normalizeComparableEntity(item?.title || "");
+  const venueKey = normalizeComparableVenue(item?.venueTitle || "");
+  return [dateKey, titleKey, venueKey].filter(Boolean).join("|");
+}
+
+function safeDateIdentityKey(value) {
+  try {
+    if (!isValidDateValue(value)) return "";
+    return new Date(value).toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
+function buildDailyActivity(events, days = ANALYTICS_DAILY_WINDOW_DAYS) {
+  const result = [];
+  const byDay = new Map();
+
+  for (const event of events) {
+    const key = formatDateInput(event.ts);
+    if (!key) continue;
+    const entry = byDay.get(key) || {
+      date: key,
+      total: 0,
+      sourceClicks: 0,
+      favorites: 0,
+      reminders: 0,
+      searches: 0
+    };
+    entry.total += 1;
+    if (isOutboundAnalyticsAction(event.action)) entry.sourceClicks += 1;
+    if (event.action === "favorite_toggle") entry.favorites += 1;
+    if (event.action === "reminder_create") entry.reminders += 1;
+    if (String(event.action || "").includes("search")) entry.searches += 1;
+    byDay.set(key, entry);
+  }
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const date = new Date();
+    date.setUTCHours(12, 0, 0, 0);
+    date.setUTCDate(date.getUTCDate() - index);
+    const key = formatDateInput(date);
+    result.push(byDay.get(key) || {
+      date: key,
+      total: 0,
+      sourceClicks: 0,
+      favorites: 0,
+      reminders: 0,
+      searches: 0
+    });
+  }
+
+  return result;
+}
+
+function buildTopLinkEntries(events, limit = 10) {
+  const counts = new Map();
+
+  for (const event of events) {
+    const url = trim(
+      event.metadata?.url
+      || event.label
+      || event.metadata?.sourceUrl
+      || event.metadata?.ticketUrl
+      || "",
+      240
+    );
+    if (!url) continue;
+    const label = trim(event.metadata?.label || event.metadata?.title || event.action || url, 140);
+    const key = `${url}@@${label}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([key, count]) => {
+      const [url, label] = key.split("@@");
+      return { url, label, count };
+    })
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ru"))
+    .slice(0, limit);
+}
+
+function topEntriesFromSelector(items, selector, limit = 10) {
+  const counts = new Map();
+
+  for (const item of items) {
+    const value = trim(selector(item) || "", 160);
+    if (!value) continue;
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "ru"))
+    .slice(0, limit);
+}
+
+function isOutboundAnalyticsAction(action) {
+  const normalized = String(action || "").trim().toLowerCase();
+  return normalized === "outbound_link" || normalized.includes("source") || normalized.includes("ticket");
+}
+
+function getAgeHours(value) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return null;
+  return Math.round((Date.now() - timestamp) / (60 * 60 * 1000));
+}
+
+function getPositiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+function getRequestIdentity(request, fallback = "anonymous") {
+  const forwarded = String(request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "")
+    .split(",")[0]
+    .trim();
+  return normalizeKeyPart(forwarded || fallback);
+}
+
+function normalizeKeyPart(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || "anonymous";
+}
+
+async function enforceRateLimit(env, scope, subject, limit, windowSeconds = DEFAULT_RATE_LIMIT_WINDOW_SECONDS) {
+  if (!env?.KAZAN_KV || !limit || limit < 1) return;
+
+  const windowId = Math.floor(Date.now() / (windowSeconds * 1000));
+  const key = `guard:${normalizeKeyPart(scope)}:${normalizeKeyPart(subject)}:${windowId}`;
+  const current = Number(await env.KAZAN_KV.get(key) || 0) || 0;
+
+  if (current >= limit) {
+    throw new HttpError("Too many requests. Please try again shortly.", 429, {
+      "retry-after": String(windowSeconds)
+    });
+  }
+
+  await env.KAZAN_KV.put(key, String(current + 1), {
+    expirationTtl: Math.max(windowSeconds * 2, 120)
+  });
+}
+
+async function readJsonBody(request, maxBytes = DEFAULT_JSON_BODY_LIMIT, fallback = null) {
+  const raw = await request.text();
+  if (!raw.trim()) {
+    if (fallback !== null) return fallback;
+    throw new HttpError("JSON body is required.", 400);
+  }
+
+  const size = new TextEncoder().encode(raw).length;
+  if (size > maxBytes) {
+    throw new HttpError("Request body is too large.", 413);
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new HttpError("Invalid JSON body.", 400);
+  }
 }
 
 async function getEventMeta(env, items = null) {
@@ -3032,6 +3777,245 @@ async function getPublishing(env) {
     postedItems: publishing.postedItems,
     lastDraftBatchAt: publishing.lastDraftBatchAt,
     lastDraftBatchCount: publishing.lastDraftBatchCount
+  };
+}
+
+async function buildProDataset(env, options = {}) {
+  const overview = buildProOverview(env);
+  const hotels = pickCatalogRecommendations("hotels", 3);
+  const includePlans = options.includePlans !== false;
+
+  if (!includePlans) {
+    return {
+      generatedAt: new Date().toISOString(),
+      overview,
+      hotels
+    };
+  }
+
+  const eventPool = await getFutureEventPool(env, 24);
+  const plans = Array.from({ length: 7 }, (_, index) => buildProPlan(index + 1, eventPool));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    overview,
+    hotels,
+    plans
+  };
+}
+
+function buildProOverview(env) {
+  const payments = [
+    { id: "sbp", label: "СБП", url: trim(env.PRO_PAYMENT_SBP_URL || "", 240) || null },
+    { id: "card", label: "Карта", url: trim(env.PRO_PAYMENT_CARD_URL || "", 240) || null },
+    { id: "crypto", label: "Крипта", url: trim(env.PRO_PAYMENT_CRYPTO_URL || "", 240) || null }
+  ].filter((item) => item.url);
+
+  const donationUrl = trim(env.PRO_DONATION_URL || "", 240) || null;
+  const donationLabel = trim(env.PRO_DONATION_LABEL || "Поддержать проект", 80) || "Поддержать проект";
+  const contactUrl = trim(env.PRO_CONTACT_URL || "", 240) || null;
+
+  return {
+    enabled: payments.length > 0,
+    features: DEFAULT_PRO_FEATURES,
+    donation: donationUrl ? { label: donationLabel, url: donationUrl } : null,
+    payments,
+    contact: contactUrl ? { label: "Связаться по Pro", url: contactUrl } : null
+  };
+}
+
+function buildSupportOverview(env) {
+  const username = trim(env.TELEGRAM_MANAGER_USERNAME || "", 64).replace(/^@+/u, "");
+  const managerUrl = username ? `https://t.me/${username}` : "";
+  const channelUrl = trim(env.TELEGRAM_CHANNEL_INVITE_URL || "", 240) || null;
+  const donationUrl = trim(env.PRO_DONATION_URL || "", 240) || null;
+
+  return {
+    contactUrl: managerUrl || null,
+    channelUrl,
+    donationUrl
+  };
+}
+
+async function getFutureEventPool(env, limit = 24) {
+  const items = await getJson(env, "events:items", []);
+  return items
+    .filter((item) => item && (item.categories?.includes("events") || item.eventDate))
+    .filter((item) => isAllowedEventItem(item, env))
+    .sort(compareEventPriority)
+    .slice(0, limit)
+    .map(attachTicketLinksSafe)
+    .map((item) => serializeEventForPlan(item));
+}
+
+function buildProPlan(days, eventPool = []) {
+  const dayBlueprints = buildProDayBlueprints(eventPool).slice(0, days);
+  const recommendedHotels = pickCatalogRecommendations("hotels", Math.min(3, Math.max(1, days >= 4 ? 3 : 2)));
+
+  return {
+    id: `pro-${days}-days`,
+    days,
+    title: buildProPlanTitle(days),
+    summary: buildProPlanSummary(days),
+    recommendedHotels,
+    transport: days >= 4
+      ? "Комбинируйте пешие дни в центре с 1-2 выездами на такси или машине."
+      : "Основу маршрута можно пройти пешком, метро и такси по необходимости.",
+    pacing: days >= 5 ? "Неспешный" : days >= 3 ? "Сбалансированный" : "Насыщенный",
+    dayPlans: dayBlueprints
+  };
+}
+
+function buildProPlanTitle(days) {
+  const labels = {
+    1: "Программа на 1 день",
+    2: "Программа на 2 дня",
+    3: "Программа на 3 дня",
+    4: "Программа на 4 дня",
+    5: "Программа на 5 дней",
+    6: "Программа на 6 дней",
+    7: "Программа на 7 дней"
+  };
+
+  return labels[days] || `Программа на ${days} дней`;
+}
+
+function buildProPlanSummary(days) {
+  if (days === 1) return "Быстрый и выразительный сценарий с центром, хорошей едой и одним сильным вечерним событием.";
+  if (days === 2) return "Комфортный уикенд: главные места, еда, прогулка и один вечер для афиши.";
+  if (days === 3) return "Классический мини-отпуск с балансом между городом, гастрономией и активностями.";
+  if (days <= 5) return "Неспешная поездка с возможностью чередовать центр, активный отдых и выезды за пределы города.";
+  return "Полный отпускной сценарий, где можно увидеть Казань глубже и добавить загородные точки без перегруза.";
+}
+
+function buildProDayBlueprints(eventPool = []) {
+  const excursions = pickCatalogRecommendations("excursions", 3);
+  const sights = pickCatalogRecommendations("sights", 4);
+  const parks = pickCatalogRecommendations("parks", 3);
+  const food = pickCatalogRecommendations("food", 5);
+  const routes = pickCatalogRecommendations("routes", 3);
+  const active = pickCatalogRecommendations("active", 3);
+  const roadtrip = pickCatalogRecommendations("roadtrip", 3);
+
+  return [
+    {
+      day: 1,
+      title: "Первое знакомство с Казанью",
+      focus: "Главные символы города, понятная логистика и сильный вечерний акцент.",
+      items: [
+        excursions[0],
+        food[0],
+        routes[0],
+        eventPool[0] || sights[0]
+      ].filter(Boolean)
+    },
+    {
+      day: 2,
+      title: "Старый город и гастрономия",
+      focus: "Больше локальной атмосферы, спокойный ритм и хороший стол в центре.",
+      items: [
+        sights[0],
+        food[1] || food[0],
+        parks[0],
+        eventPool[1] || excursions[1]
+      ].filter(Boolean)
+    },
+    {
+      day: 3,
+      title: "Активный день и вечерняя афиша",
+      focus: "День для движения, новых впечатлений и одного крупного события вечером.",
+      items: [
+        active[0],
+        food[2] || food[0],
+        routes[1] || routes[0],
+        eventPool[2] || active[1]
+      ].filter(Boolean)
+    },
+    {
+      day: 4,
+      title: "Город без спешки",
+      focus: "Панорамы, музеи или тихие места без необходимости бежать по списку.",
+      items: [
+        sights[1] || sights[0],
+        parks[1] || parks[0],
+        food[3] || food[1] || food[0],
+        eventPool[3] || excursions[2] || sights[2]
+      ].filter(Boolean)
+    },
+    {
+      day: 5,
+      title: "Выезд за пределы центра",
+      focus: "Лучший день для направления на машине или экскурсионного выезда.",
+      items: [
+        roadtrip[0],
+        food[4] || food[2] || food[0],
+        roadtrip[1] || active[1],
+        eventPool[4] || parks[2] || sights[2]
+      ].filter(Boolean)
+    },
+    {
+      day: 6,
+      title: "Гибкий день по интересам",
+      focus: "Можно усилить еду, добавить тихие места или оставить день под концерт.",
+      items: [
+        routes[2] || routes[0],
+        food[0],
+        active[2] || parks[0],
+        eventPool[5] || sights[3] || excursions[0]
+      ].filter(Boolean)
+    },
+    {
+      day: 7,
+      title: "Финальный день без перегруза",
+      focus: "Спокойное завершение поездки, покупки, красивые виды и запас по времени.",
+      items: [
+        sights[3] || sights[0],
+        parks[0],
+        food[1] || food[0],
+        eventPool[6] || roadtrip[2] || excursions[0]
+      ].filter(Boolean)
+    }
+  ];
+}
+
+function pickCatalogRecommendations(sectionId, limit = 3) {
+  const section = CATALOG?.[sectionId];
+  const items = Array.isArray(section?.items) ? section.items : [];
+  return items.slice(0, limit).map((item) => serializeCatalogItemForPlan(sectionId, item));
+}
+
+function serializeCatalogItemForPlan(sectionId, item = {}) {
+  const preview = Array.isArray(item.photoLinks) ? item.photoLinks.find(Boolean) || null : null;
+
+  return {
+    id: `${sectionId}:${item.id || cryptoRandomId()}`,
+    type: sectionId,
+    title: trim(item.title || "", 120),
+    subtitle: trim(item.subtitle || "", 160) || null,
+    summary: trim(item.description || item.excerpt || item.note || "", 280),
+    duration: trim(item.duration || item.walkTime || item.visitTime || "", 60) || null,
+    howToGet: trim(item.howToGet || "", 220) || null,
+    sourceUrl: item.sourceUrl || null,
+    mapUrl: item.mapUrl || null,
+    preview
+  };
+}
+
+function serializeEventForPlan(item = {}) {
+  const preview = item.previewUrl || item.imageUrl || null;
+  const ticketUrl = Array.isArray(item.ticketLinks) ? item.ticketLinks.find((link) => link?.url)?.url || null : null;
+
+  return {
+    id: item.id || cryptoRandomId(),
+    type: "event",
+    title: trim(item.title || "", 120),
+    subtitle: trim(item.subtitle || item.categoryLabel || "", 160) || null,
+    summary: trim(item.shortSummary || item.summary || "", 280),
+    dateText: trim(item.dateText || "", 80) || null,
+    venueTitle: trim(item.venueTitle || "", 120) || null,
+    sourceUrl: item.url || null,
+    ticketUrl,
+    preview
   };
 }
 

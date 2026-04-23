@@ -1,0 +1,183 @@
+name: Refresh Content And Deploy Mini App
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_kassir:
+        description: Include Kassir refresh
+        required: true
+        default: true
+        type: boolean
+      refresh_catalog:
+        description: Refresh catalog sections
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    - cron: "10 3 */3 * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh-content-and-pages
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Locate browser
+        shell: bash
+        run: |
+          BROWSER_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$BROWSER_PATH" ]; then
+            echo "::error::No Chrome/Chromium executable found on runner."
+            exit 1
+          fi
+          echo "PLAYWRIGHT_BROWSER_PATH=$BROWSER_PATH" >> "$GITHUB_ENV"
+          echo "Browser path: $BROWSER_PATH"
+
+      - name: Write Cloudflare credentials
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID secret."
+            exit 1
+          fi
+          printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\n' "$CF_API_TOKEN" "$CF_ACCOUNT_ID" > .cloudflare.env
+
+      - name: Restore browser auth states
+        shell: bash
+        env:
+          YANDEX_AUTH_STATE_B64: ${{ secrets.YANDEX_AUTH_STATE_B64 }}
+          KASSIR_AUTH_STATE_B64: ${{ secrets.KASSIR_AUTH_STATE_B64 }}
+        run: |
+          mkdir -p data/playwright
+          if [ -z "$YANDEX_AUTH_STATE_B64" ]; then
+            echo "::error::Missing YANDEX_AUTH_STATE_B64 secret."
+            exit 1
+          fi
+
+          printf '%s' "$YANDEX_AUTH_STATE_B64" | base64 --decode > data/playwright/github-yandex-state.bin
+
+          if [ "$(xxd -p -l 2 data/playwright/github-yandex-state.bin)" = "1f8b" ]; then
+            gunzip -c data/playwright/github-yandex-state.bin > data/playwright/github-yandex-state.json
+            rm data/playwright/github-yandex-state.bin
+          else
+            mv data/playwright/github-yandex-state.bin data/playwright/github-yandex-state.json
+          fi
+
+          echo "PLAYWRIGHT_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-yandex-state.json" >> "$GITHUB_ENV"
+
+          if [ -n "$KASSIR_AUTH_STATE_B64" ]; then
+            printf '%s' "$KASSIR_AUTH_STATE_B64" | base64 --decode > data/playwright/github-kassir-state.bin
+
+            if [ "$(xxd -p -l 2 data/playwright/github-kassir-state.bin)" = "1f8b" ]; then
+              gunzip -c data/playwright/github-kassir-state.bin > data/playwright/github-kassir-state.json
+              rm data/playwright/github-kassir-state.bin
+            else
+              mv data/playwright/github-kassir-state.bin data/playwright/github-kassir-state.json
+            fi
+
+            echo "KASSIR_AUTH_STATE_PATH=$GITHUB_WORKSPACE/data/playwright/github-kassir-state.json" >> "$GITHUB_ENV"
+          else
+            echo "KASSIR_AUTH_STATE_B64 is empty. Kassir refresh will be skipped."
+          fi
+
+      - name: Resolve refresh options
+        id: options
+        shell: bash
+        run: |
+          INCLUDE_KASSIR="true"
+          REFRESH_CATALOG="true"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            INCLUDE_KASSIR="${{ inputs.include_kassir }}"
+            REFRESH_CATALOG="${{ inputs.refresh_catalog }}"
+          fi
+
+          if [ -z "${KASSIR_AUTH_STATE_PATH:-}" ]; then
+            INCLUDE_KASSIR="false"
+          fi
+
+          echo "include_kassir=$INCLUDE_KASSIR" >> "$GITHUB_OUTPUT"
+          echo "refresh_catalog=$REFRESH_CATALOG" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh events
+        shell: bash
+        run: |
+          ARGS=("--incremental" "--headless" "--kassir-headless" "--max-links=0" "--chunk-size=6" "--pause-ms=1800" "--retries=3")
+
+          if [ "${{ steps.options.outputs.include_kassir }}" = "true" ]; then
+            ARGS+=("--with-kassir")
+          else
+            ARGS+=("--skip-kassir")
+          fi
+
+          node scripts/refresh-events-pipeline.mjs "${ARGS[@]}"
+
+      - name: Refresh catalog
+        if: steps.options.outputs.refresh_catalog == 'true'
+        shell: bash
+        run: node scripts/refresh-catalog-pipeline.mjs --no-deploy --stale-only
+
+      - name: Build photo manifest
+        run: node scripts/build-photo-manifest.mjs
+
+      - name: Build event previews
+        run: node scripts/build-event-previews.mjs
+
+      - name: Audit event content
+        run: node scripts/audit-event-content.mjs
+
+      - name: Project syntax check
+        run: npm run check
+
+      - name: Upload refresh artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-content-artifacts
+          path: |
+            data/playwright/refresh-report.json
+            data/playwright/content-audit-report.json
+            data/catalog-imports/refresh-report.json
+            public/miniapp/event-preview-manifest.js
+          if-no-files-found: warn
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Mini App
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/miniapp
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

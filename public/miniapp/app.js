@@ -3,6 +3,19 @@ const config = window.KAZAN_EVENT_RADAR_CONFIG || {};
 const apiBaseUrl = (config.apiBaseUrl || "").replace(/\/$/, "");
 const params = new URLSearchParams(window.location.search);
 const EVENTS_FETCH_LIMIT = 1000;
+const DEFAULT_PRO_INTERESTS = ["events", "food", "city"];
+const PRO_PACE_OPTIONS = [
+  { id: "relaxed", label: "Спокойно" },
+  { id: "balanced", label: "Сбалансированно" },
+  { id: "intense", label: "Насыщенно" }
+];
+const PRO_INTEREST_OPTIONS = [
+  { id: "events", label: "События" },
+  { id: "food", label: "Еда" },
+  { id: "city", label: "Город" },
+  { id: "active", label: "Активность" },
+  { id: "roadtrip", label: "Выезды" }
+];
 
 if (tg) {
   tg.ready();
@@ -21,13 +34,22 @@ const state = {
   selectedActiveId: params.get("active") || null,
   selectedRoadtripId: params.get("roadtrip") || null,
   selectedFavoriteId: params.get("favorite") || null,
+  selectedProDays: params.get("proDays") || "3",
+  proPace: params.get("proPace") || "balanced",
+  proInterests: normalizeProInterests(params.get("proTags")),
   eventCategory: params.get("category") || "all",
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
+  placeQuery: params.get("placeQuery") || "",
+  foodQuery: params.get("foodQuery") || "",
+  routeQuery: params.get("routeQuery") || "",
+  activeQuery: params.get("activeQuery") || "",
+  roadtripQuery: params.get("roadtripQuery") || "",
   catalog: null,
   sections: [],
   events: [],
   favorites: [],
+  pro: null,
   config: null,
   periodLabel: "",
   syncedAt: null,
@@ -56,6 +78,8 @@ const SECTION_VISUALS = {
   routes: "./brand/section-routes.png",
   active: "./brand/section-events.png",
   roadtrip: "./brand/section-routes.png",
+  pro: "./brand/welcome-kazan-event-radar-640x360.png",
+  support: "./brand/welcome-kazan-event-radar-640x360.png",
   favorites: "./brand/welcome-kazan-event-radar-640x360.png",
   parks: "./brand/section-parks.png",
   sights: "./brand/section-events.png",
@@ -70,16 +94,18 @@ async function bootstrap() {
   bindEvents();
 
   try {
-    const [runtimeConfig, catalog, events] = await Promise.all([
+    const [runtimeConfig, catalog, events, pro] = await Promise.all([
       api("/api/config").catch(() => ({ user: null })),
       api("/api/catalog"),
-      api(buildEventsPath())
+      api(buildEventsPath()),
+      api("/api/pro/itineraries").catch(() => null)
     ]);
 
     state.config = runtimeConfig;
     state.catalog = catalog.catalog;
     state.sections = catalog.sections;
     applyEventsPayload(events);
+    state.pro = pro;
     state.favorites = await loadFavorites();
 
     if (!state.selectedPlaceId) state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
@@ -88,6 +114,7 @@ async function bootstrap() {
     if (!state.selectedActiveId) state.selectedActiveId = getSectionItems("active")[0]?.id || null;
     if (!state.selectedRoadtripId) state.selectedRoadtripId = getSectionItems("roadtrip")[0]?.id || null;
     if (!state.selectedFavoriteId) state.selectedFavoriteId = state.favorites[0]?.id || null;
+    state.selectedProDays = resolveSelectedProDays(state.selectedProDays, state.pro);
 
     setStatus("");
     track("page_view", "miniapp_home");
@@ -109,6 +136,13 @@ function bindEvents() {
   });
 
   heroBadgesNode?.addEventListener("click", (event) => {
+    const openButton = event.target.closest("[data-action='open']");
+    if (openButton) {
+      track("outbound_link", openButton.dataset.url, { label: openButton.textContent.trim() });
+      openLink(openButton.dataset.url);
+      return;
+    }
+
     const button = event.target.closest("[data-action='hero-favorites']");
     if (!button) return;
 
@@ -167,6 +201,30 @@ function bindEvents() {
     if (action === "route-item") {
       state.selectedRouteId = button.dataset.id;
       track("route_item_click", state.selectedRouteId, { level: state.routeLevel });
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (action === "pro-days") {
+      state.selectedProDays = resolveSelectedProDays(button.dataset.days, state.pro);
+      track("pro_days_click", state.selectedProDays);
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (action === "pro-pace") {
+      state.proPace = resolveProPace(button.dataset.pace);
+      track("pro_pace_click", state.proPace);
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (action === "pro-interest") {
+      state.proInterests = toggleProInterest(button.dataset.interest, state.proInterests);
+      track("pro_interest_click", button.dataset.interest, { active: state.proInterests.includes(button.dataset.interest) });
       syncUrl();
       render();
       return;
@@ -255,15 +313,26 @@ function bindEvents() {
       return;
     }
 
-    if (action === "favorite-open") {
-      openFavorite(button.dataset.id);
-      return;
-    }
+      if (action === "favorite-open") {
+        openFavorite(button.dataset.id);
+        return;
+      }
 
-    if (action === "favorite-focus") {
-      state.selectedFavoriteId = button.dataset.id;
-      track("favorite_focus", state.selectedFavoriteId);
-      syncUrl();
+      if (action === "section-search-clear") {
+        const sectionId = button.dataset.section;
+        if (!sectionId) return;
+        setSectionQuery(sectionId, "");
+        syncSelectionForQuery(sectionId);
+        track("section_search_clear", sectionId, { section: sectionId });
+        syncUrl();
+        render();
+        return;
+      }
+
+      if (action === "favorite-focus") {
+        state.selectedFavoriteId = button.dataset.id;
+        track("favorite_focus", state.selectedFavoriteId);
+        syncUrl();
       render();
       return;
     }
@@ -271,6 +340,18 @@ function bindEvents() {
     if (action === "favorite-remove") {
       await removeFavorite(button.dataset.id);
     }
+  });
+
+  contentNode.addEventListener("input", (event) => {
+    const input = event.target.closest("[data-section-search]");
+    if (!input) return;
+
+    const sectionId = input.dataset.sectionSearch;
+    setSectionQuery(sectionId, input.value || "");
+    syncSelectionForQuery(sectionId);
+    track("section_search", input.value.trim(), { section: sectionId });
+    syncUrl();
+    render();
   });
 }
 
@@ -445,6 +526,8 @@ function render() {
   if (state.activeTab === "routes") renderRoutes();
   if (state.activeTab === "active") renderActive();
   if (state.activeTab === "roadtrip") renderRoadtrip();
+  if (state.activeTab === "pro") renderPro();
+  if (state.activeTab === "support") renderSupport();
   if (state.activeTab === "favorites") renderFavorites();
 }
 
@@ -491,6 +574,21 @@ function renderHero() {
       text: "Эти направления быстрее и комфортнее посещать на машине, но часть из них доступна и автобусом или экскурсией.",
       badges: ["За пределами центра", `${getSectionItems("roadtrip").length || 0} направлений`]
     },
+    pro: {
+      eyebrow: "Pro",
+      title: "План отпуска по дням",
+      text: "Готовые программы на 1-7 дней: с событиями, едой, прогулками, загородными точками и спокойной логистикой.",
+      badges: [
+        `${resolveSelectedProDays(state.selectedProDays, state.pro)} дн.`,
+        state.pro?.plans?.length ? `${state.pro.plans.length} сценариев` : "Сценарии загружаются"
+      ]
+    },
+    support: {
+      eyebrow: "Помощь",
+      title: "Быстрая поддержка без лишней бюрократии",
+      text: "Если что-то не открылось, не сохранилось или выглядит странно, здесь есть быстрые шаги, FAQ и прямая связь.",
+      badges: buildSupportHeroBadges()
+    },
     favorites: {
       eyebrow: "Мой план",
       title: "Сохраненные события и места",
@@ -509,6 +607,9 @@ function renderHero() {
   heroTextNode.textContent = content.text;
   heroBadgesNode.innerHTML = [
     ...content.badges.map((item) => `<span class="hero-badge">${escapeHtml(item)}</span>`),
+    ...(state.activeTab === "pro" && state.pro?.overview?.donation?.url
+      ? [`<button class="hero-badge hero-badge-button" data-action="open" data-url="${escapeHtml(state.pro.overview.donation.url)}">Поддержать проект</button>`]
+      : []),
     `<button class="hero-badge hero-badge-button" data-action="hero-favorites">Мой план${state.favorites.length ? ` · ${state.favorites.length}` : ""}</button>`
   ].join("");
 }
@@ -534,41 +635,51 @@ function renderEvents() {
 
 function renderPlaces() {
   const section = state.catalog[state.placeSection];
-  const items = getActivePlaceItems();
+  const allItems = getActivePlaceItems();
+  const items = getFilteredPlaceItems();
   const selected = items.find((item) => item.id === state.selectedPlaceId) || items[0] || null;
 
   contentNode.innerHTML = [
-    `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
-    sectionHeader(section.title, section.intro, SECTION_VISUALS[state.placeSection] || SECTION_VISUALS.places),
-    statBar(buildCatalogSectionStats(state.placeSection, items, selected)),
-    renderCatalogExplorerLayout({
-      panelLabel: sectionLabel(state.placeSection),
-      panelTitle: `${items.length || 0} точек в подборке`,
-      panelText: buildCatalogCollectionText(state.placeSection, selected),
-      panelBadges: buildCatalogCollectionBadges(state.placeSection, items, selected),
-      cardsHtml: items.map((item) => catalogPreviewCard(state.placeSection, item, item.id === selected?.id, "place-item", { id: item.id })).join(""),
-      detailHtml: selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
-    })
-  ].join("");
+      `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
+      sectionHeader(section.title, section.intro, SECTION_VISUALS[state.placeSection] || SECTION_VISUALS.places),
+      sectionFocusNote(state.placeSection),
+      sectionSearchToolbar("places", `Поиск по разделу «${section.title}»`, items.length, allItems.length),
+      statBar(buildCatalogSectionStats(state.placeSection, items, selected, allItems.length)),
+      items.length
+        ? renderCatalogExplorerLayout({
+          panelLabel: sectionLabel(state.placeSection),
+          panelTitle: `${items.length || 0} точек в подборке`,
+          panelText: buildCatalogCollectionText(state.placeSection, selected),
+          panelBadges: buildCatalogCollectionBadges(state.placeSection, items, selected, allItems.length),
+          cardsHtml: items.map((item) => catalogPreviewCard(state.placeSection, item, item.id === selected?.id, "place-item", { id: item.id })).join(""),
+          detailHtml: selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
+        })
+        : empty(`По запросу в разделе «${section.title}» пока ничего не найдено.`)
+    ].join("");
 }
 
 function renderFood() {
   const section = state.catalog.food;
-  const items = getSectionItems("food");
+  const allItems = getSectionItems("food");
+  const items = getFilteredSectionItems("food");
   const selected = items.find((item) => item.id === state.selectedFoodId) || items[0] || null;
 
   contentNode.innerHTML = [
-    sectionHeader(section.title, section.intro, SECTION_VISUALS.food),
-    statBar(buildCatalogSectionStats("food", items, selected)),
-    renderCatalogExplorerLayout({
-      panelLabel: "Еда",
-      panelTitle: `${items.length || 0} ресторанов и бистро`,
-      panelText: buildCatalogCollectionText("food", selected),
-      panelBadges: buildCatalogCollectionBadges("food", items, selected),
-      cardsHtml: items.map((item) => catalogPreviewCard("food", item, item.id === selected?.id, "section-item", { section: "food", id: item.id })).join(""),
-      detailHtml: selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
-    })
-  ].join("");
+      sectionHeader(section.title, section.intro, SECTION_VISUALS.food),
+      sectionFocusNote("food"),
+      sectionSearchToolbar("food", "Поиск по кухне, блюдам, атмосфере и отзывам", items.length, allItems.length),
+      statBar(buildCatalogSectionStats("food", items, selected, allItems.length)),
+      items.length
+        ? renderCatalogExplorerLayout({
+          panelLabel: "Еда",
+          panelTitle: `${items.length || 0} ресторанов и бистро`,
+          panelText: buildCatalogCollectionText("food", selected),
+          panelBadges: buildCatalogCollectionBadges("food", items, selected, allItems.length),
+          cardsHtml: items.map((item) => catalogPreviewCard("food", item, item.id === selected?.id, "section-item", { section: "food", id: item.id })).join(""),
+          detailHtml: selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
+        })
+        : empty("По этому запросу в разделе еды пока ничего не нашлось.")
+    ].join("");
 }
 
 function renderActive() {
@@ -577,6 +688,57 @@ function renderActive() {
 
 function renderRoadtrip() {
   renderSectionExplorer("roadtrip", "Выберите направление для поездки.");
+}
+
+function renderPro() {
+  const selectedDays = resolveSelectedProDays(state.selectedProDays, state.pro);
+  const plan = buildCustomProPlan(getSelectedProPlan());
+  const payments = state.pro?.overview?.payments || [];
+  const donation = state.pro?.overview?.donation || null;
+  const contact = state.pro?.overview?.contact || null;
+  const hotels = Array.isArray(state.pro?.hotels) ? state.pro.hotels : [];
+
+  contentNode.innerHTML = [
+    sectionHeader(
+      "Pro-планировщик отпуска",
+      "Готовые программы поездки на 1-7 дней. Можно быстро посмотреть базовый сценарий, выбрать ритм отдыха и перейти к оплате Pro или поддержке проекта.",
+      SECTION_VISUALS.pro
+    ),
+    statBar(buildProStats(selectedDays, plan)),
+    `<div class="chips">${Array.from({ length: 7 }, (_, index) => {
+      const days = String(index + 1);
+      return chip(`${days} ${pluralizeDays(index + 1)}`, "pro-days", { days }, selectedDays === days);
+    }).join("")}</div>`,
+    plan
+      ? `
+        <div class="pro-layout">
+          ${proPreferencesCard(plan)}
+          ${proOverviewCard(plan, hotels)}
+          ${proPaymentsCard(payments, donation, contact)}
+          ${proDayListCard(plan)}
+        </div>
+      `
+      : empty("Сценарии Pro пока не загрузились. Проверьте backend или повторите позже.")
+  ].join("");
+}
+
+function renderSupport() {
+  const support = getSupportInfo();
+
+  contentNode.innerHTML = [
+    sectionHeader(
+      "Помощь и поддержка",
+      "Здесь собраны быстрые ответы, понятные шаги при сбое и удобные кнопки для связи. Без тяжёлой тикет-системы, но уже с нормальной опорой для пользователей.",
+      SECTION_VISUALS.support
+    ),
+    statBar(buildSupportStats(support)),
+    `<div class="support-layout">
+      ${supportQuickActionsCard(support)}
+      ${supportFaqCard()}
+      ${supportTroubleshootingCard()}
+      ${supportFeedbackCard(support)}
+    </div>`
+  ].join("");
 }
 
 function buildEventStats() {
@@ -591,43 +753,53 @@ function buildEventStats() {
 
 function renderSectionExplorer(sectionId, emptyText) {
   const section = state.catalog[sectionId];
-  const items = getSectionItems(sectionId);
+  const allItems = getSectionItems(sectionId);
+  const items = getFilteredSectionItems(sectionId);
   const selectedId = getSelectedSectionId(sectionId);
   const selected = items.find((item) => item.id === selectedId) || items[0] || null;
 
   contentNode.innerHTML = [
-    sectionHeader(section.title, section.intro, SECTION_VISUALS[sectionId]),
-    statBar(buildCatalogSectionStats(sectionId, items, selected)),
-    renderCatalogExplorerLayout({
-      panelLabel: sectionLabel(sectionId),
-      panelTitle: `${items.length || 0} вариантов`,
-      panelText: buildCatalogCollectionText(sectionId, selected),
-      panelBadges: buildCatalogCollectionBadges(sectionId, items, selected),
-      cardsHtml: items.map((item) => catalogPreviewCard(sectionId, item, item.id === selected?.id, "section-item", { section: sectionId, id: item.id })).join(""),
-      detailHtml: selected ? placeDetailCard(sectionId, selected) : empty(emptyText)
-    })
-  ].join("");
+      sectionHeader(section.title, section.intro, SECTION_VISUALS[sectionId]),
+      sectionFocusNote(sectionId),
+      sectionSearchToolbar(sectionId, buildSectionSearchPlaceholder(sectionId), items.length, allItems.length),
+      statBar(buildCatalogSectionStats(sectionId, items, selected, allItems.length)),
+      items.length
+        ? renderCatalogExplorerLayout({
+          panelLabel: sectionLabel(sectionId),
+          panelTitle: `${items.length || 0} вариантов`,
+          panelText: buildCatalogCollectionText(sectionId, selected),
+          panelBadges: buildCatalogCollectionBadges(sectionId, items, selected, allItems.length),
+          cardsHtml: items.map((item) => catalogPreviewCard(sectionId, item, item.id === selected?.id, "section-item", { section: sectionId, id: item.id })).join(""),
+          detailHtml: selected ? renderCatalogDetailCard(sectionId, selected) : empty(emptyText)
+        })
+        : empty("По этому запросу пока нет подходящих карточек.")
+    ].join("");
 }
 
 function renderRoutes() {
   const routes = state.catalog.routes;
-  const items = getActiveRouteItems();
+  const allItems = getActiveRouteItems();
+  const items = getFilteredRouteItems();
   const selected = items.find((route) => route.id === state.selectedRouteId) || items[0] || null;
   const activeLevel = routes.levels.find((level) => level.id === state.routeLevel);
 
   contentNode.innerHTML = [
-    `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
-    sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro, SECTION_VISUALS.routes),
-    statBar(buildRouteSectionStats(items, selected)),
-    renderCatalogExplorerLayout({
-      panelLabel: "Пешие маршруты",
-      panelTitle: activeLevel ? `${items.length || 0} маршрутов: ${activeLevel.title.toLowerCase()} уровень` : `${items.length || 0} маршрутов`,
-      panelText: buildRouteCollectionText(selected, activeLevel),
-      panelBadges: buildRouteCollectionBadges(items, selected, activeLevel),
-      cardsHtml: items.map((route) => routePreviewCard(route, route.id === selected?.id)).join(""),
-      detailHtml: selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
-    })
-  ].join("");
+      `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
+      sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro, SECTION_VISUALS.routes),
+      sectionFocusNote("routes"),
+      sectionSearchToolbar("routes", "Поиск по маршрутам, точкам и логистике", items.length, allItems.length),
+      statBar(buildRouteSectionStats(items, selected, allItems.length)),
+      items.length
+        ? renderCatalogExplorerLayout({
+          panelLabel: "Пешие маршруты",
+          panelTitle: activeLevel ? `${items.length || 0} маршрутов: ${activeLevel.title.toLowerCase()} уровень` : `${items.length || 0} маршрутов`,
+          panelText: buildRouteCollectionText(selected, activeLevel),
+          panelBadges: buildRouteCollectionBadges(items, selected, activeLevel, allItems.length),
+          cardsHtml: items.map((route) => routePreviewCard(route, route.id === selected?.id)).join(""),
+          detailHtml: selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
+        })
+        : empty("По этому запросу пока нет подходящих маршрутов.")
+    ].join("");
 }
 
 function renderFavorites() {
@@ -648,6 +820,433 @@ function renderFavorites() {
       })
       : empty("Пока пусто. Добавьте в избранное хотя бы одно событие или место.")
   ].join("");
+}
+
+function buildSupportHeroBadges() {
+  const support = getSupportInfo();
+  return [
+    "FAQ внутри",
+    support.contactUrl ? "Есть быстрая связь" : "Связь добавим позже",
+    support.channelUrl ? "Есть канал с обновлениями" : "Канал подключается"
+  ];
+}
+
+function buildSupportStats(support) {
+  return [
+    "Формат: лёгкая встроенная поддержка",
+    "FAQ: 6 ответов",
+    support.contactUrl ? "Связь: включена" : "Связь: настраивается",
+    support.channelUrl ? "Канал обновлений подключён" : ""
+  ];
+}
+
+function supportQuickActionsCard(support) {
+  return card([
+    `<div class="preview-label">Быстрые действия</div>`,
+    `<h3>Что можно сделать сразу</h3>`,
+    richTextBlock([
+      "Если что-то не загрузилось, сначала обновите мини-приложение и откройте нужную вкладку ещё раз.",
+      "Если проблема повторилась, можно сразу написать нам и коротко описать, в каком разделе это произошло."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factBlock("Когда писать", "Если не открывается карточка, не работает напоминание, не сохраняется план или пропали данные в разделе.")}
+      ${factBlock("Что приложить", "Название события или места, раздел, примерное время ошибки и короткое описание того, что вы нажали.")}
+    </div>`,
+    actions([
+      support.contactUrl ? actionButton("Написать в поддержку", "open", { url: support.contactUrl }, "primary") : "",
+      support.channelUrl ? actionButton("Открыть канал", "open", { url: support.channelUrl }) : ""
+    ])
+  ], "support-card");
+}
+
+function supportFaqCard() {
+  return card([
+    `<div class="preview-label">FAQ</div>`,
+    `<h3>Частые вопросы</h3>`,
+    `<div class="support-faq-list">
+      ${supportFaqItem("Почему не открылось событие?", "Обычно помогает повторное открытие карточки или обновление Mini App. Если проблема повторяется, значит ссылка или данные требуют перепроверки — лучше сразу сообщить нам.")}
+      ${supportFaqItem("Почему не пришло напоминание?", "Напоминания зависят от сохранённого события и корректной даты. Если событие было изменено источником или бот временно терял доступ, напоминание могло не сработать вовремя.")}
+      ${supportFaqItem("Что делать, если не работает кнопка «В план»?", "Попробуйте закрыть и заново открыть Mini App. Если ошибка осталась, пришлите название карточки — это один из самых полезных сигналов для нас.")}
+      ${supportFaqItem("Почему в афише стало меньше событий?", "Фильтры по датам и категориям могли сузить выдачу. Ещё часть событий может скрываться после чистки дублей или при обновлении источников.")}
+      ${supportFaqItem("Можно ли предложить новое место или маршрут?", "Да. Это один из самых полезных форматов обратной связи: место, краткое описание и почему его стоит добавить.")}
+      ${supportFaqItem("Нужна ли отдельная поддержка прямо сейчас?", "Да, но в лёгком формате. Для проекта на этом этапе важнее быстрый контакт и понятный FAQ, чем тяжёлая тикет-система.")}
+    </div>`
+  ], "support-card");
+}
+
+function supportTroubleshootingCard() {
+  return card([
+    `<div class="preview-label">Если что-то сломалось</div>`,
+    `<h3>Проверка за 30 секунд</h3>`,
+    richTextBlock([
+      "1. Закройте и заново откройте Mini App.",
+      "2. Убедитесь, что у вас открыта нужная вкладка и не стоит слишком узкий фильтр по датам.",
+      "3. Если проблема связана с событием, попробуйте открыть другое событие из той же категории.",
+      "4. Если сбой повторяется, напишите нам: раздел, название карточки и что именно не произошло."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factBlock("Что чаще всего ломается", "Внешние ссылки, устаревшие источники, напоминания после изменения даты у события и редкие ошибки сохранения.")}
+      ${factBlock("Что мы уже отслеживаем", "Открытия карточек, клики, избранное, напоминания и общую готовность контента внутри системы.")}
+    </div>`
+  ], "support-card");
+}
+
+function supportFeedbackCard(support) {
+  return card([
+    `<div class="preview-label">Обратная связь</div>`,
+    `<h3>Как лучше прислать идею или баг</h3>`,
+    richTextBlock([
+      "Лучше всего работают короткие и конкретные сообщения: что открывали, что ожидали увидеть и что произошло вместо этого.",
+      "Если хотите помочь проекту расти, можно присылать идеи новых мест, маршрутов, заведений и улучшений для интерфейса."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factListBlock("Полезный формат сообщения", [
+        "Раздел: афиша / места / еда / маршруты / активный отдых / на машине",
+        "Название карточки или события",
+        "Коротко: что должно было случиться",
+        "Коротко: что произошло на самом деле"
+      ])}
+      ${factListBlock("Что особенно ценно", [
+        "Ошибки, которые можно повторить",
+        "Предложения по удобству интерфейса",
+        "Новые локации и события для добавления",
+        "Скриншоты, если визуально что-то поехало"
+      ])}
+    </div>`,
+    actions([
+      support.contactUrl ? actionButton("Связаться", "open", { url: support.contactUrl }, "primary") : "",
+      support.donationUrl ? actionButton("Поддержать проект", "open", { url: support.donationUrl }) : ""
+    ])
+  ], "support-card");
+}
+
+function supportFaqItem(title, text) {
+  return `
+    <section class="support-faq-item">
+      <h4>${escapeHtml(title)}</h4>
+      <p>${escapeHtml(text)}</p>
+    </section>
+  `;
+}
+
+function getSupportInfo() {
+  const configSupport = state.config?.support || {};
+  const proOverview = state.config?.pro || state.pro?.overview || {};
+  const managerUrl = String(configSupport.contactUrl || proOverview?.contact?.url || "").trim();
+  const donationUrl = String(configSupport.donationUrl || proOverview?.donation?.url || "").trim();
+  const channelUrl = String(configSupport.channelUrl || state.config?.channelUrl || "").trim();
+
+  return {
+    contactUrl: managerUrl,
+    donationUrl,
+    channelUrl
+  };
+}
+
+function getSelectedProPlan() {
+  const selectedDays = resolveSelectedProDays(state.selectedProDays, state.pro);
+  return state.pro?.plans?.find((item) => String(item.days) === String(selectedDays)) || state.pro?.plans?.[0] || null;
+}
+
+function buildCustomProPlan(plan) {
+  if (!plan) return null;
+
+  const dayLimit = getProDayItemLimit(state.proPace);
+  const personalizedDays = (plan.dayPlans || []).map((dayPlan) => {
+    const items = [...(dayPlan.items || [])]
+      .sort((left, right) => scoreProItem(right) - scoreProItem(left))
+      .slice(0, dayLimit);
+
+    return {
+      ...dayPlan,
+      focus: buildProDayFocus(dayPlan),
+      items
+    };
+  });
+
+  return {
+    ...plan,
+    summary: buildProSummary(plan),
+    pacing: proPaceLabel(state.proPace),
+    transport: buildProTransportText(plan.transport),
+    dayPlans: personalizedDays
+  };
+}
+
+function resolveSelectedProDays(value, pro) {
+  const available = Array.isArray(pro?.plans) ? pro.plans.map((item) => String(item.days)) : ["1", "2", "3", "4", "5", "6", "7"];
+  return available.includes(String(value)) ? String(value) : available[0] || "3";
+}
+
+function buildProStats(selectedDays, plan) {
+  return [
+    `Формат: ${selectedDays} ${pluralizeDays(Number(selectedDays))}`,
+    `Темп: ${proPaceLabel(state.proPace)}`,
+    `Интересы: ${state.proInterests.length}`,
+    plan?.dayPlans?.length ? `Дней в программе: ${plan.dayPlans.length}` : "",
+    plan?.recommendedHotels?.length ? `Отели: ${plan.recommendedHotels.length}` : "",
+    state.pro?.overview?.payments?.length ? `Способов оплаты: ${state.pro.overview.payments.length}` : "Оплата появится позже"
+  ];
+}
+
+function proPreferencesCard(plan) {
+  return card([
+    `<div class="preview-label">Настройка сценария</div>`,
+    `<h3>Соберите свой стиль поездки</h3>`,
+    richTextBlock(`Сейчас программа подстраивается под ваш темп и интересы. Это быстрый полуавтоматический режим: без длинных анкет, но уже с заметной персонализацией.`),
+    `<div class="pro-controls">
+      <div class="pro-control-block">
+        <div class="subtle-title">Темп поездки</div>
+        <div class="chips">${PRO_PACE_OPTIONS.map((item) => chip(item.label, "pro-pace", { pace: item.id }, state.proPace === item.id)).join("")}</div>
+      </div>
+      <div class="pro-control-block">
+        <div class="subtle-title">Приоритеты</div>
+        <div class="chips">${PRO_INTEREST_OPTIONS.map((item) => chip(item.label, "pro-interest", { interest: item.id }, state.proInterests.includes(item.id))).join("")}</div>
+      </div>
+    </div>`,
+    `<div class="fact-grid">
+      ${factBlock("Что изменится", proPreferenceEffectText())}
+      ${factBlock("Текущий формат", `${plan.dayPlans?.length || 0} ${pluralizeDays(plan.dayPlans?.length || 0)} с упором на: ${formatProInterests(state.proInterests)}.`)}
+    </div>`
+  ], "active");
+}
+
+function proOverviewCard(plan, hotels) {
+  return card([
+    `<div class="preview-label">Pro</div>`,
+    `<h2 class="detail-title">${escapeHtml(plan.title || "Программа поездки")}</h2>`,
+    richTextBlock(plan.summary || ""),
+    `<div class="fact-grid">
+      ${factBlock("Темп", plan.pacing || "Сбалансированный")}
+      ${factBlock("Транспорт", plan.transport || "Комбинируйте пеший маршрут и такси")}
+    </div>`,
+    hotels.length ? factListBlock("Где остановиться", hotels.map((item) => `${item.title}${item.subtitle ? ` — ${item.subtitle}` : ""}`)) : "",
+    hotels.length ? actions(hotels.slice(0, 3).map((item) => item.mapUrl ? actionButton(item.title, "open", { url: item.mapUrl }) : "").filter(Boolean)) : ""
+  ], "active");
+}
+
+function buildProSummary(plan) {
+  const interests = formatProInterests(state.proInterests);
+  const pace = proPaceLabel(state.proPace).toLowerCase();
+  const base = String(plan?.summary || "").trim();
+  const additions = [
+    `Сейчас маршрут собран в режиме «${pace}».`,
+    `Главные приоритеты: ${interests}.`
+  ];
+
+  if (state.proPace === "relaxed") {
+    additions.push("Внутри дней оставлены более спокойные и удобные по темпу точки, чтобы поездка не ощущалась гонкой.");
+  } else if (state.proPace === "intense") {
+    additions.push("Внутри дней оставлено больше насыщенных точек, чтобы отпуск был плотнее и ярче.");
+  } else {
+    additions.push("Маршрут старается держать баланс между яркими точками, едой и логистикой.");
+  }
+
+  return [base, ...additions].filter(Boolean).join("\n\n");
+}
+
+function buildProDayFocus(dayPlan) {
+  const base = String(dayPlan?.focus || "").trim();
+  const extras = [];
+
+  if (state.proInterests.includes("events")) extras.push("вечернее событие");
+  if (state.proInterests.includes("food")) extras.push("сильная гастропауза");
+  if (state.proInterests.includes("city")) extras.push("понятный городской ритм");
+  if (state.proInterests.includes("active")) extras.push("больше движения");
+  if (state.proInterests.includes("roadtrip")) extras.push("пространство для выезда");
+
+  if (!extras.length) return base;
+  return `${base} Сейчас день тянется в сторону: ${extras.slice(0, 3).join(", ")}.`;
+}
+
+function buildProTransportText(base) {
+  if (state.proPace === "relaxed") {
+    return "Упор на комфорт: меньше спешки, больше коротких переездов и времени на паузы. " + String(base || "");
+  }
+  if (state.proPace === "intense") {
+    return "Можно смело комбинировать пешие блоки, такси и при необходимости машину, чтобы вместить больше впечатлений. " + String(base || "");
+  }
+  return String(base || "");
+}
+
+function scoreProItem(item) {
+  const type = String(item?.type || "").toLowerCase();
+  let score = 0;
+
+  if (state.proInterests.includes("events") && type === "event") score += 6;
+  if (state.proInterests.includes("food") && type === "food") score += 5;
+  if (state.proInterests.includes("city") && ["excursions", "sights", "parks", "routes"].includes(type)) score += 4;
+  if (state.proInterests.includes("active") && type === "active") score += 5;
+  if (state.proInterests.includes("roadtrip") && type === "roadtrip") score += 5;
+
+  if (state.proPace === "relaxed") {
+    if (["food", "parks", "sights", "excursions", "hotels"].includes(type)) score += 2;
+    if (["active"].includes(type)) score -= 1;
+  }
+
+  if (state.proPace === "intense") {
+    if (["event", "active", "roadtrip", "routes"].includes(type)) score += 2;
+    if (type === "hotels") score -= 1;
+  }
+
+  return score;
+}
+
+function getProDayItemLimit(pace) {
+  if (pace === "relaxed") return 2;
+  if (pace === "intense") return 4;
+  return 3;
+}
+
+function resolveProPace(value) {
+  return PRO_PACE_OPTIONS.some((item) => item.id === value) ? value : "balanced";
+}
+
+function normalizeProInterests(value) {
+  const parsed = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const allowed = PRO_INTEREST_OPTIONS.map((item) => item.id);
+  const next = parsed.filter((item, index) => allowed.includes(item) && parsed.indexOf(item) === index);
+  return next.length ? next : [...DEFAULT_PRO_INTERESTS];
+}
+
+function toggleProInterest(value, current) {
+  const allowed = PRO_INTEREST_OPTIONS.some((item) => item.id === value);
+  if (!allowed) return current;
+
+  const next = current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value];
+
+  return next.length ? next : [...DEFAULT_PRO_INTERESTS];
+}
+
+function proPaceLabel(value) {
+  return {
+    relaxed: "Спокойный",
+    balanced: "Сбалансированный",
+    intense: "Насыщенный"
+  }[value] || "Сбалансированный";
+}
+
+function formatProInterests(interests) {
+  const labels = interests
+    .map((item) => PRO_INTEREST_OPTIONS.find((option) => option.id === item)?.label)
+    .filter(Boolean);
+  return labels.length ? labels.join(", ").toLowerCase() : "город, еда, события";
+}
+
+function proPreferenceEffectText() {
+  if (state.proPace === "relaxed") {
+    return "Программа станет мягче: меньше перегруза в одном дне, больше удобных точек и спокойных пауз.";
+  }
+  if (state.proPace === "intense") {
+    return "Программа станет плотнее: в дни войдёт больше активных точек и вечерних сценариев.";
+  }
+  return "Программа держит баланс между прогулками, событиями, едой и логистикой.";
+}
+
+function proPaymentsCard(payments, donation, contact) {
+  return card([
+    `<div class="preview-label">Оплата и поддержка</div>`,
+    `<h3>Доступ и помощь проекту</h3>`,
+    richTextBlock([
+      payments.length
+        ? "Когда мы заполним реальные ссылки, здесь появится удобный доступ к оплате Pro: СБП, карта или крипта."
+        : "Платёжные ссылки пока не заполнены, но каркас уже готов и ждёт реальные реквизиты.",
+      donation?.url
+        ? "Ниже также можно оставить донат на поддержку проекта."
+        : "При желании сюда же можно добавить донаты на развитие проекта."
+    ].join("\n\n")),
+    state.pro?.overview?.features?.length ? factListBlock("Что даст Pro", state.pro.overview.features) : "",
+    actions([
+      ...payments.map((item) => actionButton(`Оплатить через ${item.label}`, "open", { url: item.url }, "primary")),
+      donation?.url ? actionButton(donation.label || "Поддержать проект", "open", { url: donation.url }) : "",
+      contact?.url ? actionButton(contact.label || "Связаться", "open", { url: contact.url }) : ""
+    ])
+  ]);
+}
+
+function proDayListCard(plan) {
+  return card([
+    `<div class="preview-label">Сценарий по дням</div>`,
+    `<h3>${escapeHtml(plan.title || "Программа поездки")}</h3>`,
+    `<div class="pro-day-list">${(plan.dayPlans || []).map(proDayCard).join("")}</div>`
+  ]);
+}
+
+function proDayCard(dayPlan) {
+  return `
+    <section class="pro-day-card">
+      <div class="pro-day-head">
+        <div>
+          <div class="subtle-title">День ${escapeHtml(String(dayPlan.day || ""))}</div>
+          <h4>${escapeHtml(dayPlan.title || "День поездки")}</h4>
+        </div>
+      </div>
+      ${dayPlan.focus ? `<p class="summary-short">${escapeHtml(dayPlan.focus)}</p>` : ""}
+      <div class="pro-day-items">
+        ${(dayPlan.items || []).map(proPlanItemCard).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function proPlanItemCard(item) {
+  const meta = [
+    item.subtitle,
+    item.duration,
+    item.dateText,
+    item.venueTitle
+  ].filter(Boolean).join(" · ");
+  const preview = item.preview || SECTION_VISUALS.pro;
+
+  return `
+    <article class="pro-plan-item">
+      ${mediaImage(preview, item.title || "Пункт программы", "compact", SECTION_VISUALS.pro)}
+      <div class="preview-label">${escapeHtml(proItemTypeLabel(item.type))}</div>
+      <h5>${escapeHtml(item.title || "Точка маршрута")}</h5>
+      ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ""}
+      ${item.summary ? `<p class="summary-short">${escapeHtml(trim(item.summary, 180))}</p>` : ""}
+      <div class="actions">
+        ${proFavoriteButton(item)}
+        ${item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""}
+        ${item.ticketUrl ? actionButton("Билеты", "open", { url: item.ticketUrl }, "primary") : ""}
+        ${item.mapUrl ? actionButton("Маршрут", "open", { url: item.mapUrl }) : ""}
+      </div>
+    </article>
+  `;
+}
+
+function proFavoriteButton(item) {
+  if (!item?.id || !item?.type) return "";
+
+  if (item.type === "event") {
+    return actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : "");
+  }
+
+  if (item.type === "routes") {
+    const rawId = parseProRawId(item.id);
+    if (!rawId) return "";
+    return actionButton(favoriteToggleLabel(routeFavoriteId(rawId)), "favorite-route", { id: rawId }, isFavorite(routeFavoriteId(rawId)) ? "primary" : "");
+  }
+
+  if (["excursions", "sights", "parks", "hotels", "food", "active", "roadtrip"].includes(item.type)) {
+    const rawId = parseProRawId(item.id);
+    if (!rawId) return "";
+    const favoriteId = catalogFavoriteId(item.type, rawId);
+    return actionButton(favoriteToggleLabel(favoriteId), "favorite-catalog", { section: item.type, id: rawId }, isFavorite(favoriteId) ? "primary" : "");
+  }
+
+  return "";
+}
+
+function parseProRawId(value) {
+  const raw = String(value || "");
+  const separatorIndex = raw.indexOf(":");
+  return separatorIndex >= 0 ? raw.slice(separatorIndex + 1) : raw;
 }
 
 function eventDetailCard(item) {
@@ -784,23 +1383,23 @@ function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelTe
 }
 
 function catalogPreviewCard(sectionId, item, isActive, action, data) {
-  const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
-  const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
-  const summary = trim(item.description || item.reviewSummary || item.cuisine || item.subtitle || item.title, 140);
-  const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
-  const previewImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
-
-  return `
-    <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="${action}" ${attrs}>
-      ${previewImage ? mediaImage(previewImage, item.title, "compact", fallbackImage) : ""}
-      <div class="selector-card-head">
-        <span class="preview-label">${escapeHtml(sectionLabel(sectionId))}</span>
-        <span class="selector-state">${isActive ? "Открыто" : "Смотреть"}</span>
-      </div>
-      <div class="selector-card-title">${escapeHtml(item.title)}</div>
-      ${item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : ""}
-      ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
-      ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
+    const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
+    const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
+    const summary = catalogPreviewSummary(sectionId, item);
+    const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
+    const previewImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
+  
+    return `
+      <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="${action}" ${attrs}>
+        ${previewImage ? mediaImage(previewImage, item.title, "compact", fallbackImage) : ""}
+        <div class="selector-card-head">
+          <span class="preview-label">${escapeHtml(catalogPreviewLabel(sectionId))}</span>
+          <span class="selector-state">${isActive ? "Открыто" : catalogPreviewState(sectionId)}</span>
+        </div>
+        <div class="selector-card-title">${escapeHtml(item.title)}</div>
+        ${item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : ""}
+        ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
+        ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
     </button>
   `;
 }
@@ -836,6 +1435,79 @@ function placeDetailCard(sectionId, item) {
       actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
       item.mapUrl ? actionButton("Маршрут на карте", "open", { url: item.mapUrl }, "primary") : "",
       item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
+      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
+    ])
+    ], "active");
+}
+
+function activeDetailCard(item) {
+  const sectionId = "active";
+  const fallbackImage = SECTION_VISUALS[sectionId];
+  const primaryImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const detailBadges = buildCatalogDetailBadges(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+
+  return card([
+    primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">${escapeHtml(sectionLabel(sectionId))}</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
+    `<h2>${escapeHtml(item.title)}</h2>`,
+    item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(item.description),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Что внутри", item.highlights) : ""}
+      ${item.features?.length ? factListBlock("Почему это удобно", item.features) : ""}
+      ${item.bestFor ? factBlock("Кому подойдёт", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше идти", item.timing) : ""}
+      ${item.foodNearby ? factBlock("Где сделать паузу", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    actions([
+      actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
+      item.mapUrl ? actionButton("Открыть карту", "open", { url: item.mapUrl }, "primary") : "",
+      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
+    ])
+  ], "active");
+}
+
+function roadtripDetailCard(item) {
+  const sectionId = "roadtrip";
+  const fallbackImage = SECTION_VISUALS[sectionId];
+  const primaryImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const detailBadges = buildCatalogDetailBadges(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+  const byCarNote = buildRoadtripDriveNote(item);
+  const withoutCarNote = buildRoadtripNoCarNote(item);
+
+  return card([
+    primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">${escapeHtml(sectionLabel(sectionId))}</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
+    `<h2>${escapeHtml(item.title)}</h2>`,
+    item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(item.description),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Почему стоит ехать", item.highlights) : ""}
+      ${item.bestFor ? factBlock("Для какого выезда подходит", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше планировать", item.timing) : ""}
+      ${byCarNote ? factBlock("Если едете на машине", byCarNote) : ""}
+      ${withoutCarNote ? factBlock("Если машины нет", withoutCarNote) : ""}
+      ${item.foodNearby ? factBlock("Где сделать остановку", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Логистика", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    actions([
+      actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
+      item.mapUrl ? actionButton("Маршрут на карте", "open", { url: item.mapUrl }, "primary") : "",
       item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
     ])
   ], "active");
@@ -900,11 +1572,12 @@ function buildCatalogCollectionText(sectionId, selected) {
     : "Выберите место, чтобы открыть краткий, но полезный гид без лишнего текста.";
 }
 
-function buildCatalogCollectionBadges(sectionId, items, selected) {
+function buildCatalogCollectionBadges(sectionId, items, selected, totalCount = items?.length || 0) {
   const badges = [];
   const photoCount = getSectionPhotoLinks(sectionId, selected).length;
 
   if (items?.length) badges.push(`${items.length} в подборке`);
+  if (totalCount > (items?.length || 0)) badges.push(`Из ${totalCount} по запросу`);
   if (photoCount) badges.push(`${photoCount} фото`);
   if (selected?.mapUrl) badges.push(sectionId === "food" ? "Есть карта" : "Есть маршрут");
   if (sectionId === "food" && selected?.reviewUrl) badges.push("Есть отзывы");
@@ -913,13 +1586,14 @@ function buildCatalogCollectionBadges(sectionId, items, selected) {
   return badges.slice(0, 4);
 }
 
-function buildCatalogSectionStats(sectionId, items, selected) {
+function buildCatalogSectionStats(sectionId, items, selected, totalCount = items?.length || 0) {
   const stats = [];
   const photoCount = getSectionPhotoLinks(sectionId, selected).length;
 
   if (items?.length) {
     stats.push(sectionId === "food" ? `${items.length} мест для еды` : `${items.length} точек в разделе`);
   }
+  if (totalCount > (items?.length || 0)) stats.push(`Из ${totalCount} после поиска`);
 
   if (selected?.subtitle) stats.push(selected.subtitle);
   if (photoCount) stats.push(`${photoCount} фото`);
@@ -939,12 +1613,64 @@ function buildCatalogPreviewBadges(sectionId, item) {
     ].filter(Boolean);
   }
 
+  if (sectionId === "active") {
+    return [
+      item.highlights?.[0] || item.features?.[0] || "",
+      item.bestFor ? "Под формат отдыха" : "",
+      item.mapUrl ? "Как доехать" : "",
+      item.foodNearby ? "Есть пауза на еду" : ""
+    ].filter(Boolean);
+  }
+
+  if (sectionId === "roadtrip") {
+    return [
+      item.highlights?.[0] || "",
+      hasRoadtripNoCarOption(item) ? "Можно без авто" : "Лучше на машине",
+      item.timing ? "Лучше планировать заранее" : "",
+      item.mapUrl ? "Маршрут" : ""
+    ].filter(Boolean);
+  }
+
   return [
     item.highlights?.[0] || item.features?.[0] || "",
     item.foodNearby ? "Есть где перекусить" : "",
     item.bestFor ? trim(item.bestFor, 28) : "",
     item.mapUrl ? "Маршрут" : ""
   ].filter(Boolean);
+}
+
+function catalogPreviewLabel(sectionId) {
+  return {
+    active: "Сценарий отдыха",
+    roadtrip: "Выезд за город",
+    food: "Где поесть",
+    places: "Городской гид"
+  }[sectionId] || sectionLabel(sectionId);
+}
+
+function catalogPreviewState(sectionId) {
+  return {
+    active: "Выбрать",
+    roadtrip: "Маршрут",
+    food: "Смотреть",
+    places: "Смотреть"
+  }[sectionId] || "Смотреть";
+}
+
+function catalogPreviewSummary(sectionId, item) {
+  if (sectionId === "food") {
+    return trim(item.reviewSummary || item.cuisine || item.interior || item.subtitle || item.title, 140);
+  }
+
+  if (sectionId === "active") {
+    return trim(item.bestFor || item.highlights?.[0] || item.features?.[0] || item.description || item.subtitle || item.title, 140);
+  }
+
+  if (sectionId === "roadtrip") {
+    return trim(item.bestFor || item.timing || item.howToGet || item.description || item.subtitle || item.title, 140);
+  }
+
+  return trim(item.description || item.reviewSummary || item.cuisine || item.subtitle || item.title, 140);
 }
 
 function buildCatalogDetailBadges(sectionId, item) {
@@ -956,6 +1682,22 @@ function buildCatalogDetailBadges(sectionId, item) {
     ].filter(Boolean);
   }
 
+  if (sectionId === "active") {
+    return [
+      item.highlights?.length ? `${item.highlights.length} акцента` : "",
+      item.features?.length ? `${item.features.length} сильные стороны` : "",
+      item.foodNearby ? "Есть пауза на еду" : ""
+    ].filter(Boolean);
+  }
+
+  if (sectionId === "roadtrip") {
+    return [
+      "Выезд за город",
+      hasRoadtripNoCarOption(item) ? "Есть вариант без машины" : "Авто удобнее всего",
+      item.timing ? "Лучше планировать день" : ""
+    ].filter(Boolean);
+  }
+
   return [
     item.highlights?.length ? `${item.highlights.length} акцента` : "",
     item.reviewRating ? `${item.reviewRating} / 5` : "",
@@ -964,6 +1706,40 @@ function buildCatalogDetailBadges(sectionId, item) {
 }
 
 function buildPlaceQuickFacts(sectionId, item) {
+  if (sectionId === "active") {
+    return [
+      {
+        label: "Формат",
+        value: trim(item.subtitle || item.highlights?.[0] || "Активный отдых", 88)
+      },
+      {
+        label: "Лучше для",
+        value: trim(item.bestFor || item.features?.[0] || "", 88)
+      },
+      {
+        label: "Логистика",
+        value: trim(item.howToGet || item.timing || "", 88)
+      }
+    ].filter((item) => item.value);
+  }
+
+  if (sectionId === "roadtrip") {
+    return [
+      {
+        label: "Формат поездки",
+        value: hasRoadtripNoCarOption(item) ? "Машина удобнее, но есть запасной сценарий без авто" : "Лучше всего ехать на машине"
+      },
+      {
+        label: "Зачем ехать",
+        value: trim(item.bestFor || item.highlights?.[0] || item.subtitle || "", 88)
+      },
+      {
+        label: "Если без машины",
+        value: trim(buildRoadtripNoCarNote(item) || "Лучше заранее проверять экскурсии, автобусы и такси по обратному пути.", 88)
+      }
+    ].filter((item) => item.value);
+  }
+
   return [
     {
       label: sectionId === "roadtrip" ? "Формат" : "Раздел",
@@ -977,7 +1753,41 @@ function buildPlaceQuickFacts(sectionId, item) {
       label: "Логистика",
       value: trim(item.howToGet || item.timing || item.foodNearby || "", 88)
     }
-  ].filter((item) => item.value);
+    ].filter((item) => item.value);
+}
+
+function renderCatalogDetailCard(sectionId, item) {
+  if (sectionId === "food") return foodDetailCard(item);
+  if (sectionId === "active") return activeDetailCard(item);
+  if (sectionId === "roadtrip") return roadtripDetailCard(item);
+  return placeDetailCard(sectionId, item);
+}
+
+function hasRoadtripNoCarOption(item) {
+  const text = compactTextFingerprint(`${item?.howToGet || ""} ${item?.bestFor || ""} ${item?.timing || ""}`);
+  return ["без авто", "без машины", "автобус", "экскурси", "трансфер", "такси"].some((token) => text.includes(token));
+}
+
+function buildRoadtripDriveNote(item) {
+  return extractSentenceByKeywords(item?.howToGet || item?.bestFor || "", ["машин", "авто", "автомобил", "такси"], trim(item?.howToGet || "", 180));
+}
+
+function buildRoadtripNoCarNote(item) {
+  const extracted = extractSentenceByKeywords(item?.howToGet || item?.bestFor || "", ["без авто", "без машины", "автобус", "экскурси", "трансфер", "такси"], "");
+  if (extracted) return extracted;
+  if (hasRoadtripNoCarOption(item)) return trim(item?.howToGet || "", 180);
+  return "Если своей машины нет, лучше заранее проверить экскурсии, автобусы, такси в обе стороны и время обратного выезда.";
+}
+
+function extractSentenceByKeywords(text, keywords, fallback = "") {
+  const normalizedKeywords = (keywords || []).map((value) => compactTextFingerprint(value)).filter(Boolean);
+  const sentences = splitSummaryParagraphs(text, 6);
+  const match = sentences.find((sentence) => {
+    const normalizedSentence = compactTextFingerprint(sentence);
+    return normalizedKeywords.some((keyword) => normalizedSentence.includes(keyword));
+  });
+
+  return match || fallback || "";
 }
 
 function buildFoodQuickFacts(item) {
@@ -1059,21 +1869,23 @@ function buildRouteCollectionText(selected, activeLevel) {
   return "Выберите маршрут, чтобы быстро сравнить длину, темп и ключевые точки прогулки.";
 }
 
-function buildRouteCollectionBadges(items, selected, activeLevel) {
+function buildRouteCollectionBadges(items, selected, activeLevel, totalCount = items?.length || 0) {
   const badges = [];
 
   if (activeLevel) badges.push(routeLevelLabel(activeLevel.id));
   if (items?.length) badges.push(`${items.length} маршрутов`);
+  if (totalCount > (items?.length || 0)) badges.push(`Из ${totalCount} по запросу`);
   if (selected?.duration) badges.push(selected.duration);
   if (selected?.stops?.length) badges.push(`${selected.stops.length} точек`);
 
   return badges.slice(0, 4);
 }
 
-function buildRouteSectionStats(items, selected) {
+function buildRouteSectionStats(items, selected, totalCount = items?.length || 0) {
   const stats = [];
 
   if (items?.length) stats.push(`${items.length} маршрутов в уровне`);
+  if (totalCount > (items?.length || 0)) stats.push(`Из ${totalCount} после поиска`);
   if (selected?.subtitle) stats.push(selected.subtitle);
   if (selected?.duration) stats.push(selected.duration);
   if (selected?.stops?.length) stats.push(`${selected.stops.length} остановок`);
@@ -1581,6 +2393,188 @@ function getSelectedSectionId(sectionId) {
   return null;
 }
 
+function getSectionQuery(sectionId) {
+  if (sectionId === "places") return state.placeQuery || "";
+  if (sectionId === "food") return state.foodQuery || "";
+  if (sectionId === "routes") return state.routeQuery || "";
+  if (sectionId === "active") return state.activeQuery || "";
+  if (sectionId === "roadtrip") return state.roadtripQuery || "";
+  return "";
+}
+
+function setSectionQuery(sectionId, value) {
+  const next = String(value || "");
+  if (sectionId === "places") state.placeQuery = next;
+  if (sectionId === "food") state.foodQuery = next;
+  if (sectionId === "routes") state.routeQuery = next;
+  if (sectionId === "active") state.activeQuery = next;
+  if (sectionId === "roadtrip") state.roadtripQuery = next;
+}
+
+function syncSelectionForQuery(sectionId) {
+  if (sectionId === "places") {
+    const items = getFilteredPlaceItems();
+    if (!items.some((item) => item.id === state.selectedPlaceId)) {
+      state.selectedPlaceId = items[0]?.id || null;
+    }
+    return;
+  }
+
+  if (sectionId === "routes") {
+    const items = getFilteredRouteItems();
+    if (!items.some((item) => item.id === state.selectedRouteId)) {
+      state.selectedRouteId = items[0]?.id || null;
+    }
+    return;
+  }
+
+  const items = getFilteredSectionItems(sectionId);
+  if (sectionId === "food" && !items.some((item) => item.id === state.selectedFoodId)) {
+    state.selectedFoodId = items[0]?.id || null;
+  }
+  if (sectionId === "active" && !items.some((item) => item.id === state.selectedActiveId)) {
+    state.selectedActiveId = items[0]?.id || null;
+  }
+  if (sectionId === "roadtrip" && !items.some((item) => item.id === state.selectedRoadtripId)) {
+    state.selectedRoadtripId = items[0]?.id || null;
+  }
+}
+
+function getFilteredPlaceItems() {
+  const items = getActivePlaceItems();
+  const query = getSectionQuery("places");
+  return items.filter((item) => matchesSectionSearch(item, state.placeSection, query));
+}
+
+function getFilteredSectionItems(sectionId) {
+  const items = getSectionItems(sectionId);
+  const query = getSectionQuery(sectionId);
+  return items.filter((item) => matchesSectionSearch(item, sectionId, query));
+}
+
+function getFilteredRouteItems() {
+  const items = getActiveRouteItems();
+  const query = getSectionQuery("routes");
+  return items.filter((item) => matchesSectionSearch(item, "routes", query));
+}
+
+function matchesSectionSearch(item, sectionId, query) {
+  const normalizedQuery = compactTextFingerprint(query);
+  if (!normalizedQuery) return true;
+  return buildSectionSearchText(item, sectionId).includes(normalizedQuery);
+}
+
+function buildSectionSearchText(item, sectionId) {
+  const values = [
+    item?.title,
+    item?.subtitle,
+    item?.description,
+    item?.bestFor,
+    item?.timing,
+    item?.howToGet,
+    item?.foodNearby,
+    item?.interior,
+    item?.reviewSummary,
+    item?.cuisine,
+    item?.duration,
+    item?.travelTime,
+    ...(Array.isArray(item?.highlights) ? item.highlights : []),
+    ...(Array.isArray(item?.features) ? item.features : []),
+    ...(Array.isArray(item?.signatureDishes) ? item.signatureDishes : []),
+    ...(Array.isArray(item?.stops) ? item.stops : [])
+  ];
+
+  if (sectionId === "roadtrip") {
+    values.push("машина", "авто", "автобус", "экскурсия", "поездка");
+  }
+
+  if (sectionId === "food") {
+    values.push("ресторан", "кафе", "бистро", "еда", "кухня");
+  }
+
+  if (sectionId === "routes") {
+    values.push("пеший маршрут", "прогулка", "маршрут");
+  }
+
+  return compactTextFingerprint(values.filter(Boolean).join(" "));
+}
+
+function buildSectionSearchPlaceholder(sectionId) {
+  return {
+    places: "Поиск по местам, паркам, отелям и достопримечательностям",
+    food: "Поиск по кухне, блюдам, интерьеру и отзывам",
+    routes: "Поиск по маршрутам, точкам и логистике",
+    active: "Поиск по формату отдыха, месту и логистике",
+    roadtrip: "Поиск по направлениям, дороге и формату поездки"
+  }[sectionId] || "Поиск по разделу";
+}
+
+function sectionSearchToolbar(sectionId, placeholder, filteredCount, totalCount) {
+  const query = getSectionQuery(sectionId);
+  const countLabel = totalCount > filteredCount
+    ? `Показано ${filteredCount} из ${totalCount}`
+    : `${filteredCount} карточек`;
+
+  return `
+    <section class="card search-toolbar">
+      <div class="search-toolbar-top">
+        <div>
+          <div class="preview-label">Быстрый поиск</div>
+          <h3>${escapeHtml(countLabel)}</h3>
+        </div>
+        <div class="search-toolbar-actions">
+          ${query ? `<span class="meta-badge">Запрос: ${escapeHtml(trim(query, 36))}</span>` : ""}
+          ${query ? actionButton("Сбросить", "section-search-clear", { section: sectionId }) : ""}
+        </div>
+      </div>
+      <label class="search-field">
+        <span class="search-label">${escapeHtml(placeholder)}</span>
+        <input
+          type="text"
+          value="${escapeHtml(query)}"
+          data-section-search="${escapeHtml(sectionId)}"
+          placeholder="${escapeHtml(placeholder)}"
+          autocomplete="off"
+        />
+      </label>
+    </section>
+  `;
+}
+
+function sectionFocusNote(sectionId) {
+  const content = {
+    places: {
+      title: "Как использовать раздел",
+      text: "Открывайте карточки как быстрый городской гид: сначала смотрите ключевую идею места, потом логистику и уже после этого решайте, добавлять ли точку в свой план."
+    },
+    food: {
+      title: "Что здесь важнее всего",
+      text: "В этом разделе фокус на кухне, ключевых блюдах, атмосфере и реальных ориентирах по отзывам. Это не энциклопедия, а короткий выбор места, где действительно стоит поесть."
+    },
+    routes: {
+      title: "Как выбирать маршрут",
+      text: "Сначала смотрите уровень сложности и длительность, затем точки маршрута и логистику старта. Так проще собрать прогулку под своё настроение и запас сил."
+    },
+    active: {
+      title: "Формат активного отдыха",
+      text: "Здесь собраны сценарии, куда идти за эмоциями и движением: термы, вода, картинг, развлечения для компании и семейные форматы без лишнего туристического шума."
+    },
+    roadtrip: {
+      title: "Важно по разделу «На машине»",
+      text: "До этих мест удобнее и быстрее всего ехать на машине. Если своей машины нет, часть направлений всё равно доступна через автобусы, такси или готовые экскурсии — это мы отдельно отмечаем внутри карточек."
+    }
+  }[sectionId];
+
+  if (!content) return "";
+
+  return `
+    <section class="card section-note">
+      <div class="preview-label">${escapeHtml(content.title)}</div>
+      <p class="summary-short">${escapeHtml(content.text)}</p>
+    </section>
+  `;
+}
+
 function getActiveRouteItems() {
   return state.catalog?.routes?.items?.filter((route) => route.level === state.routeLevel) || [];
 }
@@ -1635,23 +2629,34 @@ function syncUrl() {
   if (state.activeTab === "places") {
     next.set("section", state.placeSection);
     if (state.selectedPlaceId) next.set("place", state.selectedPlaceId);
+    if (state.placeQuery) next.set("placeQuery", state.placeQuery);
   }
 
   if (state.activeTab === "food" && state.selectedFoodId) {
     next.set("food", state.selectedFoodId);
   }
+  if (state.activeTab === "food" && state.foodQuery) {
+    next.set("foodQuery", state.foodQuery);
+  }
 
   if (state.activeTab === "active" && state.selectedActiveId) {
     next.set("active", state.selectedActiveId);
+  }
+  if (state.activeTab === "active" && state.activeQuery) {
+    next.set("activeQuery", state.activeQuery);
   }
 
   if (state.activeTab === "roadtrip" && state.selectedRoadtripId) {
     next.set("roadtrip", state.selectedRoadtripId);
   }
+  if (state.activeTab === "roadtrip" && state.roadtripQuery) {
+    next.set("roadtripQuery", state.roadtripQuery);
+  }
 
   if (state.activeTab === "routes") {
     next.set("level", state.routeLevel);
     if (state.selectedRouteId) next.set("route", state.selectedRouteId);
+    if (state.routeQuery) next.set("routeQuery", state.routeQuery);
   }
 
   if (state.activeTab === "events" && state.openEventId) {
@@ -1660,6 +2665,12 @@ function syncUrl() {
 
   if (state.activeTab === "favorites" && state.selectedFavoriteId) {
     next.set("favorite", state.selectedFavoriteId);
+  }
+
+  if (state.activeTab === "pro" && state.selectedProDays) {
+    next.set("proDays", state.selectedProDays);
+    next.set("proPace", state.proPace);
+    if (state.proInterests.length) next.set("proTags", state.proInterests.join(","));
   }
 
   if (state.activeTab === "events" && state.eventCategory && state.eventCategory !== "all") {
@@ -2245,6 +3256,30 @@ function sectionLabel(sectionId) {
     active: "Активный отдых",
     roadtrip: "На машине"
   }[sectionId] || sectionId;
+}
+
+function proItemTypeLabel(type) {
+  return {
+    event: "Событие",
+    excursions: "Экскурсия",
+    sights: "Место",
+    parks: "Парк",
+    food: "Еда",
+    routes: "Маршрут",
+    active: "Активность",
+    roadtrip: "Выезд",
+    hotels: "Отель"
+  }[type] || "Точка";
+}
+
+function pluralizeDays(value) {
+  const number = Math.abs(Number(value) || 0);
+  const mod10 = number % 10;
+  const mod100 = number % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return "день";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
+  return "дней";
 }
 
 function routeLevelLabel(levelId) {

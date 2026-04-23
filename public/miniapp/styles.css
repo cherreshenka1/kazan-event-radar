@@ -210,6 +210,38 @@ h1 {
   gap: 14px;
 }
 
+.support-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.support-card {
+  align-self: start;
+}
+
+.support-faq-list {
+  display: grid;
+  gap: 10px;
+}
+
+.support-faq-item {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid var(--border);
+}
+
+.support-faq-item h4 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.support-faq-item p {
+  margin: 0;
+  color: var(--hint);
+}
+
 .filter-panel {
   display: grid;
   gap: 14px;
@@ -236,6 +268,68 @@ h1 {
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
+}
+
+.search-toolbar,
+.section-note {
+  display: grid;
+  gap: 12px;
+}
+
+.search-toolbar-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.search-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.search-toolbar-top h3 {
+  margin: 4px 0 0;
+}
+
+.search-field {
+  display: grid;
+  gap: 8px;
+}
+
+.search-label {
+  color: var(--hint);
+  font-size: 0.92rem;
+}
+
+.search-field input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.search-field input::placeholder {
+  color: rgba(47, 67, 88, 0.7);
+}
+
+.search-field input:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.42);
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.section-note .summary-short {
+  margin: 0;
 }
 
 .two-column {
@@ -271,6 +365,67 @@ h1 {
 .list-grid {
   display: grid;
   gap: 10px;
+}
+
+.pro-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.pro-controls {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.pro-control-block {
+  display: grid;
+  gap: 10px;
+}
+
+.pro-day-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.pro-day-card {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(16, 32, 51, 0.1);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.pro-day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pro-day-head h4,
+.pro-plan-item h5 {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.pro-day-items {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pro-plan-item {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  background: rgba(248, 251, 255, 0.86);
+}
+
+.pro-plan-item .actions {
+  margin-top: 12px;
 }
 
 .selector-list {
