@@ -2968,16 +2968,31 @@ async function getPublishing(env) {
 }
 
 function getPreparedDraftCountForDate(publishing, value = new Date()) {
-  if (!publishing?.lastDraftBatchAt) return 0;
-  if (formatDateInput(publishing.lastDraftBatchAt) !== formatDateInput(value)) return 0;
-  return Math.max(0, Number(publishing.lastDraftBatchCount || 0) || 0);
+  const dateKey = formatDateInput(value);
+  if (!dateKey) return 0;
+
+  const batchCount = publishing?.lastDraftBatchAt && formatDateInput(publishing.lastDraftBatchAt) === dateKey
+    ? Math.max(0, Number(publishing.lastDraftBatchCount || 0) || 0)
+    : 0;
+
+  const draftCount = Array.isArray(publishing?.drafts)
+    ? publishing.drafts.filter((draft) => {
+      if (!draft || typeof draft !== "object") return false;
+      if (!draft.createdAt || formatDateInput(draft.createdAt) !== dateKey) return false;
+      return draft.status !== "failed" && draft.status !== "expired";
+    }).length
+    : 0;
+
+  return Math.max(batchCount, draftCount);
 }
 
 function expireStalePendingDrafts(publishing, env, now = new Date()) {
   const ttlHours = Math.max(12, Number(env?.DRAFT_PENDING_TTL_HOURS || 30) || 30);
   const ttlMs = ttlHours * 60 * 60 * 1000;
   const nowTime = now.getTime();
+  const nowIso = now.toISOString();
   let staleDraftsExpired = 0;
+  const seenPendingDraftKeys = new Set();
 
   const drafts = publishing.drafts.map((draft) => {
     if (!draft || typeof draft !== "object") return draft;
@@ -2986,20 +3001,45 @@ function expireStalePendingDrafts(publishing, env, now = new Date()) {
     const timestamp = draft.updatedAt || draft.createdAt;
     const draftTime = timestamp ? new Date(timestamp).getTime() : Number.NaN;
     if (Number.isNaN(draftTime)) return draft;
-    if ((nowTime - draftTime) < ttlMs) return draft;
+    if ((nowTime - draftTime) >= ttlMs) {
+      staleDraftsExpired += 1;
+      return {
+        ...draft,
+        status: "expired",
+        updatedAt: nowIso
+      };
+    }
 
-    staleDraftsExpired += 1;
-    return {
-      ...draft,
-      status: "expired",
-      updatedAt: now.toISOString()
-    };
+    const identityKeys = [
+      draft.itemId ? `item:${draft.itemId}` : "",
+      draft.eventExactSignature ? `exact:${draft.eventExactSignature}` : "",
+      draft.eventSignature ? `primary:${draft.eventSignature}` : "",
+      draft.eventLooseSignature ? `loose:${draft.eventLooseSignature}` : "",
+      draft.dateKey && draft.titleKey && draft.venueKey
+        ? `basic:${draft.dateKey}:${draft.titleKey}:${draft.venueKey}:${draft.summaryKey || ""}`
+        : ""
+    ].filter(Boolean);
+
+    const isDuplicatePendingDraft = identityKeys.some((key) => seenPendingDraftKeys.has(key));
+    if (isDuplicatePendingDraft) {
+      staleDraftsExpired += 1;
+      return {
+        ...draft,
+        status: "expired",
+        updatedAt: nowIso
+      };
+    }
+
+    identityKeys.forEach((key) => seenPendingDraftKeys.add(key));
+    return draft;
   });
 
   return {
     drafts,
     postedItemIds: publishing.postedItemIds,
     postedItems: publishing.postedItems,
+    lastDraftBatchAt: publishing.lastDraftBatchAt || null,
+    lastDraftBatchCount: Math.max(0, Number(publishing.lastDraftBatchCount || 0) || 0),
     staleDraftsExpired
   };
 }
