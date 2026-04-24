@@ -47,6 +47,8 @@
     "catalog:refresh:stale": "node scripts/refresh-catalog-imports.mjs --stale-only",
     "catalog:refresh:pipeline": "node scripts/refresh-catalog-pipeline.mjs --deploy",
     "catalog:refresh:local": "node scripts/refresh-catalog-pipeline.mjs --no-deploy",
+    "catalog:moderation:candidates": "node scripts/collect-catalog-moderation-candidates.mjs",
+    "catalog:moderation:apply": "node scripts/apply-catalog-moderation-approvals.mjs",
     "catalog:food": "node scripts/import-food-catalog.mjs",
     "catalog:sights": "node scripts/import-sights-catalog.mjs",
     "catalog:parks": "node scripts/import-parks-catalog.mjs",

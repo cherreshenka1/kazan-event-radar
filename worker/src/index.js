@@ -263,9 +263,15 @@ async function handleRequest(request, env) {
       user,
       miniAppUrl: env.MINI_APP_URL || null,
       channelUrl: env.TELEGRAM_CHANNEL_INVITE_URL || null,
+      admin: buildMiniAppAdmin(user, env),
       pro: buildProOverview(env),
       support: buildSupportOverview(env)
     }, 200, env);
+  }
+
+  if (url.pathname === "/api/moderation/summary") {
+    const user = await requireMiniAppModerator(request, env);
+    return json(await buildModerationSummary(env, user), 200, env);
   }
 
   if (url.pathname === "/api/catalog") {
@@ -3595,6 +3601,68 @@ async function safeBuildDraftReadiness(env, publishing = null) {
   }
 }
 
+async function buildModerationSummary(env, user) {
+  const [eventMeta, eventsRefresh, catalogRefresh, runtime, publishing] = await Promise.all([
+    getEventMeta(env),
+    getJson(env, "system:eventsRefreshReport", null),
+    getJson(env, "system:catalogRefreshReport", null),
+    getRuntime(env),
+    getPublishing(env)
+  ]);
+  const draftReadiness = await safeBuildDraftReadiness(env, publishing);
+  const status = buildSystemStatus(env, {
+    eventMeta,
+    eventsRefresh,
+    catalogRefresh,
+    runtime,
+    publishing,
+    draftReadiness
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    user: {
+      id: user?.id || null,
+      username: user?.username || null
+    },
+    status: status.overallStatus,
+    ready: status.ready,
+    warnings: status.warnings,
+    drafts: {
+      targetPerDay: Math.max(1, Number(env.DRAFTS_PER_DAY || 10) || 10),
+      lastBatchAt: publishing.lastDraftBatchAt || null,
+      lastBatchCount: publishing.lastDraftBatchCount || 0,
+      preparedToday: getPreparedDraftCountForDate(publishing, new Date()),
+      readiness: draftReadiness
+    },
+    events: {
+      total: eventMeta?.eventItems || eventMeta?.totalItems || 0,
+      lastScanAt: eventMeta?.lastScanAt || null,
+      refreshAt: eventsRefresh?.finishedAt || null
+    },
+    catalog: {
+      refreshAt: catalogRefresh?.finishedAt || null,
+      sections: Array.isArray(catalogRefresh?.sections) ? catalogRefresh.sections : [],
+      schedule: [
+        { label: "Еда", cadence: "каждые 3 дня" },
+        { label: "Пешие маршруты", cadence: "каждые 3 дня" },
+        { label: "Активный отдых", cadence: "каждые 3 дня" },
+        { label: "Мастер-классы", cadence: "каждые 3 дня" },
+        { label: "На машине", cadence: "каждые 3 дня" },
+        { label: "Парки, места и отели", cadence: "раз в 7 дней" }
+      ]
+    },
+    cardModeration: {
+      mode: "local_approval_pipeline",
+      candidatesCommand: "npm run catalog:moderation:candidates",
+      applyCommand: "npm run catalog:moderation:apply",
+      boardPath: "data/catalog-moderation/review-board.md",
+      photosPath: "data/catalog-moderation/photo-candidates",
+      approvalsPath: "config/catalog-moderation-approvals.json"
+    }
+  };
+}
+
 function isValidDateValue(value) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
@@ -4178,8 +4246,43 @@ function isManagerIdentity(user, env) {
   return normalizeUsername(user.username) === normalizeUsername(env.TELEGRAM_MANAGER_USERNAME);
 }
 
+async function requireMiniAppModerator(request, env) {
+  const user = await optionalTelegramUser(request, env);
+  if (!isMiniAppModerator(user, env)) {
+    throw new HttpError("Mini App moderator access required.", 403);
+  }
+  return user;
+}
+
+function buildMiniAppAdmin(user, env) {
+  const canModerate = isMiniAppModerator(user, env);
+  return {
+    canModerate,
+    role: canModerate ? "manager" : "viewer"
+  };
+}
+
+function isMiniAppModerator(user, env) {
+  if (!user) return false;
+  if (isManagerIdentity(user, env)) return true;
+
+  const userId = String(user.id || "").trim();
+  const username = normalizeUsername(user.username);
+  const allowedIds = parseCsv(env.MINIAPP_MODERATOR_IDS || env.TELEGRAM_MODERATOR_IDS || "");
+  const allowedUsernames = parseCsv(env.MINIAPP_MODERATOR_USERNAMES || "").map(normalizeUsername);
+
+  return (userId && allowedIds.includes(userId)) || (username && allowedUsernames.includes(username));
+}
+
 function normalizeUsername(username) {
   return String(username || "").replace(/^@/, "").trim().toLowerCase();
+}
+
+function parseCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 async function telegramApi(env, method, payload) {

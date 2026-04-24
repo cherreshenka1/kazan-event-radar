@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-04-24T00:00:00.000Z",
+  "instructions": [
+    "Скопируйте этот файл в config/catalog-moderation-approvals.json.",
+    "Поставьте approved: true только у карточек, которые прошли модерацию.",
+    "photoCandidateFile должен вести на файл из data/catalog-moderation/photo-candidates.",
+    "targetFileName обычно оставляем 1, чтобы фото стало главным в карточке."
+  ],
+  "items": [
+    {
+      "section": "food",
+      "id": "example",
+      "title": "Пример карточки",
+      "approved": false,
+      "photoCandidateFile": "data/catalog-moderation/photo-candidates/food/example/candidate-01.jpg",
+      "targetFileName": "1",
+      "note": "Проверено: нет водяного знака и чужого брендинга."
+    }
+  ]
+}

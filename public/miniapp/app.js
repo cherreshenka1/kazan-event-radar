@@ -54,6 +54,7 @@ const state = {
   events: [],
   favorites: [],
   pro: null,
+  moderation: null,
   config: null,
   periodLabel: "",
   syncedAt: null,
@@ -86,6 +87,7 @@ const SECTION_VISUALS = {
   masterclasses: "./brand/section-food.png",
   roadtrip: "./brand/section-routes.png",
   pro: "./brand/welcome-kazan-event-radar-640x360.png",
+  moderation: "./brand/welcome-kazan-event-radar-640x360.png",
   support: "./brand/welcome-kazan-event-radar-640x360.png",
   favorites: "./brand/welcome-kazan-event-radar-640x360.png",
   parks: "./brand/section-parks.png",
@@ -115,6 +117,9 @@ async function bootstrap() {
     applyEventsPayload(events);
     state.pro = pro;
     state.favorites = await loadFavorites();
+    if (canModerate()) {
+      state.moderation = await loadModerationSummary().catch(() => null);
+    }
 
     if (!state.selectedPlaceId) state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
     if (!state.selectedRouteId) state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
@@ -330,6 +335,14 @@ function bindEvents() {
     if (action === "open") {
       track("outbound_link", button.dataset.url, { label: button.textContent.trim() });
       openLink(button.dataset.url);
+      return;
+    }
+
+    if (action === "moderation-refresh") {
+      if (!canModerate()) return;
+      track("moderation_refresh", "manual");
+      state.moderation = await loadModerationSummary();
+      render();
       return;
     }
 
@@ -554,8 +567,18 @@ async function loadFavorites() {
   }
 }
 
+async function loadModerationSummary() {
+  if (!tg?.initData && !config.allowDevAuth) return null;
+  return api("/api/moderation/summary");
+}
+
 function render() {
+  if (state.activeTab === "moderation" && !canModerate()) {
+    state.activeTab = "support";
+  }
+
   tabNodes.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === state.activeTab));
+  document.body.classList.toggle("is-moderator", canModerate());
   topbarActionsNode?.querySelectorAll("[data-action='top-tab']").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.tab === state.activeTab);
   });
@@ -571,6 +594,7 @@ function render() {
   if (state.activeTab === "masterclasses") renderMasterclasses();
   if (state.activeTab === "roadtrip") renderRoadtrip();
   if (state.activeTab === "pro") renderPro();
+  if (state.activeTab === "moderation") renderModeration();
   if (state.activeTab === "support") renderSupport();
   if (state.activeTab === "favorites") renderFavorites();
 }
@@ -632,6 +656,12 @@ function renderHero() {
         `${resolveSelectedProDays(state.selectedProDays, state.pro)} дн.`,
         state.pro?.plans?.length ? `${state.pro.plans.length} сценариев` : "Сценарии загружаются"
       ]
+    },
+    moderation: {
+      eyebrow: "Модерация",
+      title: "Закрытая доска контроля",
+      text: "Здесь видно состояние черновиков, обновлений и пайплайна карточек. Обычные пользователи этот раздел не видят.",
+      badges: buildModerationHeroBadges()
     },
     support: {
       eyebrow: "Помощь",
@@ -776,6 +806,25 @@ function renderPro() {
   ].join("");
 }
 
+function renderModeration() {
+  const summary = state.moderation;
+
+  contentNode.innerHTML = [
+    sectionHeader(
+      "Закрытая модерация",
+      "Здесь собраны сигналы по черновикам канала, свежести данных и полуавтоматическому заполнению карточек. Раздел доступен только допущенным аккаунтам.",
+      SECTION_VISUALS.moderation
+    ),
+    statBar(buildModerationStats(summary)),
+    `<div class="support-layout moderation-layout">
+      ${moderationDraftsCard(summary)}
+      ${moderationCardPipelineCard(summary)}
+      ${moderationRefreshCard(summary)}
+      ${moderationWarningsCard(summary)}
+    </div>`
+  ].join("");
+}
+
 function renderSupport() {
   const support = getSupportInfo();
 
@@ -794,6 +843,99 @@ function renderSupport() {
       ${supportFeedbackCard(support)}
     </div>`
   ].join("");
+}
+
+function buildModerationHeroBadges() {
+  const summary = state.moderation;
+  return [
+    canModerate() ? "Доступ подтверждён" : "Только для менеджера",
+    summary?.drafts ? `Черновики: ${summary.drafts.preparedToday || 0} сегодня` : "Черновики проверяются",
+    summary?.warnings?.length ? `${summary.warnings.length} сигналов` : "Критичных сигналов нет"
+  ];
+}
+
+function buildModerationStats(summary) {
+  if (!summary) {
+    return [
+      "Статус: загружается",
+      "Черновики: проверяем",
+      "Каталог: проверяем",
+      "Карточки: ручная модерация"
+    ];
+  }
+
+  return [
+    `Статус: ${summary.ready ? "готово" : "нужна проверка"}`,
+    `Черновики сегодня: ${summary.drafts?.preparedToday || 0}`,
+    `Событий в базе: ${summary.events?.total || 0}`,
+    summary.catalog?.refreshAt ? `Каталог: ${formatDate(summary.catalog.refreshAt)}` : "Каталог: ждёт обновления"
+  ];
+}
+
+function moderationDraftsCard(summary) {
+  const drafts = summary?.drafts || {};
+  const readiness = drafts.readiness || {};
+
+  return card([
+    `<div class="preview-label">Черновики канала</div>`,
+    `<h3>Утренний пакет постов</h3>`,
+    richTextBlock([
+      "Цель — каждый день иметь готовые черновики с картинкой, коротким описанием и аккуратной ссылкой «Источник».",
+      "Если новых событий мало, один пост может повториться не чаще заданного окна, но визуалы должны оставаться разнообразными."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factBlock("План в день", `${drafts.targetPerDay || 10} черновиков`)}
+      ${factBlock("Сегодня готово", `${drafts.preparedToday || 0} черновиков`)}
+      ${factBlock("Готовых кандидатов", `${readiness.readyCount || 0} из ${readiness.target || drafts.targetPerDay || 10}`)}
+      ${factBlock("Уникальные превью", `${readiness.uniquePhotoCount || 0}`)}
+    </div>`,
+    actions([actionButton("Обновить статус", "moderation-refresh", {}, "primary")])
+  ], "support-card moderation-card");
+}
+
+function moderationCardPipelineCard(summary) {
+  const moderation = summary?.cardModeration || {};
+
+  return card([
+    `<div class="preview-label">Черновики карточек</div>`,
+    `<h3>Автозаполнение под твой контроль</h3>`,
+    richTextBlock([
+      "Система собирает кандидаты для карточек и фото, но не публикует их без модерации.",
+      "Это безопасный формат: я подготавливаю материал, а ты подтверждаешь только то, что выглядит чисто и подходит проекту."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factBlock("Доска", moderation.boardPath || "data/catalog-moderation/review-board.md")}
+      ${factBlock("Фото-кандидаты", moderation.photosPath || "data/catalog-moderation/photo-candidates")}
+      ${factBlock("Сбор", moderation.candidatesCommand || "npm run catalog:moderation:candidates")}
+      ${factBlock("Применить", moderation.applyCommand || "npm run catalog:moderation:apply")}
+    </div>`
+  ], "support-card moderation-card");
+}
+
+function moderationRefreshCard(summary) {
+  const schedule = summary?.catalog?.schedule || [];
+
+  return card([
+    `<div class="preview-label">Обновление разделов</div>`,
+    `<h3>Что обновляется автоматически</h3>`,
+    richTextBlock("Циклы обновления уже разделены по важности: динамичные разделы проверяются чаще, стабильные — реже, чтобы не перегружать систему."),
+    `<div class="fact-grid">
+      ${schedule.map((item) => factBlock(item.label, item.cadence)).join("") || factBlock("Расписание", "проверяется")}
+      ${factBlock("Последнее обновление", summary?.catalog?.refreshAt ? formatDate(summary.catalog.refreshAt) : "нет данных")}
+    </div>`
+  ], "support-card support-card-wide moderation-card");
+}
+
+function moderationWarningsCard(summary) {
+  const warnings = summary?.warnings || [];
+
+  return card([
+    `<div class="preview-label">Сигналы системы</div>`,
+    `<h3>${warnings.length ? "Что требует внимания" : "Всё выглядит спокойно"}</h3>`,
+    warnings.length
+      ? `<div class="support-faq-list">${warnings.slice(0, 8).map((warning) => supportFaqItem(warning.code || "Сигнал", warning.message || "Нужна проверка.")).join("")}</div>`
+      : richTextBlock("Критичных предупреждений сейчас нет. Если черновики утром не пришли, можно нажать обновление статуса и проверить блок черновиков выше.")
+  ], "support-card support-card-wide moderation-card");
 }
 
 function buildEventStats() {
@@ -1025,6 +1167,10 @@ function getSupportInfo() {
     donationUrl,
     channelUrl
   };
+}
+
+function canModerate() {
+  return Boolean(state.config?.admin?.canModerate);
 }
 
 function getSelectedProPlan() {
