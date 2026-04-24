@@ -25,6 +25,7 @@ async function main() {
   await fs.mkdir(path.dirname(STATE_PATH), { recursive: true });
 
   const syncState = await loadSyncState();
+  const existingSnapshotUrls = await loadExistingSnapshotUrls();
   const runStartedAt = new Date().toISOString();
   const importMode = resolveImportMode(cliOptions);
   const runMode = resolveRunMode(cliOptions);
@@ -61,7 +62,7 @@ async function main() {
       const sourceState = getSourceStateBucket(syncState, source);
       markLinksDiscovered(sourceState, links, runStartedAt);
 
-      const queuedLinks = pickLinksForCollection(links, sourceState, cliOptions);
+      const queuedLinks = pickLinksForCollection(links, sourceState, cliOptions, existingSnapshotUrls);
       console.log(`Found links: ${links.length}`);
       console.log(`Queued links: ${queuedLinks.length}${cliOptions.incremental ? " (new only)" : ""}`);
 
@@ -91,6 +92,7 @@ async function main() {
             event = await collectEventDetails(page, link, source);
           } catch (error) {
             if (isKassirAntiBotError(error)) {
+              markLinkBlocked(sourceState, link, runStartedAt);
               sourceStoppedEarly = true;
               runFlags.stoppedEarly = true;
               runFlags.antiBotTriggered = true;
@@ -107,7 +109,7 @@ async function main() {
           if (!event?.title) continue;
           importedForSource += 1;
           collected.push(event);
-          markLinkCollected(sourceState, event, runStartedAt);
+          markLinkCollected(sourceState, event, runStartedAt, shouldUpload);
         }
       }
 
@@ -129,7 +131,7 @@ async function main() {
       }
     }
 
-    const deduped = dedupeImportedEvents(collected);
+    const deduped = dedupeImportedEvents(collected).filter(isValidKassirPayloadEvent);
     const uploadPayload = {
       source: "kassir_browser",
       mode: importMode,
@@ -139,9 +141,9 @@ async function main() {
       reportedImportedCount: deduped.length,
       items: deduped
     };
-    const snapshotPayload = await buildLocalSnapshotPayload(OUTPUT_PATH, uploadPayload, {
-      mode: runMode
-    });
+    const snapshotPayload = repairKassirPayload(await buildLocalSnapshotPayload(OUTPUT_PATH, uploadPayload, {
+      mode: runFlags.stoppedEarly ? "incremental" : runMode
+    }));
 
     await writeOutputSnapshot(OUTPUT_PATH, snapshotPayload, console.log, "Kassir browser events");
     console.log(`Output: ${OUTPUT_PATH}`);
@@ -159,6 +161,9 @@ async function main() {
       }
     }
 
+    if (cliOptions.noUpload) {
+      clearNoUploadPendingLinks(syncState);
+    }
     reconcileUploadedLinks(syncState);
     finalizeSyncState(syncState, {
       startedAt: runStartedAt,
@@ -207,7 +212,7 @@ async function collectEventDetails(page, link, source) {
       await gotoAndSettle(page, link);
       await assertNoKassirAntiBot(page, link);
 
-      const details = await page.evaluate(() => {
+      const rawDetails = await page.evaluate(() => {
       const normalize = (value) => String(value || '')
         .replace(/\u00a0/g, ' ')
         .replace(/\s+/g, ' ')
@@ -330,6 +335,7 @@ async function collectEventDetails(page, link, source) {
       };
     });
 
+    const details = repairKassirDetails(rawDetails);
     const resolvedSummary = resolveKassirSummary(details.summaryCandidates);
     const resolvedTitle = resolveKassirTitle(details.titleCandidates, resolvedSummary);
     if (!resolvedTitle) {
@@ -519,7 +525,9 @@ function normalizeSyncState(value) {
         collectedAt: entry?.collectedAt || null,
         uploadedAt: entry?.uploadedAt || null,
         pendingUpload: Boolean(entry?.pendingUpload),
-        title: entry?.title || "",
+        blockedAt: entry?.blockedAt || null,
+        blockedCount: Number(entry?.blockedCount || 0),
+        title: repairKassirMojibake(entry?.title || ""),
         eventDate: entry?.eventDate || null
       };
     }
@@ -560,6 +568,8 @@ function markLinksDiscovered(bucket, links, nowIso) {
       collectedAt: null,
       uploadedAt: null,
       pendingUpload: false,
+      blockedAt: null,
+      blockedCount: 0,
       title: "",
       eventDate: null
     };
@@ -569,18 +579,40 @@ function markLinksDiscovered(bucket, links, nowIso) {
   }
 }
 
-function pickLinksForCollection(links, bucket, options) {
+async function loadExistingSnapshotUrls() {
+  try {
+    const raw = await fs.readFile(OUTPUT_PATH, "utf8");
+    const payload = JSON.parse(raw);
+    return new Set((payload.items || []).map((item) => canonicalEventUrl(item?.url)).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function pickLinksForCollection(links, bucket, options, existingSnapshotUrls = new Set()) {
   if (!options.incremental) return links;
 
   return links.filter((rawLink) => {
     const link = canonicalEventUrl(rawLink);
     const current = bucket.links[link];
     if (!current) return true;
+    if (shouldSkipTemporarilyBlockedLink(current)) return false;
+    if (!existingSnapshotUrls.has(link)) return true;
     return current.pendingUpload || !current.collectedAt;
   });
 }
 
-function markLinkCollected(bucket, event, nowIso) {
+function shouldSkipTemporarilyBlockedLink(entry) {
+  if (Number(entry?.blockedCount || 0) < 2 || !entry?.blockedAt) return false;
+
+  const blockedAt = new Date(entry.blockedAt);
+  if (Number.isNaN(blockedAt.getTime())) return false;
+
+  const blockedForMs = Date.now() - blockedAt.getTime();
+  return blockedForMs >= 0 && blockedForMs < 12 * 60 * 60 * 1000;
+}
+
+function markLinkCollected(bucket, event, nowIso, pendingUpload = true) {
   const link = canonicalEventUrl(event?.url);
   if (!link) return;
 
@@ -591,17 +623,54 @@ function markLinkCollected(bucket, event, nowIso) {
     collectedAt: null,
     uploadedAt: null,
     pendingUpload: false,
+    blockedAt: null,
+    blockedCount: 0,
     title: "",
     eventDate: null
   };
 
   current.lastSeenAt = nowIso;
   current.collectedAt = nowIso;
-  current.pendingUpload = true;
+  current.pendingUpload = Boolean(pendingUpload);
+  current.blockedAt = null;
+  current.blockedCount = 0;
   current.title = event?.title || current.title || "";
   current.eventDate = event?.eventDate || current.eventDate || null;
   bucket.links[link] = current;
   bucket.updatedAt = nowIso;
+}
+
+function markLinkBlocked(bucket, rawLink, nowIso) {
+  const link = canonicalEventUrl(rawLink);
+  if (!link) return;
+
+  const current = bucket.links[link] || {
+    url: link,
+    firstSeenAt: nowIso,
+    lastSeenAt: nowIso,
+    collectedAt: null,
+    uploadedAt: null,
+    pendingUpload: false,
+    blockedAt: null,
+    blockedCount: 0,
+    title: "",
+    eventDate: null
+  };
+
+  current.lastSeenAt = nowIso;
+  current.blockedAt = nowIso;
+  current.blockedCount = Number(current.blockedCount || 0) + 1;
+  bucket.links[link] = current;
+  bucket.updatedAt = nowIso;
+}
+
+function clearNoUploadPendingLinks(state) {
+  for (const bucket of Object.values(state.sources || {})) {
+    for (const entry of Object.values(bucket?.links || {})) {
+      if (!entry?.collectedAt || entry.uploadedAt) continue;
+      entry.pendingUpload = false;
+    }
+  }
 }
 
 function markEventsUploaded(state, events, nowIso) {
@@ -833,7 +902,7 @@ function isKassirEventInAllowedWindow(url) {
 
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
-  const max = new Date(today.getTime() + 155 * 24 * 60 * 60 * 1000);
+  const max = new Date(Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59));
   return parsed >= today && parsed <= max;
 }
 
@@ -851,6 +920,112 @@ const KASSIR_TITLE_STOP_WORDS = new Set([
   '\u0430\u0444\u0438\u0448\u0430',
   '\u0442\u0435\u0430\u0442\u0440'
 ]);
+
+const CP1251_SPECIAL_BYTES = new Map([
+  [0x0402, 0x80], [0x0403, 0x81], [0x201A, 0x82], [0x0453, 0x83],
+  [0x201E, 0x84], [0x2026, 0x85], [0x2020, 0x86], [0x2021, 0x87],
+  [0x20AC, 0x88], [0x2030, 0x89], [0x0409, 0x8A], [0x2039, 0x8B],
+  [0x040A, 0x8C], [0x040C, 0x8D], [0x040B, 0x8E], [0x040F, 0x8F],
+  [0x0452, 0x90], [0x2018, 0x91], [0x2019, 0x92], [0x201C, 0x93],
+  [0x201D, 0x94], [0x2022, 0x95], [0x2013, 0x96], [0x2014, 0x97],
+  [0x2122, 0x99], [0x0459, 0x9A], [0x203A, 0x9B], [0x045A, 0x9C],
+  [0x045C, 0x9D], [0x045B, 0x9E], [0x045F, 0x9F], [0x00A0, 0xA0],
+  [0x040E, 0xA1], [0x045E, 0xA2], [0x0408, 0xA3], [0x00A4, 0xA4],
+  [0x0490, 0xA5], [0x00A6, 0xA6], [0x00A7, 0xA7], [0x0401, 0xA8],
+  [0x00A9, 0xA9], [0x0404, 0xAA], [0x00AB, 0xAB], [0x00AC, 0xAC],
+  [0x00AD, 0xAD], [0x00AE, 0xAE], [0x0407, 0xAF], [0x00B0, 0xB0],
+  [0x00B1, 0xB1], [0x0406, 0xB2], [0x0456, 0xB3], [0x0491, 0xB4],
+  [0x00B5, 0xB5], [0x00B6, 0xB6], [0x00B7, 0xB7], [0x0451, 0xB8],
+  [0x2116, 0xB9], [0x0454, 0xBA], [0x00BB, 0xBB], [0x0458, 0xBC],
+  [0x0405, 0xBD], [0x0455, 0xBE], [0x0457, 0xBF]
+]);
+
+function repairKassirDetails(details = {}) {
+  return {
+    ...details,
+    titleCandidates: repairKassirStringArray(details.titleCandidates),
+    summaryCandidates: repairKassirStringArray(details.summaryCandidates),
+    venueCandidates: repairKassirStringArray(details.venueCandidates),
+    timeText: repairKassirMojibake(details.timeText || ""),
+    sourceLabel: repairKassirMojibake(details.sourceLabel || "")
+  };
+}
+
+function repairKassirPayload(payload = {}) {
+  return {
+    ...payload,
+    items: (payload.items || []).map(repairKassirEvent).filter(isValidKassirPayloadEvent)
+  };
+}
+
+function repairKassirEvent(event = {}) {
+  return {
+    ...event,
+    title: repairKassirMojibake(event.title || ""),
+    subtitle: repairKassirMojibake(event.subtitle || ""),
+    summary: repairKassirMojibake(event.summary || ""),
+    shortSummary: repairKassirMojibake(event.shortSummary || ""),
+    venueTitle: repairKassirMojibake(event.venueTitle || ""),
+    sourceLabel: repairKassirMojibake(event.sourceLabel || ""),
+    dateText: repairKassirMojibake(event.dateText || "")
+  };
+}
+
+function isValidKassirPayloadEvent(event = {}) {
+  const combinedText = `${event.title || ""} ${event.summary || ""}`;
+  return Boolean(event.title)
+    && isKassirEventUrl(event.url)
+    && !looksLikeKassirGenericListingText(combinedText);
+}
+
+function repairKassirStringArray(values) {
+  if (!Array.isArray(values)) return [];
+  return values.map((value) => repairKassirMojibake(value));
+}
+
+function repairKassirMojibake(value) {
+  const text = String(value || "");
+  if (!looksLikeKassirMojibake(text)) return text;
+
+  const bytes = [];
+  for (const char of text) {
+    const byte = cp1251ByteFromChar(char);
+    if (byte == null) return text;
+    bytes.push(byte);
+  }
+
+  const repaired = Buffer.from(bytes).toString("utf8");
+  if (!repaired || repaired.includes("\uFFFD")) return text;
+
+  const originalNoise = countKassirMojibakeNoise(text);
+  const repairedNoise = countKassirMojibakeNoise(repaired);
+  const repairedCyrillic = countCyrillicLetters(repaired);
+
+  return repairedNoise < originalNoise && repairedCyrillic >= 1
+    ? repaired
+    : text;
+}
+
+function looksLikeKassirMojibake(text) {
+  return countKassirMojibakeNoise(text) >= 2
+    || /(?:[РС][\u0400-\u04FF]|в[\u0400-\u04FF\u2018-\u2122\u00A0-\u00BF])/u.test(text);
+}
+
+function countKassirMojibakeNoise(text) {
+  return (String(text || "").match(/(?:[РС][\u0400-\u04FF]|в[\u0400-\u04FF\u2018-\u2122\u00A0-\u00BF])/gu) || []).length;
+}
+
+function countCyrillicLetters(text) {
+  return (String(text || "").match(/[А-Яа-яЁё]/g) || []).length;
+}
+
+function cp1251ByteFromChar(char) {
+  const code = char.codePointAt(0);
+  if (code <= 0x7F) return code;
+  if (code >= 0x0410 && code <= 0x044F) return code - 0x0350;
+  if (code >= 0x00A0 && code <= 0x00BF) return code;
+  return CP1251_SPECIAL_BYTES.get(code) ?? null;
+}
 
 function parseKassirEventDate(url, startDateCandidates = [], timeText = '', summary = '') {
   const urlDate = parseDateFromKassirUrl(url);
@@ -1134,7 +1309,12 @@ function isMeaningfulKassirText(value) {
   if (!text || text.length < 3) return false;
   if (/\[object Object\]/i.test(text)) return false;
   if (/(?:\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f\s+\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435|\u043d\u0435\u043e\u0431\u0445\u043e\u0434\u0438\u043c\u043e\s+\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435|robot|captcha)/i.test(text)) return false;
+  if (looksLikeKassirGenericListingText(text)) return false;
   return true;
+}
+
+function looksLikeKassirGenericListingText(value) {
+  return /(?:\u0430\u0444\u0438\u0448\u0430\s+\u043a\u0430\u0437\u0430\u043d\u0438|\u043a\u0443\u0434\u0430\s+\u0441\u0445\u043e\u0434\u0438\u0442\u044c|\u0443\u0434\u043e\u0431\u043d\u044b\u0439\s+\u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c\s+\u0441\u043e\u0431\u044b\u0442\u0438\u0439|\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0438\u044f\s+\u043f\u043e\s+\u043f\u0440\u043e\u0434\u0430\u0436\u0435\s+\u0431\u0438\u043b\u0435\u0442\u043e\u0432)/i.test(String(value || ""));
 }
 
 function looksLikeKassirMetaTitle(value) {

@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "..");
 const PROFILE_DIR = path.join(ROOT, "data", "playwright", "kassir-profile");
+const STATE_PATH = path.join(ROOT, "data", "playwright", "kassir-browser-state.json");
 const DEFAULT_URL = "https://kzn.kassir.ru";
 
 main().catch((error) => {
@@ -33,10 +34,11 @@ async function main() {
   });
 
   console.log("Kassir profile:", PROFILE_DIR);
-  console.log("Open page:", DEFAULT_URL);
-  console.log("Pass anti-bot or captcha in this browser window, then close the window.");
+  const warmupUrl = await resolveWarmupUrl();
+  console.log("Open page:", warmupUrl);
+  console.log("Pass anti-bot or captcha in this browser window, wait for the normal Kassir page, then close the window.");
 
-  await page.goto(DEFAULT_URL, { waitUntil: "domcontentloaded", timeout: 180000 });
+  await page.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: 180000 });
 
   if (!browser) {
     await new Promise(() => {});
@@ -46,6 +48,23 @@ async function main() {
   await new Promise((resolve) => {
     browser.once("disconnected", resolve);
   });
+}
+
+async function resolveWarmupUrl() {
+  const cliUrl = process.argv.slice(2).find((value) => /^https?:\/\//i.test(value));
+  if (cliUrl) return cliUrl;
+
+  try {
+    const state = JSON.parse(await fs.readFile(STATE_PATH, "utf8"));
+    const blockedLink = state?.lastRun?.blockedLink;
+    if (/^https?:\/\//i.test(blockedLink || "")) {
+      return blockedLink;
+    }
+  } catch {
+    // no previous blocked URL yet
+  }
+
+  return DEFAULT_URL;
 }
 
 async function findBrowserExecutable() {
