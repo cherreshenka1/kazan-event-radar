@@ -11,7 +11,7 @@ on:
       refresh_catalog:
         description: Refresh catalog sections
         required: true
-        default: true
+        default: false
         type: boolean
   schedule:
     - cron: "10 3 */3 * *"
@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           INCLUDE_KASSIR="true"
-          REFRESH_CATALOG="true"
+          REFRESH_CATALOG="false"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             INCLUDE_KASSIR="${{ inputs.include_kassir }}"

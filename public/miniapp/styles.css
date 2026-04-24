@@ -12,6 +12,19 @@
   --content-width: min(1120px, 100%);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1724;
+  --text: #e7edf6;
+  --hint: #a8b5c7;
+  --card: #172232;
+  --accent: #4f8cff;
+  --accent-text: #ffffff;
+  --border: rgba(231, 237, 246, 0.12);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --card-hover: rgba(79, 140, 255, 0.16);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -29,6 +42,12 @@ body {
     linear-gradient(180deg, #d2dce7 0%, var(--bg) 52%);
   color: var(--text);
   line-height: 1.58;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top right, rgba(79, 140, 255, 0.13), transparent 30rem),
+    linear-gradient(180deg, #111c2b 0%, var(--bg) 54%);
 }
 
 body.modal-open {
@@ -67,6 +86,126 @@ a {
   margin: 0 auto;
   padding: 18px 14px 32px;
   animation: fade-up 0.45s ease;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: rgba(244, 247, 251, 0.7);
+  box-shadow: 0 12px 30px rgba(16, 32, 51, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+:root[data-theme="dark"] .topbar {
+  background: rgba(15, 23, 36, 0.72);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.topbar-brand strong,
+.topbar-brand small {
+  display: block;
+  white-space: nowrap;
+}
+
+.topbar-brand strong {
+  line-height: 1.15;
+}
+
+.topbar-brand small {
+  margin-top: 2px;
+  color: var(--hint);
+  font-size: 0.78rem;
+}
+
+.topbar-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  background: #102033;
+  color: #b7f5b4;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+:root[data-theme="dark"] .topbar-logo {
+  background: #e7edf6;
+  color: #102033;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar-button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+:root[data-theme="dark"] .topbar-button {
+  background: rgba(231, 237, 246, 0.08);
+}
+
+:root[data-theme="dark"] .tab,
+:root[data-theme="dark"] .chip,
+:root[data-theme="dark"] .button,
+:root[data-theme="dark"] .hero-badge,
+:root[data-theme="dark"] .stat-pill,
+:root[data-theme="dark"] .meta-badge {
+  background: rgba(231, 237, 246, 0.08);
+  color: var(--text);
+}
+
+.topbar-button:hover,
+.topbar-brand:hover {
+  transform: translateY(-1px);
+}
+
+.topbar-button.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+  font-weight: 650;
+}
+
+:root[data-theme="dark"] .search-field input,
+:root[data-theme="dark"] .date-field input,
+:root[data-theme="dark"] .support-faq-item,
+:root[data-theme="dark"] .pro-day-card,
+:root[data-theme="dark"] .fact {
+  background: rgba(231, 237, 246, 0.07);
+  border-color: var(--border);
 }
 
 .hero {
@@ -108,7 +247,7 @@ h1 {
   font-size: clamp(1.75rem, 6vw, 3.4rem);
   line-height: 1.02;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: #f8fbff;
 }
 
@@ -407,7 +546,7 @@ h1 {
 .pro-plan-item h5 {
   margin: 0;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--text);
 }
 
@@ -511,7 +650,7 @@ h1 {
   font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.22;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
 }
 
 .selector-card .summary-short {
@@ -549,7 +688,7 @@ h1 {
   margin: 0 0 10px;
   font-weight: 620;
   line-height: 1.12;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text);
 }
 
@@ -842,6 +981,26 @@ h1 {
 @media (max-width: 560px) {
   .app {
     padding: 12px 10px 24px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    border-radius: 20px;
+  }
+
+  .topbar-brand small {
+    display: none;
+  }
+
+  .topbar-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .topbar-button {
+    padding: 8px 10px;
+    font-size: 0.92rem;
   }
 
   .hero {

@@ -12,6 +12,22 @@
   </head>
   <body>
     <main class="app">
+      <header class="topbar" aria-label="Быстрые действия">
+        <button class="topbar-brand" type="button" data-action="top-tab" data-tab="events">
+          <span class="topbar-logo">KER</span>
+          <span>
+            <strong>Kazan Event Radar</strong>
+            <small>афиша и гид по Казани</small>
+          </span>
+        </button>
+        <div class="topbar-actions" id="topbarActions">
+          <button class="topbar-button" type="button" data-action="top-tab" data-tab="support">Помощь</button>
+          <button class="topbar-button" type="button" data-action="top-collab">Сотрудничество</button>
+          <button class="topbar-button" type="button" data-action="top-tab" data-tab="pro">Pro</button>
+          <button class="topbar-button" type="button" data-action="theme-toggle" id="themeToggle">Тёмная</button>
+        </div>
+      </header>
+
       <section class="hero" id="hero">
         <div class="hero-copy">
           <p class="eyebrow" id="heroEyebrow">Kazan Event Radar</p>
@@ -30,8 +46,6 @@
         <button class="tab" data-tab="routes">Пешие маршруты</button>
         <button class="tab" data-tab="active">Активный отдых</button>
         <button class="tab" data-tab="roadtrip">На машине</button>
-        <button class="tab" data-tab="pro">Pro</button>
-        <button class="tab" data-tab="support">Помощь</button>
       </nav>
 
       <section id="status" class="status">Загружаю данные...</section>

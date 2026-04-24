@@ -3,6 +3,7 @@ const config = window.KAZAN_EVENT_RADAR_CONFIG || {};
 const apiBaseUrl = (config.apiBaseUrl || "").replace(/\/$/, "");
 const params = new URLSearchParams(window.location.search);
 const EVENTS_FETCH_LIMIT = 1000;
+const THEME_STORAGE_KEY = "kazan_event_radar_theme";
 const DEFAULT_PRO_INTERESTS = ["events", "food", "city"];
 const PRO_PACE_OPTIONS = [
   { id: "relaxed", label: "Спокойно" },
@@ -65,6 +66,8 @@ const state = {
 const statusNode = document.querySelector("#status");
 const contentNode = document.querySelector("#content");
 const tabNodes = [...document.querySelectorAll(".tab")];
+const topbarActionsNode = document.querySelector("#topbarActions");
+const themeToggleNode = document.querySelector("#themeToggle");
 const heroEyebrowNode = document.querySelector("#heroEyebrow");
 const heroTitleNode = document.querySelector("#heroTitle");
 const heroTextNode = document.querySelector("#heroText");
@@ -88,6 +91,7 @@ const SECTION_VISUALS = {
 };
 const eventVisualCache = new Map();
 
+applyTheme(getStoredTheme());
 bootstrap();
 
 async function bootstrap() {
@@ -133,6 +137,36 @@ function bindEvents() {
       syncUrl();
       render();
     });
+  });
+
+  topbarActionsNode?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+
+    const action = button.dataset.action;
+
+    if (action === "top-tab") {
+      state.activeTab = button.dataset.tab || "events";
+      if (state.activeTab !== "events") state.openEventId = null;
+      track("topbar_tab_click", state.activeTab);
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (action === "top-collab") {
+      const support = getSupportInfo();
+      const url = support.contactUrl || "https://t.me/cherreshenkaw";
+      track("topbar_collab_click", url);
+      openLink(url);
+      return;
+    }
+
+    if (action === "theme-toggle") {
+      const nextTheme = getStoredTheme() === "dark" ? "light" : "dark";
+      applyTheme(nextTheme);
+      track("theme_toggle", nextTheme);
+    }
   });
 
   heroBadgesNode?.addEventListener("click", (event) => {
@@ -516,6 +550,9 @@ async function loadFavorites() {
 
 function render() {
   tabNodes.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === state.activeTab));
+  topbarActionsNode?.querySelectorAll("[data-action='top-tab']").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.tab === state.activeTab);
+  });
   document.body.classList.toggle("modal-open", state.activeTab === "events" && Boolean(state.openEventId));
   renderHero();
   syncUrl();
@@ -3297,6 +3334,23 @@ function favoriteTypeLabel(type, sectionId = "") {
     catalog: "Место",
     route: "Маршрут"
   }[type] || "Избранное";
+}
+
+function getStoredTheme() {
+  const stored = window.localStorage?.getItem(THEME_STORAGE_KEY);
+  if (stored === "dark" || stored === "light") return stored;
+  if (tg?.colorScheme === "dark") return "dark";
+  return "light";
+}
+
+function applyTheme(theme) {
+  const normalized = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = normalized;
+  window.localStorage?.setItem(THEME_STORAGE_KEY, normalized);
+  if (themeToggleNode) {
+    themeToggleNode.textContent = normalized === "dark" ? "Светлая" : "Тёмная";
+    themeToggleNode.setAttribute("aria-label", normalized === "dark" ? "Включить светлую тему" : "Включить тёмную тему");
+  }
 }
 
 function openLink(url) {
