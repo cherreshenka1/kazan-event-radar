@@ -59,6 +59,7 @@ async function main() {
         title: item.title,
         approved: false,
         photoCandidateFile: result.photoCandidates[0]?.file || "",
+        photoSearchQuery: result.photoSearchQueries[0] || "",
         targetFileName: "1",
         note: ""
       });
@@ -139,6 +140,7 @@ async function collectItemCandidates(sectionId, item) {
     snapshots,
     draft: buildDraft(sectionId, item, snapshots),
     photoCandidates,
+    photoSearchQueries: buildPhotoSearchQueries(sectionId, item, snapshots),
     moderationNotes: buildModerationNotes(sectionId, item, photoCandidates, snapshots)
   };
 }
@@ -258,6 +260,21 @@ function buildModerationNotes(sectionId, item, photoCandidates, snapshots) {
   return notes;
 }
 
+function buildPhotoSearchQueries(sectionId, item, snapshots) {
+  const title = cleanText(item.title || item.subtitle || sectionLabel(sectionId), 80);
+  const venueOrType = cleanText(item.venueTitle || item.category || sectionLabel(sectionId), 80);
+  const snapshotTitle = cleanText(snapshots.find((snapshot) => snapshot.title)?.title || "", 80);
+
+  return unique([
+    `${title} Казань фото`,
+    `${title} ${venueOrType} Казань`,
+    snapshotTitle ? `${snapshotTitle} Казань фото` : "",
+    sectionId === "masterclasses" ? `${title} мастер-класс Казань фото` : "",
+    sectionId === "food" ? `${title} ресторан Казань интерьер блюда` : "",
+    sectionId === "active" ? `${title} активный отдых Казань фото` : ""
+  ]).slice(0, 4);
+}
+
 function buildMarkdown(report) {
   const lines = [
     "# Модерация карточек каталога",
@@ -287,11 +304,12 @@ function buildMarkdown(report) {
     lines.push("");
     lines.push(`## ${section.title}`);
     lines.push("");
-    lines.push("| Карточка | Фото-кандидаты | Источники | Заметки |");
-    lines.push("| --- | ---: | ---: | --- |");
+    lines.push("| Карточка | Фото-кандидаты | Источники | Поиск фото | Заметки |");
+    lines.push("| --- | ---: | ---: | --- | --- |");
 
     for (const item of section.items) {
-      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length} | ${item.sourceCount} | ${escapeMarkdown(item.moderationNotes.join("; ") || "готово к проверке")} |`);
+      const searchHint = item.photoSearchQueries?.[0] || "";
+      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length} | ${item.sourceCount} | ${escapeMarkdown(searchHint)} | ${escapeMarkdown(item.moderationNotes.join("; ") || "готово к проверке")} |`);
     }
   }
 

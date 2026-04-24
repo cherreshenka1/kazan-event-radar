@@ -13,6 +13,7 @@
       "title": "Пример карточки",
       "approved": false,
       "photoCandidateFile": "data/catalog-moderation/photo-candidates/food/example/candidate-01.jpg",
+      "photoSearchQuery": "Пример карточки Казань фото",
       "targetFileName": "1",
       "note": "Проверено: нет водяного знака и чужого брендинга."
     }
