@@ -788,6 +788,7 @@ function renderSupport() {
     statBar(buildSupportStats(support)),
     `<div class="support-layout">
       ${supportQuickActionsCard(support)}
+      ${supportDataFreshnessCard()}
       ${supportFaqCard()}
       ${supportTroubleshootingCard()}
       ${supportFeedbackCard(support)}
@@ -881,6 +882,7 @@ function buildSupportHeroBadges() {
   return [
     "FAQ внутри",
     support.contactUrl ? "Есть быстрая связь" : "Связь добавим позже",
+    "Данные обновляются",
     support.channelUrl ? "Есть канал с обновлениями" : "Канал подключается"
   ];
 }
@@ -889,6 +891,7 @@ function buildSupportStats(support) {
   return [
     "Формат: лёгкая встроенная поддержка",
     "FAQ: 6 ответов",
+    "Каталог: автообновление",
     support.contactUrl ? "Связь: включена" : "Связь: настраивается",
     support.channelUrl ? "Канал обновлений подключён" : ""
   ];
@@ -911,6 +914,33 @@ function supportQuickActionsCard(support) {
       support.channelUrl ? actionButton("Открыть канал", "open", { url: support.channelUrl }) : ""
     ])
   ], "support-card");
+}
+
+function supportDataFreshnessCard() {
+  return card([
+    `<div class="preview-label">Свежесть данных</div>`,
+    `<h3>Как обновляются разделы</h3>`,
+    richTextBlock([
+      "Приложение не должно зависеть от ручного обновления. Для каталога уже заложены регулярные проверки источников и пересборка данных.",
+      "Если карточка выглядит устаревшей, это не повод ждать следующего цикла: можно сразу прислать её название, и мы быстрее проверим источник."
+    ].join("\n\n")),
+    `<div class="fact-grid">
+      ${factListBlock("Каждые 3 дня", [
+        "Еда",
+        "Экскурсии",
+        "Пешие маршруты",
+        "Активный отдых",
+        "Мастер-классы",
+        "На машине"
+      ])}
+      ${factListBlock("Раз в 7 дней", [
+        "Парки",
+        "Достопримечательности",
+        "Отели"
+      ])}
+      ${factBlock("Если данных мало", "Система не должна выдумывать карточки: лучше меньше, но с источником, фото, логистикой и нормальным описанием. Новые источники можно добавлять постепенно.")}
+    </div>`
+  ], "support-card support-card-wide");
 }
 
 function supportFaqCard() {
