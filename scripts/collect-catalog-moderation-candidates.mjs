@@ -35,10 +35,10 @@ async function main() {
   const approvals = {
     generatedAt: new Date().toISOString(),
     instructions: [
-      "Скопируйте этот файл в config/catalog-moderation-approvals.json.",
-      "Для карточек, которые можно опубликовать, поставьте approved: true.",
-      "Оставьте photoCandidateFile только у фото без водяных знаков, чужой атрибутики и нерелевантных объектов.",
-      "После проверки запустите npm run catalog:moderation:apply."
+      "Copy this file to config/catalog-moderation-approvals.json.",
+      "Set approved: true only for cards checked by a human moderator.",
+      "Keep photoCandidateFile only for images without watermarks, foreign branding, or irrelevant objects.",
+      "Run npm run catalog:moderation:apply after review."
     ],
     items: []
   };
@@ -77,9 +77,9 @@ async function main() {
     generatedAt: new Date().toISOString(),
     mode: "catalog_moderation_candidates",
     legalModel: {
-      text: "Тексты являются короткими черновиками на основе фактов карточки и источников. Перед публикацией их можно отредактировать вручную.",
-      photos: "Фото скачиваются только как кандидаты для модерации и не попадают в Mini App без явного approval-файла.",
-      warning: "Не одобряйте изображения с водяными знаками, логотипами чужих сервисов, рекламными плашками или сомнительными правами."
+      text: "Draft texts are short summaries based on catalog facts and source metadata. Edit them before publication if needed.",
+      photos: "Downloaded files are candidates only. They are not published until approved by the project owner.",
+      warning: "Do not approve images with third-party watermarks, visible service branding, advertising labels, or unclear rights."
     },
     sections
   };
@@ -211,12 +211,10 @@ async function downloadImageCandidate(sectionId, itemId, url, index) {
 
 function buildDraft(sectionId, item, snapshots) {
   const sourceSummary = cleanText(snapshots.find((snapshot) => snapshot.description)?.description || "", 220);
-  const description = buildSafeDescription(sectionId, item, sourceSummary);
-
   return {
     title: item.title,
     subtitle: item.subtitle || sectionLabel(sectionId),
-    description,
+    description: buildSafeDescription(sectionId, item, sourceSummary),
     highlights: buildSafeHighlights(sectionId, item),
     howToGet: item.howToGet || "",
     sourceUrl: item.sourceUrl || snapshots.find((snapshot) => snapshot.ok)?.url || ""
@@ -225,19 +223,16 @@ function buildDraft(sectionId, item, snapshots) {
 
 function buildSafeDescription(sectionId, item, sourceSummary) {
   const base = cleanText(item.description || item.bestFor || item.reviewSummary || item.subtitle || "", 260);
-  const sourceHint = sourceSummary ? `Источник даёт дополнительный контекст: ${sourceSummary}` : "";
+  const sourceHint = sourceSummary ? `Source context: ${sourceSummary}` : "";
   const sectionHint = {
-    food: "В финальной карточке сделаем акцент на кухне, сильных блюдах, атмосфере, интерьере и реальных ориентирах по отзывам.",
-    active: "В финальной карточке быстро покажем формат отдыха, кому он подойдёт, примерную логистику и что проверить перед визитом.",
-    masterclasses: "В финальной карточке важно показать, что человек сделает своими руками, кому подойдёт формат и где уточнить запись.",
-    roadtrip: "В финальной карточке важно объяснить, зачем ехать, сколько закладывать времени и можно ли добраться без машины.",
-    routes: "В финальной карточке важно показать темп прогулки, ключевые точки и удобный старт маршрута."
-  }[sectionId] || "В финальной карточке оставим короткое описание, сильные стороны места и понятную логистику.";
+    food: "Final card should focus on cuisine, signature dishes, atmosphere, interior, and review-based expectations.",
+    active: "Final card should show the activity format, who it suits, logistics, and what to check before visiting.",
+    masterclasses: "Final card should show what the guest will make, who the format suits, and where to confirm booking.",
+    roadtrip: "Final card should explain why to go, how much time to plan, and whether it is reachable without a car.",
+    routes: "Final card should show route pace, key stops, and a convenient starting point."
+  }[sectionId] || "Final card should keep the description short, concrete, and useful for planning.";
 
-  return [base, sourceHint, sectionHint]
-    .filter(Boolean)
-    .map((part) => cleanText(part, 260))
-    .join("\n\n");
+  return [base, sourceHint, sectionHint].filter(Boolean).map((part) => cleanText(part, 260)).join("\n\n");
 }
 
 function buildSafeHighlights(sectionId, item) {
@@ -253,10 +248,10 @@ function buildSafeHighlights(sectionId, item) {
 
 function buildModerationNotes(sectionId, item, photoCandidates, snapshots) {
   const notes = [];
-  if (!photoCandidates.length) notes.push("Нужно вручную подобрать фото или расширить источники.");
-  if (!item.sourceUrl && !snapshots.some((snapshot) => snapshot.ok)) notes.push("Нет уверенного источника.");
-  if (sectionId === "food" && !item.reviewSummary) notes.push("Для ресторана желательно добавить короткий вывод по отзывам.");
-  if (sectionId === "roadtrip" && !item.howToGet) notes.push("Для выезда нужно уточнить логистику.");
+  if (!photoCandidates.length) notes.push("Needs a manual photo pick or more image sources.");
+  if (!item.sourceUrl && !snapshots.some((snapshot) => snapshot.ok)) notes.push("No reliable source attached.");
+  if (sectionId === "food" && !item.reviewSummary) notes.push("Restaurant card should include a short review-based summary.");
+  if (sectionId === "roadtrip" && !item.howToGet) notes.push("Roadtrip card needs clearer logistics.");
   return notes;
 }
 
@@ -277,39 +272,37 @@ function buildPhotoSearchQueries(sectionId, item, snapshots) {
 
 function buildMarkdown(report) {
   const lines = [
-    "# Модерация карточек каталога",
+    "# Catalog card moderation",
     "",
-    `Обновлено: ${report.generatedAt}`,
+    `Updated: ${report.generatedAt}`,
     "",
-    "Это рабочая доска. Фото здесь являются кандидатами и не публикуются автоматически.",
+    "This is a working board. Photo files are candidates only and are not published automatically.",
     "",
-    "## Как модерировать",
+    "## Workflow",
     "",
-    "1. Откройте папку `data/catalog-moderation/photo-candidates`.",
-    "2. Проверьте фото: без водяных знаков, чужого брендинга и нерелевантных изображений.",
-    "3. Скопируйте `data/catalog-moderation/approvals.template.json` в `config/catalog-moderation-approvals.json`.",
-    "4. Для нужных карточек поставьте `approved: true` и оставьте выбранный `photoCandidateFile`.",
-    "5. Запустите `npm run catalog:moderation:apply`.",
+    "1. Open `data/catalog-moderation/photo-candidates`.",
+    "2. Check images: no watermarks, no foreign branding, no irrelevant pictures.",
+    "3. Copy `data/catalog-moderation/approvals.template.json` to `config/catalog-moderation-approvals.json`.",
+    "4. Set `approved: true` and keep the selected `photoCandidateFile` for approved cards only.",
+    "5. Run `npm run catalog:moderation:apply`.",
     "",
-    "## Сводка",
+    "## Summary",
     ""
   ];
 
   for (const section of report.sections) {
     const withPhotos = section.items.filter((item) => item.photoCandidates.length).length;
-    lines.push(`- ${section.title}: ${withPhotos}/${section.itemCount} карточек с фото-кандидатами`);
+    lines.push(`- ${section.title}: ${withPhotos}/${section.itemCount} cards with photo candidates`);
   }
 
   for (const section of report.sections) {
-    lines.push("");
-    lines.push(`## ${section.title}`);
-    lines.push("");
-    lines.push("| Карточка | Фото-кандидаты | Источники | Поиск фото | Заметки |");
+    lines.push("", `## ${section.title}`, "");
+    lines.push("| Card | Photo candidates | Sources | Photo search | Notes |");
     lines.push("| --- | ---: | ---: | --- | --- |");
 
     for (const item of section.items) {
       const searchHint = item.photoSearchQueries?.[0] || "";
-      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length} | ${item.sourceCount} | ${escapeMarkdown(searchHint)} | ${escapeMarkdown(item.moderationNotes.join("; ") || "готово к проверке")} |`);
+      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length} | ${item.sourceCount} | ${escapeMarkdown(searchHint)} | ${escapeMarkdown(item.moderationNotes.join("; ") || "ready for review")} |`);
     }
   }
 
@@ -364,15 +357,15 @@ function uniqueByUrl(entries) {
 
 function sectionLabel(sectionId) {
   return {
-    parks: "Парки",
-    sights: "Достопримечательности",
-    hotels: "Отели",
-    excursions: "Экскурсии",
-    food: "Еда",
-    routes: "Пешие маршруты",
-    active: "Активный отдых",
-    masterclasses: "Мастер-классы",
-    roadtrip: "На машине"
+    parks: "Parks",
+    sights: "Sights",
+    hotels: "Hotels",
+    excursions: "Excursions",
+    food: "Food",
+    routes: "Walking routes",
+    active: "Active leisure",
+    masterclasses: "Masterclasses",
+    roadtrip: "By car"
   }[sectionId] || sectionId;
 }
 
