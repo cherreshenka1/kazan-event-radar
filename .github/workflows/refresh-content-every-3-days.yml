@@ -149,6 +149,9 @@ jobs:
       - name: Build photo manifest
         run: node scripts/build-photo-manifest.mjs
 
+      - name: Audit catalog photos
+        run: node scripts/audit-catalog-photos.mjs
+
       - name: Build event previews
         run: node scripts/build-event-previews.mjs
 
@@ -167,6 +170,8 @@ jobs:
             data/playwright/refresh-report.json
             data/playwright/content-audit-report.json
             data/catalog-imports/refresh-report.json
+            data/catalog-imports/photo-coverage-report.json
+            docs/catalog-photo-coverage.md
             public/miniapp/event-preview-manifest.js
           if-no-files-found: warn
 

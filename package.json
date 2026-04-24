@@ -41,6 +41,8 @@
     "catalog:sources": "node scripts/validate-catalog-sources.mjs",
     "catalog:build": "node scripts/build-catalog-import-overrides.mjs",
     "photos:manifest": "node scripts/build-photo-manifest.mjs",
+    "photos:audit": "node scripts/audit-catalog-photos.mjs",
+    "photos:audit:fix": "node scripts/audit-catalog-photos.mjs --ensure-folders",
     "catalog:refresh": "node scripts/refresh-catalog-imports.mjs",
     "catalog:refresh:stale": "node scripts/refresh-catalog-imports.mjs --stale-only",
     "catalog:refresh:pipeline": "node scripts/refresh-catalog-pipeline.mjs --deploy",
