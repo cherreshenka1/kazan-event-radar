@@ -15,6 +15,7 @@ const PRO_INTEREST_OPTIONS = [
   { id: "food", label: "Еда" },
   { id: "city", label: "Город" },
   { id: "active", label: "Активность" },
+  { id: "masterclasses", label: "Мастер-классы" },
   { id: "roadtrip", label: "Выезды" }
 ];
 
@@ -33,6 +34,7 @@ const state = {
   openEventId: params.get("event") || null,
   selectedFoodId: params.get("food") || null,
   selectedActiveId: params.get("active") || null,
+  selectedMasterclassId: params.get("masterclass") || null,
   selectedRoadtripId: params.get("roadtrip") || null,
   selectedFavoriteId: params.get("favorite") || null,
   selectedProDays: params.get("proDays") || "3",
@@ -45,6 +47,7 @@ const state = {
   foodQuery: params.get("foodQuery") || "",
   routeQuery: params.get("routeQuery") || "",
   activeQuery: params.get("activeQuery") || "",
+  masterclassesQuery: params.get("masterclassesQuery") || "",
   roadtripQuery: params.get("roadtripQuery") || "",
   catalog: null,
   sections: [],
@@ -80,6 +83,7 @@ const SECTION_VISUALS = {
   food: "./brand/section-food.png",
   routes: "./brand/section-routes.png",
   active: "./brand/section-events.png",
+  masterclasses: "./brand/section-food.png",
   roadtrip: "./brand/section-routes.png",
   pro: "./brand/welcome-kazan-event-radar-640x360.png",
   support: "./brand/welcome-kazan-event-radar-640x360.png",
@@ -116,6 +120,7 @@ async function bootstrap() {
     if (!state.selectedRouteId) state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
     if (!state.selectedFoodId) state.selectedFoodId = getSectionItems("food")[0]?.id || null;
     if (!state.selectedActiveId) state.selectedActiveId = getSectionItems("active")[0]?.id || null;
+    if (!state.selectedMasterclassId) state.selectedMasterclassId = getSectionItems("masterclasses")[0]?.id || null;
     if (!state.selectedRoadtripId) state.selectedRoadtripId = getSectionItems("roadtrip")[0]?.id || null;
     if (!state.selectedFavoriteId) state.selectedFavoriteId = state.favorites[0]?.id || null;
     state.selectedProDays = resolveSelectedProDays(state.selectedProDays, state.pro);
@@ -215,6 +220,7 @@ function bindEvents() {
 
       if (section === "food") state.selectedFoodId = itemId;
       if (section === "active") state.selectedActiveId = itemId;
+      if (section === "masterclasses") state.selectedMasterclassId = itemId;
       if (section === "roadtrip") state.selectedRoadtripId = itemId;
 
       track("section_item_click", itemId, { section });
@@ -562,6 +568,7 @@ function render() {
   if (state.activeTab === "food") renderFood();
   if (state.activeTab === "routes") renderRoutes();
   if (state.activeTab === "active") renderActive();
+  if (state.activeTab === "masterclasses") renderMasterclasses();
   if (state.activeTab === "roadtrip") renderRoadtrip();
   if (state.activeTab === "pro") renderPro();
   if (state.activeTab === "support") renderSupport();
@@ -602,8 +609,14 @@ function renderHero() {
     active: {
       eyebrow: "Активный отдых",
       title: "Когда хочется не только гулять",
-      text: "Собрала варианты для активного дня: акваформат, развлечения и места для компании.",
+      text: "Собрала варианты для активного дня: вода, квесты, прокаты, полеты, спорт и места для компании.",
       badges: ["Для семьи и друзей", `${getSectionItems("active").length || 0} идей`]
+    },
+    masterclasses: {
+      eyebrow: "Мастер-классы",
+      title: "Сделать что-то своими руками",
+      text: "Гончарка, кулинария, арт-вечера и ремесленные форматы для спокойного, но запоминающегося дня.",
+      badges: ["Творческий досуг", `${getSectionItems("masterclasses").length || 0} идей`]
     },
     roadtrip: {
       eyebrow: "На машине",
@@ -721,6 +734,10 @@ function renderFood() {
 
 function renderActive() {
   renderSectionExplorer("active", "Выберите место для активного отдыха.");
+}
+
+function renderMasterclasses() {
+  renderSectionExplorer("masterclasses", "Выберите формат мастер-класса.");
 }
 
 function renderRoadtrip() {
@@ -2426,6 +2443,7 @@ function getSectionItems(sectionId) {
 function getSelectedSectionId(sectionId) {
   if (sectionId === "food") return state.selectedFoodId;
   if (sectionId === "active") return state.selectedActiveId;
+  if (sectionId === "masterclasses") return state.selectedMasterclassId;
   if (sectionId === "roadtrip") return state.selectedRoadtripId;
   return null;
 }
@@ -2435,6 +2453,7 @@ function getSectionQuery(sectionId) {
   if (sectionId === "food") return state.foodQuery || "";
   if (sectionId === "routes") return state.routeQuery || "";
   if (sectionId === "active") return state.activeQuery || "";
+  if (sectionId === "masterclasses") return state.masterclassesQuery || "";
   if (sectionId === "roadtrip") return state.roadtripQuery || "";
   return "";
 }
@@ -2445,6 +2464,7 @@ function setSectionQuery(sectionId, value) {
   if (sectionId === "food") state.foodQuery = next;
   if (sectionId === "routes") state.routeQuery = next;
   if (sectionId === "active") state.activeQuery = next;
+  if (sectionId === "masterclasses") state.masterclassesQuery = next;
   if (sectionId === "roadtrip") state.roadtripQuery = next;
 }
 
@@ -2471,6 +2491,9 @@ function syncSelectionForQuery(sectionId) {
   }
   if (sectionId === "active" && !items.some((item) => item.id === state.selectedActiveId)) {
     state.selectedActiveId = items[0]?.id || null;
+  }
+  if (sectionId === "masterclasses" && !items.some((item) => item.id === state.selectedMasterclassId)) {
+    state.selectedMasterclassId = items[0]?.id || null;
   }
   if (sectionId === "roadtrip" && !items.some((item) => item.id === state.selectedRoadtripId)) {
     state.selectedRoadtripId = items[0]?.id || null;
@@ -2542,6 +2565,7 @@ function buildSectionSearchPlaceholder(sectionId) {
     food: "Поиск по кухне, блюдам, интерьеру и отзывам",
     routes: "Поиск по маршрутам, точкам и логистике",
     active: "Поиск по формату отдыха, месту и логистике",
+    masterclasses: "Поиск по ремеслу, формату, навыку и записи",
     roadtrip: "Поиск по направлениям, дороге и формату поездки"
   }[sectionId] || "Поиск по разделу";
 }
@@ -2595,6 +2619,10 @@ function sectionFocusNote(sectionId) {
     active: {
       title: "Формат активного отдыха",
       text: "Здесь собраны сценарии, куда идти за эмоциями и движением: термы, вода, картинг, развлечения для компании и семейные форматы без лишнего туристического шума."
+    },
+    masterclasses: {
+      title: "Как выбирать мастер-класс",
+      text: "Смотрите формат, длительность, сложность и возможность уйти с готовой вещью или блюдом. Это хороший спокойный блок для дня, когда хочется впечатлений без гонки по городу."
     },
     roadtrip: {
       title: "Важно по разделу «На машине»",
@@ -2681,6 +2709,13 @@ function syncUrl() {
   }
   if (state.activeTab === "active" && state.activeQuery) {
     next.set("activeQuery", state.activeQuery);
+  }
+
+  if (state.activeTab === "masterclasses" && state.selectedMasterclassId) {
+    next.set("masterclass", state.selectedMasterclassId);
+  }
+  if (state.activeTab === "masterclasses" && state.masterclassesQuery) {
+    next.set("masterclassesQuery", state.masterclassesQuery);
   }
 
   if (state.activeTab === "roadtrip" && state.selectedRoadtripId) {
@@ -3291,6 +3326,7 @@ function sectionLabel(sectionId) {
     hotels: "Отели",
     excursions: "Экскурсии",
     active: "Активный отдых",
+    masterclasses: "Мастер-классы",
     roadtrip: "На машине"
   }[sectionId] || sectionId;
 }
@@ -3304,6 +3340,7 @@ function proItemTypeLabel(type) {
     food: "Еда",
     routes: "Маршрут",
     active: "Активность",
+    masterclasses: "Мастер-класс",
     roadtrip: "Выезд",
     hotels: "Отель"
   }[type] || "Точка";
@@ -3449,7 +3486,15 @@ function sourceCountLabel(count) {
 
 function trim(text, maxLength) {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
-  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}…` : normalized;
+  if (!maxLength || normalized.length <= maxLength) return normalized;
+
+  const slice = normalized.slice(0, Math.max(0, maxLength - 1)).trim();
+  const sentenceEnd = Math.max(slice.lastIndexOf("."), slice.lastIndexOf("!"), slice.lastIndexOf("?"));
+  if (sentenceEnd >= Math.floor(maxLength * 0.45)) return slice.slice(0, sentenceEnd + 1).trim();
+
+  const wordBoundary = slice.lastIndexOf(" ");
+  const compact = (wordBoundary >= Math.floor(maxLength * 0.45) ? slice.slice(0, wordBoundary) : slice).trim();
+  return /[.!?]$/u.test(compact) ? compact : `${compact}.`;
 }
 
 function escapeHtml(value) {

@@ -13,6 +13,7 @@ const sectionTasks = [
   { sectionId: "excursions", script: "catalog:excursions" },
   { sectionId: "routes", script: "catalog:routes" },
   { sectionId: "active", script: "catalog:active" },
+  { sectionId: "masterclasses", script: "catalog:masterclasses" },
   { sectionId: "roadtrip", script: "catalog:roadtrip" }
 ];
 

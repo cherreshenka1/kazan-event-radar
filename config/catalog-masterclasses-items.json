@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "id": "pottery",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Гончарные занятия отслеживаем через афишные образовательные события и карты студий."
+    },
+    {
+      "id": "cooking",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Кулинарные мастер-классы могут быть как регулярными студийными занятиями, так и датированными событиями."
+    },
+    {
+      "id": "painting",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Арт-вечера обновляем по афишам и картам: важны тема, материалы и формат записи."
+    },
+    {
+      "id": "embroidery",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Текстильные занятия ведём как спокойный ремесленный формат с проверкой студий по картам."
+    },
+    {
+      "id": "candles",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Свечеварение удобно проверять через образовательные события и карточки творческих студий."
+    },
+    {
+      "id": "floristics",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Флористика может быть сезонной, поэтому важны актуальные даты, материалы и возможность забрать работу."
+    },
+    {
+      "id": "jewelry",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Украшения своими руками оставляем как быстрый творческий формат с понятным результатом."
+    }
+  ]
+}

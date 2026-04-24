@@ -35,6 +35,145 @@
       "id": "sup_kazanka",
       "officialUrl": "https://supmaniac.ru/",
       "notes": "Пока опираемся на официальный сайт проката: он стабильно отдает описание, заголовок и базовую картинку."
+    },
+    {
+      "id": "vnebopark",
+      "officialUrl": "https://vneboparkkzn.ru/",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/vnebopark/",
+      "notes": "Комбинируем официальный сайт парка и туристическую карточку, чтобы получить и практичную информацию, и более чистое превью для витрины."
+    },
+    {
+      "id": "kazanring",
+      "officialUrl": "https://visit-tatarstan.com/en/places/leisure/kazan_ring/",
+      "notes": "Для карточки используем туристическую страницу объекта и дополнительный материал про автоспорт в Казани, чтобы превью не зависело от сервисных страниц трассы."
+    },
+    {
+      "id": "hippodrome",
+      "officialUrl": "https://go.kzn.ru/places/kazanskii-ippodrom-net-foto",
+      "guideUrl": "https://visit-tatarstan.com/places/leisure/mezhdunarodnyj_konno-sportivnyj_kompleks_kazan/",
+      "notes": "Городской гид дает привязку к самой локации, а Visit Tatarstan — более удачное фото и описание для витрины раздела."
+    },
+    {
+      "id": "tiki_viki",
+      "officialUrl": "https://tikiviki.ru/o-nas",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/semeynyy-park-aktivnogo-otdykha-tiki-viki/",
+      "notes": "Официальный сайт нужен для практической информации, а Visit Tatarstan дает более чистую витринную карточку и фото."
+    },
+    {
+      "id": "laserland",
+      "officialUrl": "https://kazan.laser-land.ru/",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/razvlekatelnyy-tsentr-laserland/",
+      "notes": "Комбинируем официальный сайт площадки и туристическую карточку, чтобы сохранить и полезный контекст, и красивое превью."
+    },
+    {
+      "id": "pautina",
+      "guideUrl": "https://visit-tatarstan.com/en/places/leisure/verevochnyy-park-pautina/",
+      "notes": "Для верёвочного парка пока достаточно карточки Visit Tatarstan: она даёт и понятное описание, и рабочую обложку."
+    },
+    {
+      "id": "provoda",
+      "guideUrl": "https://visit-tatarstan.com/en/places/leisure/provoda/",
+      "notes": "Wake Park ProVoda пока заводим через туристическую карточку, чтобы стабильно получить витринное фото и базовый контекст."
+    },
+    {
+      "id": "bulat",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/tsentr-strelkovoy-podgotovki-bulat/",
+      "notes": "Для стрелкового центра достаточно туристической карточки: она даёт хорошее превью, заголовок и базовый контекст."
+    },
+    {
+      "id": "forsazh",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/tsentr-kartinga-forsazh/",
+      "notes": "Карточка Visit Tatarstan подходит для картинга: у неё удачное фото и понятный заголовок без лишней служебной информации."
+    },
+    {
+      "id": "electro_karting",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/electro-karting/",
+      "notes": "Используем туристическую страницу как основной витринный источник для современного indoor-картинга."
+    },
+    {
+      "id": "war_space",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/arena-virtualnoy-realnosti-war-space/",
+      "notes": "VR-арена хорошо подтягивается с Visit Tatarstan: карточка даёт и обложку, и чистое краткое описание."
+    },
+    {
+      "id": "cyberpark",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/kiberpark-arena-v-it-parke-im-b-rameeva-/",
+      "notes": "Для Cyber Park Arena берём туристическую карточку как основной источник витрины и описания."
+    },
+    {
+      "id": "soyuzmultpark",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/multimediynyy-tsentr-soyuzmultpark-/",
+      "notes": "Мультимедийный центр удобно вести через Visit Tatarstan: карточка стабильно даёт обложку и понятный заголовок."
+    },
+    {
+      "id": "pixel_quest",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/piksel-kvest-v-kazani/",
+      "notes": "Пиксель Квест добавляем как игровой indoor-формат на компанию с хорошей обложкой Visit Tatarstan."
+    },
+    {
+      "id": "les_chudes",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/interaktivnyy-park-les-chudes/",
+      "notes": "Лес Чудес закрывает мягкий семейный интерактивный сценарий для плохой погоды и отдыха с детьми."
+    },
+    {
+      "id": "artcore",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/set-kibersportivnykh-tsentrov-artcore/",
+      "notes": "Artcore добавляем как отдельный киберспортивный формат, чтобы digital-досуг не ограничивался Cyber Park Arena."
+    },
+    {
+      "id": "ak_bars_retro_cars",
+      "guideUrl": "https://visit-tatarstan.com/en/places/entertainment/vystavochnyy-kompleks-ak-bars-retro-cars/",
+      "notes": "Ak Bars Retro Cars нужен как необычный indoor-досуг для любителей техники и семейного формата."
+    },
+    {
+      "id": "water_sports_palace",
+      "guideUrl": "https://visit-tatarstan.com/en/places/leisure/dvorec_vodnyh_vidov_sporta/",
+      "notes": "Дворец водных видов спорта добавляет спортивный водный сценарий и крупную городскую инфраструктуру."
+    },
+    {
+      "id": "tennis_academy",
+      "guideUrl": "https://visit-tatarstan.com/en/places/leisure/akademiya_tennisa/",
+      "notes": "Академия тенниса добавляет полноценную спортивную активность и сценарий для гостей, которые хотят тренировки."
+    },
+    {
+      "id": "naikom_arena",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/stadion-tekhnicheskikh-vidov-sporta-naikom-arena/",
+      "notes": "Наиком Арена усиливает направление технических видов спорта и активностей для любителей скорости."
+    },
+    {
+      "id": "vr_perekhod",
+      "guideUrl": "https://visit-tatarstan.com/places/entertainment/vr-ekskursiya-perekhod-/",
+      "notes": "VR-экскурсия Переход добавляет иммерсивный формат между классической экскурсией и развлечением."
+    },
+    {
+      "id": "quests_kazan",
+      "guideUrl": "https://kazan.mir-kvestov.ru/",
+      "notes": "Квесты лучше вести через отдельный агрегатор: там видны жанры, возрастные ограничения и актуальные площадки."
+    },
+    {
+      "id": "quad_bike_rides",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%BA%D0%B0%D1%82%D0%B0%D0%BD%D0%B8%D0%B5%20%D0%BD%D0%B0%20%D0%BA%D0%B2%D0%B0%D0%B4%D1%80%D0%BE%D1%86%D0%B8%D0%BA%D0%BB%D0%B0%D1%85%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Квадроциклы зависят от сезона и конкретного организатора, поэтому основной слой — карты и ручная проверка площадок."
+    },
+    {
+      "id": "boat_rental",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%BF%D1%80%D0%BE%D0%BA%D0%B0%D1%82%20%D0%BB%D0%BE%D0%B4%D0%BE%D0%BA%20%D0%B8%20%D0%BA%D0%B0%D1%82%D0%B5%D1%80%D0%BE%D0%B2%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Прокат лодок и катеров обновляем как сезонный водный формат с проверкой погоды и точек старта."
+    },
+    {
+      "id": "bungee_jumping",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%B1%D0%B0%D0%BD%D0%B4%D0%B6%D0%B8%20%D0%B4%D0%B6%D0%B0%D0%BC%D0%BF%D0%B8%D0%BD%D0%B3%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Экстремальные форматы требуют особенно аккуратной проверки организатора, ограничений и условий безопасности."
+    },
+    {
+      "id": "kazan_flights",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%BF%D0%BE%D0%BB%D1%91%D1%82%D1%8B%20%D0%BD%D0%B0%20%D1%81%D0%B0%D0%BC%D0%BE%D0%BB%D1%91%D1%82%D0%B5%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Полёты вокруг Казани ведём через карты и организаторов, потому что расписание сильно зависит от погоды."
+    },
+    {
+      "id": "skydiving",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%BF%D1%80%D1%8B%D0%B6%D0%BA%D0%B8%20%D1%81%20%D0%BF%D0%B0%D1%80%D0%B0%D1%88%D1%8E%D1%82%D0%BE%D0%BC%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Парашютные прыжки — выездной экстремальный формат, где нужны проверка аэродрома, погоды и ограничений."
     }
   ]
 }

@@ -551,6 +551,94 @@
             "photos"
           ],
           "usage": "Резервная карта и контакты."
+        },
+        {
+          "id": "mir-kvestov-kazan",
+          "name": "Мир квестов",
+          "type": "quest_aggregator",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://kazan.mir-kvestov.ru/",
+          "fields": [
+            "title",
+            "genre",
+            "age",
+            "booking",
+            "photos"
+          ],
+          "usage": "Слой для квестов: жанры, возрастные ограничения, актуальность площадок и ссылки на запись."
+        }
+      ]
+    },
+    "masterclasses": {
+      "label": "Мастер-классы",
+      "refreshDays": 3,
+      "rawDir": "data/catalog-imports/raw/masterclasses",
+      "normalizedFile": "data/catalog-imports/normalized/masterclasses.json",
+      "photosDir": "public/miniapp/photos/masterclasses",
+      "cardFields": [
+        "title",
+        "subtitle",
+        "description",
+        "highlights",
+        "bestFor",
+        "timing",
+        "howToGet",
+        "priceLabel",
+        "mapUrl",
+        "reviewUrl",
+        "sourceUrl",
+        "photoLinks"
+      ],
+      "sources": [
+        {
+          "id": "kassir-masterclasses",
+          "name": "Kassir Казань: образование и мастер-классы",
+          "type": "ticket_catalog",
+          "priority": 1,
+          "enabled": true,
+          "url": "https://kzn.kassir.ru/obrazovanie",
+          "fields": [
+            "title",
+            "date",
+            "venue",
+            "price",
+            "photo",
+            "ticket_url"
+          ],
+          "usage": "Основной слой для датированных мастер-классов и образовательных событий."
+        },
+        {
+          "id": "yandex-maps-masterclasses",
+          "name": "Яндекс Карты",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://yandex.ru/maps/",
+          "fields": [
+            "address",
+            "hours",
+            "route",
+            "rating",
+            "reviews",
+            "photos"
+          ],
+          "usage": "Адреса, отзывы, фото студий и проверка, что площадка живая."
+        },
+        {
+          "id": "2gis-masterclasses",
+          "name": "2GIS",
+          "type": "maps",
+          "priority": 2,
+          "enabled": true,
+          "url": "https://2gis.ru/kazan",
+          "fields": [
+            "address",
+            "hours",
+            "contacts",
+            "photos"
+          ],
+          "usage": "Резервный слой для контактов и карточек студий."
         }
       ]
     },

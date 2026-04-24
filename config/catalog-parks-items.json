@@ -30,6 +30,126 @@
       "id": "fuks",
       "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/fuksovskij_sad/",
       "notes": "Для Фуксовского сада уже есть рабочая карточка Visit Tatarstan, поэтому отдельный городской news-url пока не нужен."
+    },
+    {
+      "id": "millennium",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/park-tysyacheletiya/",
+      "notes": "Парк Тысячелетия переводим на Visit Tatarstan, чтобы карточка получала понятную обложку и стабильный туристический контекст."
+    },
+    {
+      "id": "wings_soviets",
+      "guideUrl": "https://park.tatar/open-park-wings",
+      "notes": "Для Крыльев Советов используем park.tatar как рабочий городской источник с нормальной обложкой."
+    },
+    {
+      "id": "lebyazhye",
+      "guideUrl": "https://visit-tatarstan.com/en/places/camping/plyazh-ozero-bolshoe-lebyazhe/",
+      "notes": "Лебяжье лучше ведётся через Visit Tatarstan: карточка даёт и воду, и природу, и рабочее витринное фото."
+    },
+    {
+      "id": "kaban_embankment",
+      "guideUrl": "https://visit-tatarstan.com/en/places/parki-i-mesta-dlya-progulok/naberezhnaya-ozera-kaban/",
+      "notes": "Набережная Кабана нужна в парках как центральная прогулочная карточка с водой, хорошей обложкой и сильным вечерним сценарием."
+    },
+    {
+      "id": "russian_switzerland",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/russko-nemetskaya-shveytsariya/",
+      "notes": "Русско-Немецкую Швейцарию добавляем как более природную и рельефную зелёную точку, чтобы раздел парков не замыкался только на центральных аллеях."
+    },
+    {
+      "id": "chaikovye_lakes",
+      "guideUrl": "https://park.tatar/chaikovie",
+      "notes": "Парк у Чайковых озёр ведём через официальный park.tatar: там есть нормальная витринная обложка и чистая карточка районного парка."
+    },
+    {
+      "id": "lyadsky",
+      "guideUrl": "https://visit-tatarstan.com/places/sightseeings/lyadskoj_sad/",
+      "notes": "Лядской сад добавляем как тихую центральную зелёную точку: карточка Visit Tatarstan даёт рабочую обложку и хорошую базовую витрину."
+    },
+    {
+      "id": "dubrava",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/eko-park-dubrava/",
+      "notes": "Эко-парк Дубрава берем через Visit Tatarstan: у страницы есть отдельная карточка, описание и сильная природная обложка."
+    },
+    {
+      "id": "white_flowers_boulevard",
+      "guideUrl": "https://park.tatar/abs",
+      "notes": "Бульвар «Белые Цветы» ведем через park.tatar как официальный городской источник с нормальной витринной фотографией."
+    },
+    {
+      "id": "festival_boulevard",
+      "guideUrl": "https://park.tatar/fest_blvd",
+      "notes": "Фестивальный бульвар добавляем через park.tatar: источник хорошо подходит для районных благоустроенных пространств."
+    },
+    {
+      "id": "fuchika_boulevard",
+      "guideUrl": "https://park.tatar/kazan_fuchica",
+      "notes": "Бульвар на улице Фучика ведем через park.tatar, чтобы расширить раздел парков за пределы только центра."
+    },
+    {
+      "id": "salavat_park",
+      "guideUrl": "https://park.tatar/park_salavat",
+      "notes": "Парк в Салават Купере подключаем через park.tatar как современное районное пространство для семейного отдыха."
+    },
+    {
+      "id": "elmay",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/detskiy-park-elmay/",
+      "notes": "Елмай добавляем как современный семейный парк Казани с рабочей карточкой и живой обложкой Visit Tatarstan."
+    },
+    {
+      "id": "sosnovaya_roshcha",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/park-sosnovaya-roshcha-park-dk-khimikov/",
+      "notes": "Сосновая роща нужна для более локального зелёного сценария у ДК Химиков, не только центральных парков."
+    },
+    {
+      "id": "kaleidoscope",
+      "guideUrl": "https://park.tatar/new_syrtlanova_park",
+      "notes": "Калейдоскоп подключаем через park.tatar как обновлённый районный парк с хорошей обложкой."
+    },
+    {
+      "id": "kontinent",
+      "guideUrl": "https://park.tatar/kontinent",
+      "notes": "Континент добавляем как детский парк в Ново-Савиновском районе, чтобы усилить семейные районные сценарии."
+    },
+    {
+      "id": "aksenova_square",
+      "guideUrl": "https://park.tatar/aksenova",
+      "notes": "Сквер Аксенова добавляем как камерную центральную точку с литературным контекстом и рабочей обложкой."
+    },
+    {
+      "id": "tinchurina",
+      "guideUrl": "https://park.tatar/tinchurina-first",
+      "notes": "Парк Тинчурина добавляем через материал об обновлении первой очереди: источник даёт актуальный контекст и фото."
+    },
+    {
+      "id": "chishmale",
+      "guideUrl": "https://park.tatar/chishmale",
+      "notes": "Сквер Чишмяле добавляем как районную зелёную точку с отдельной страницей park.tatar и рабочей обложкой."
+    },
+    {
+      "id": "glory_square",
+      "guideUrl": "https://park.tatar/glory-square",
+      "notes": "Сквер Славы добавляем для более спокойного мемориального сценария в разделе парков."
+    },
+    {
+      "id": "lokomotiv_beach",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%9F%D0%BB%D1%8F%D0%B6%20%D0%9B%D0%BE%D0%BA%D0%BE%D0%BC%D0%BE%D1%82%D0%B8%D0%B2%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Пляж Локомотив добавляем как городской летний сценарий у воды с обязательной проверкой актуального состояния."
+    },
+    {
+      "id": "nizhnee_zarechye_beach",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%9F%D0%BB%D1%8F%D0%B6%20%D0%9D%D0%B8%D0%B6%D0%BD%D0%B5%D0%B5%20%D0%97%D0%B0%D1%80%D0%B5%D1%87%D1%8C%D0%B5%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Нижнее Заречье нужно как летняя пляжная точка у воды внутри города."
+    },
+    {
+      "id": "glubokoe_lake",
+      "guideUrl": "https://yandex.ru/maps/?mode=search&text=%D0%9E%D0%B7%D0%B5%D1%80%D0%BE%20%D0%93%D0%BB%D1%83%D0%B1%D0%BE%D0%BA%D0%BE%D0%B5%20%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C",
+      "notes": "Озеро Глубокое добавляем как природную пляжно-прогулочную точку с проверкой инфраструктуры перед визитом."
+    },
+    {
+      "id": "lebyazhye_beach",
+      "guideUrl": "https://visit-tatarstan.com/places/parki-i-mesta-dlya-progulok/ozero-lebyazhye/",
+      "notes": "Пляжную зону Лебяжьего ведём рядом с уже существующей карточкой озера, но как отдельный летний пляжный сценарий."
     }
   ]
 }

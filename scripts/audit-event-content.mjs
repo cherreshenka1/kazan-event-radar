@@ -612,7 +612,13 @@ function buildShortEventTitle(value) {
 function trimText(value, maxLength) {
   const normalized = normalizeText(value);
   if (!maxLength || normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+  const slice = normalized.slice(0, Math.max(0, maxLength - 1)).trim();
+  const sentenceEnd = Math.max(slice.lastIndexOf("."), slice.lastIndexOf("!"), slice.lastIndexOf("?"));
+  if (sentenceEnd >= Math.floor(maxLength * 0.45)) return slice.slice(0, sentenceEnd + 1).trim();
+
+  const wordBoundary = slice.lastIndexOf(" ");
+  const compact = (wordBoundary >= Math.floor(maxLength * 0.45) ? slice.slice(0, wordBoundary) : slice).trim();
+  return /[.!?]$/u.test(compact) ? compact : `${compact}.`;
 }
 
 function normalizeText(value) {

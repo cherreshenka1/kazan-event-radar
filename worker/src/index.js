@@ -2965,8 +2965,13 @@ function buildChannelMoodParagraph(item) {
 }
 
 function buildChannelPhotoUrl(item, env) {
-  const generatedPreviewUrl = buildGeneratedChannelPhotoUrl(item, env);
-  if (generatedPreviewUrl) return generatedPreviewUrl;
+  const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
+  if (directPhotoUrl) return directPhotoUrl;
+
+  if (allowGeneratedChannelPreviews(env)) {
+    const generatedPreviewUrl = buildGeneratedChannelPhotoUrl(item, env);
+    if (generatedPreviewUrl) return generatedPreviewUrl;
+  }
 
   const assetPath = channelImagePathForKind(item.kind);
 
@@ -4820,7 +4825,36 @@ function escapeRegExp(value) {
 function trim(value, maxLength) {
   const normalized = normalizeText(value);
   if (!maxLength || normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+  const slice = normalized.slice(0, Math.max(0, maxLength - 1)).trim();
+  const sentenceEnd = findSafeSentenceEnd(slice);
+  if (sentenceEnd >= Math.floor(maxLength * 0.45)) return slice.slice(0, sentenceEnd + 1).trim();
+
+  const wordBoundary = slice.lastIndexOf(" ");
+  const compact = finalizeTrimmedText(wordBoundary >= Math.floor(maxLength * 0.45) ? slice.slice(0, wordBoundary) : slice);
+  return /[.!?]$/u.test(compact) ? compact : `${compact}.`;
+}
+
+function findSafeSentenceEnd(value) {
+  const text = String(value || "");
+  const endings = [...text.matchAll(/[.!?]/gu)]
+    .map((matchItem) => matchItem.index ?? -1)
+    .filter((index) => index >= 0)
+    .filter((index) => !isLikelyAbbreviationEnding(text, index));
+  return endings.length ? endings[endings.length - 1] : -1;
+}
+
+function isLikelyAbbreviationEnding(text, index) {
+  const before = text.slice(Math.max(0, index - 12), index + 1).toLowerCase();
+  return /\b(?:г|им|ул|д|стр|пр|респ|пос|с)\.$/u.test(before);
+}
+
+function finalizeTrimmedText(value) {
+  return String(value || "")
+    .replace(/\s*\([^)]*$/u, "")
+    .replace(/\s+[–—-]\s*[^–—-]*$/u, "")
+    .replace(/\s+\/\s*[^/]*$/u, "")
+    .replace(/\b(?:г|им|ул|д|стр|пр|респ|пос|с)\.$/iu, "")
+    .trim();
 }
 
 function ensureSentence(value) {
