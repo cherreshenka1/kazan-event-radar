@@ -2311,6 +2311,9 @@ async function hydrateDraftForSend(env, draft) {
     title: item.title || draft.title,
     text: formatChannelPost(item),
     url: item.url || draft.url,
+    imageUrl: item.imageUrl || draft.imageUrl || "",
+    externalPreviewUrl: item.externalPreviewUrl || draft.externalPreviewUrl || "",
+    photoLinks: Array.isArray(item.photoLinks) ? item.photoLinks : draft.photoLinks,
     photoUrl: buildChannelPhotoUrl(item, env) || draft.photoUrl,
     photoKey: buildDraftPhotoIdentity(item) || draft.photoKey || ""
   };
@@ -2492,9 +2495,12 @@ function scoreDraftCandidate(item, env, now = new Date()) {
   if (isFestivalEventItem(item)) score += 10;
   if (extractSafeEventHighlight(item)) score += 16;
 
+  const cleanImageUrl = firstCleanChannelImageUrl(item);
   const imageUrl = firstChannelImageUrl(item);
-  if (imageUrl) {
-    score += 34;
+  if (cleanImageUrl) {
+    score += 46;
+  } else if (imageUrl) {
+    score += 12;
   } else {
     score -= 14;
   }
@@ -2867,22 +2873,22 @@ function buildChannelPostParagraphs(item) {
     return true;
   };
 
-  pushParagraph(buildChannelLeadParagraph(item), { skipSanitize: true, maxLength: 170 });
-  pushParagraph(buildChannelSupportParagraph(item), { skipSanitize: true, maxLength: 220 });
+  pushParagraph(buildChannelLeadParagraph(item), { skipSanitize: true, maxLength: 260 });
+  pushParagraph(buildChannelSupportParagraph(item), { skipSanitize: true, maxLength: 170 });
 
   const fallbackText = cleanEventSummary(item.rawSummary || item.summary || item.shortSummary || item.subtitle || "");
-  if (paragraphs.length < 3 && fallbackText) {
+  if (paragraphs.length < 2 && fallbackText) {
     for (const part of splitDraftParagraphs(fallbackText)) {
-      if (pushParagraph(part, { maxLength: 220 }) && paragraphs.length >= 3) break;
+      if (pushParagraph(part, { maxLength: 220 }) && paragraphs.length >= 2) break;
     }
   }
 
   const moodLine = buildChannelMoodParagraph(item);
-  if (paragraphs.length < 4) {
+  if (paragraphs.length < 2) {
     pushParagraph(moodLine, { skipSanitize: true, maxLength: 180 });
   }
 
-  return paragraphs.slice(0, 4);
+  return paragraphs.slice(0, 2);
 }
 
 function buildChannelLeadParagraph(item) {
@@ -2978,15 +2984,14 @@ function buildChannelPhotoUrl(item, env) {
 async function resolveChannelPhotoCandidates(item, env) {
   const candidates = [];
 
-  candidates.push(...buildGeneratedChannelPhotoUrls(item, env));
-
   const sourceImagesEnabled = !["0", "false", "off"].includes(String(env.CHANNEL_ALLOW_SOURCE_IMAGES || "1").trim().toLowerCase())
     && String(env.CHANNEL_DISABLE_SOURCE_IMAGES || "").trim() !== "1";
   if (sourceImagesEnabled) {
-    const directPhotoUrl = buildChannelDirectPhotoUrl(item, env);
-    if (directPhotoUrl) {
-      candidates.push(directPhotoUrl);
-    }
+    candidates.push(...buildChannelDirectPhotoUrls(item, env));
+  }
+
+  if (allowGeneratedChannelPreviews(env)) {
+    candidates.push(...buildGeneratedChannelPhotoUrls(item, env));
   }
 
   const fallbackPhotoUrl = buildFallbackChannelPhotoUrl(item, env);
@@ -3032,7 +3037,74 @@ function buildFallbackChannelPhotoUrl(item, env) {
 }
 
 function buildChannelDirectPhotoUrl(item, env) {
-  const directUrl = firstChannelImageUrl(item);
+  return buildChannelDirectPhotoUrls(item, env)[0] || "";
+}
+
+function buildChannelDirectPhotoUrls(item, env) {
+  const directUrls = channelImageCandidates(item)
+    .filter((url) => isCleanChannelPhotoUrl(url));
+  if (!directUrls.length) return [];
+
+  return directUrls.map((directUrl) => {
+    const apiBase = normalizeBaseUrl(env.PUBLIC_API_URL || "https://kazan-event-radar-api.4ereshny333.workers.dev");
+    if (!apiBase) return directUrl;
+
+    try {
+      return new URL(`api/image?url=${encodeURIComponent(directUrl)}`, apiBase).toString();
+    } catch {
+      return directUrl;
+    }
+  });
+}
+
+function allowGeneratedChannelPreviews(env) {
+  return ["1", "true", "on"].includes(String(env.CHANNEL_ALLOW_GENERATED_PREVIEWS || "").trim().toLowerCase());
+}
+
+function isCleanChannelPhotoUrl(value) {
+  const url = String(value || "").trim();
+  if (!/^https?:\/\//i.test(url)) return false;
+
+  const normalized = decodeURIComponent(url).toLowerCase();
+  const blockedMarkers = [
+    "wmark",
+    "watermark",
+    "tickets",
+    "ticket",
+    "logo",
+    "banner",
+    "poster",
+    "announce",
+    "1200x628_wmark",
+    "generated/events",
+    "/brand/"
+  ];
+
+  return !blockedMarkers.some((marker) => normalized.includes(marker));
+}
+
+function firstChannelImageUrl(item) {
+  return channelImageCandidates(item)[0] || "";
+}
+
+function channelImageCandidates(item) {
+  const candidates = [
+    item?.imageUrl,
+    item?.photoUrl,
+    ...(Array.isArray(item?.photoLinks) ? item.photoLinks.map((link) => link?.url) : [])
+  ];
+
+  return [...new Set(candidates
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value)))];
+}
+
+function firstCleanChannelImageUrl(item) {
+  return channelImageCandidates(item).find((value) => isCleanChannelPhotoUrl(value)) || "";
+}
+
+function buildChannelDirectPhotoUrlLegacy(item, env) {
+  const directUrl = firstCleanChannelImageUrl(item) || firstChannelImageUrl(item);
   if (!directUrl) return "";
 
   const apiBase = normalizeBaseUrl(env.PUBLIC_API_URL || "https://kazan-event-radar-api.4ereshny333.workers.dev");
@@ -3043,16 +3115,6 @@ function buildChannelDirectPhotoUrl(item, env) {
   } catch {
     return directUrl;
   }
-}
-
-function firstChannelImageUrl(item) {
-  const candidates = [
-    item?.imageUrl,
-    item?.photoUrl,
-    ...(Array.isArray(item?.photoLinks) ? item.photoLinks.map((link) => link?.url) : [])
-  ];
-
-  return candidates.find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
 }
 
 function generatedEventPreviewPath(item) {
