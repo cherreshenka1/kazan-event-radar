@@ -200,11 +200,13 @@ a {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(235, 245, 255, 0.34)),
+    rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 12px 32px rgba(31, 58, 96, 0.12);
 }
 
 :root[data-theme="dark"] .topbar-actions {
@@ -214,8 +216,8 @@ a {
 
 .topbar-button {
   border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 999px;
-  padding: 9px 13px;
+  border-radius: 18px;
+  padding: 9px 13px 8px;
   background: rgba(255, 255, 255, 0.62);
   color: var(--text);
   cursor: pointer;
@@ -224,9 +226,29 @@ a {
   transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
 }
 
+.topbar-button span,
+.topbar-button small {
+  display: block;
+  line-height: 1.08;
+}
+
+.topbar-button span {
+  font-weight: 650;
+}
+
+.topbar-button small {
+  margin-top: 3px;
+  color: rgba(53, 80, 112, 0.74);
+  font-size: 0.7rem;
+}
+
 :root[data-theme="dark"] .topbar-button {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(231, 237, 246, 0.08);
+}
+
+:root[data-theme="dark"] .topbar-button small {
+  color: rgba(231, 237, 246, 0.64);
 }
 
 :root[data-theme="dark"] .tab,
@@ -250,6 +272,36 @@ a {
   border-color: transparent;
   font-weight: 650;
   box-shadow: 0 10px 26px rgba(34, 104, 255, 0.25);
+}
+
+.topbar-button.is-active small,
+.topbar-button-pro small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.topbar-button-pro {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #172a46, #245dff 54%, #25d98b);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.topbar-button-pro::before {
+  content: "";
+  position: absolute;
+  inset: -50% auto auto -20%;
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3), transparent 62%);
+  animation: soft-pulse 4.8s ease-in-out infinite;
+}
+
+.topbar-button-pro span,
+.topbar-button-pro small {
+  position: relative;
+  z-index: 1;
 }
 
 :root[data-theme="dark"] .search-field input,
@@ -1054,6 +1106,10 @@ h1 {
   .topbar-button {
     padding: 8px 10px;
     font-size: 0.92rem;
+  }
+
+  .topbar-button small {
+    display: none;
   }
 
   .hero {

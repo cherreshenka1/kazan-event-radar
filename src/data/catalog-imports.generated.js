@@ -8341,7 +8341,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8412,7 +8412,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8483,7 +8483,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8554,7 +8554,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8625,7 +8625,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8696,7 +8696,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [
@@ -8767,7 +8767,7 @@ export const CATALOG_IMPORT_OVERRIDES = {
         "externalTitle": "Необходимо подтверждение",
         "externalSummary": "",
         "importMeta": {
-          "generatedAt": "2026-04-24T10:57:12.602Z",
+          "generatedAt": "2026-04-24T14:21:27.676Z",
           "sourceSeed": "src/data/catalog.js",
           "sourceManifest": "config/catalog-masterclasses-items.json",
           "sourcePriority": [

@@ -1107,6 +1107,7 @@ function buildProDayFocus(dayPlan) {
   if (state.proInterests.includes("food")) extras.push("сильная гастропауза");
   if (state.proInterests.includes("city")) extras.push("понятный городской ритм");
   if (state.proInterests.includes("active")) extras.push("больше движения");
+  if (state.proInterests.includes("masterclasses")) extras.push("творческий формат");
   if (state.proInterests.includes("roadtrip")) extras.push("пространство для выезда");
 
   if (!extras.length) return base;
@@ -1131,15 +1132,16 @@ function scoreProItem(item) {
   if (state.proInterests.includes("food") && type === "food") score += 5;
   if (state.proInterests.includes("city") && ["excursions", "sights", "parks", "routes"].includes(type)) score += 4;
   if (state.proInterests.includes("active") && type === "active") score += 5;
+  if (state.proInterests.includes("masterclasses") && type === "masterclasses") score += 5;
   if (state.proInterests.includes("roadtrip") && type === "roadtrip") score += 5;
 
   if (state.proPace === "relaxed") {
-    if (["food", "parks", "sights", "excursions", "hotels"].includes(type)) score += 2;
+    if (["food", "parks", "sights", "excursions", "hotels", "masterclasses"].includes(type)) score += 2;
     if (["active"].includes(type)) score -= 1;
   }
 
   if (state.proPace === "intense") {
-    if (["event", "active", "roadtrip", "routes"].includes(type)) score += 2;
+    if (["event", "active", "masterclasses", "roadtrip", "routes"].includes(type)) score += 2;
     if (type === "hotels") score -= 1;
   }
 
@@ -1199,7 +1201,7 @@ function proPreferenceEffectText() {
   if (state.proPace === "intense") {
     return "Программа станет плотнее: в дни войдёт больше активных точек и вечерних сценариев.";
   }
-  return "Программа держит баланс между прогулками, событиями, едой и логистикой.";
+  return "Программа держит баланс между прогулками, событиями, едой, мастер-классами и логистикой.";
 }
 
 function proPaymentsCard(payments, donation, contact) {
@@ -1287,7 +1289,7 @@ function proFavoriteButton(item) {
     return actionButton(favoriteToggleLabel(routeFavoriteId(rawId)), "favorite-route", { id: rawId }, isFavorite(routeFavoriteId(rawId)) ? "primary" : "");
   }
 
-  if (["excursions", "sights", "parks", "hotels", "food", "active", "roadtrip"].includes(item.type)) {
+  if (["excursions", "sights", "parks", "hotels", "food", "active", "masterclasses", "roadtrip"].includes(item.type)) {
     const rawId = parseProRawId(item.id);
     if (!rawId) return "";
     const favoriteId = catalogFavoriteId(item.type, rawId);
@@ -3385,7 +3387,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = normalized;
   window.localStorage?.setItem(THEME_STORAGE_KEY, normalized);
   if (themeToggleNode) {
-    themeToggleNode.textContent = normalized === "dark" ? "Светлая" : "Тёмная";
+    themeToggleNode.innerHTML = `<span>${normalized === "dark" ? "Светлая" : "Тёмная"}</span><small>тема</small>`;
     themeToggleNode.setAttribute("aria-label", normalized === "dark" ? "Включить светлую тему" : "Включить тёмную тему");
   }
 }

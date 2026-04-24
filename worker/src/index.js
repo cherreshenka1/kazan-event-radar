@@ -20,7 +20,7 @@ const DEFAULT_STALE_EVENTS_HOURS = 18;
 const DEFAULT_STALE_CATALOG_HOURS = 72;
 const DEFAULT_PRO_FEATURES = [
   "План поездки на 1-7 дней",
-  "Приоритет по событиям, местам и еде",
+  "Приоритет по событиям, местам, еде и мастер-классам",
   "Готовые дневные сценарии с логистикой",
   "Варианты маршрута на авто и без машины",
   "Рекомендации по темпу поездки и паузам"
@@ -3962,6 +3962,7 @@ function buildProDayBlueprints(eventPool = []) {
   const food = pickCatalogRecommendations("food", 5);
   const routes = pickCatalogRecommendations("routes", 3);
   const active = pickCatalogRecommendations("active", 3);
+  const masterclasses = pickCatalogRecommendations("masterclasses", 3);
   const roadtrip = pickCatalogRecommendations("roadtrip", 3);
 
   return [
@@ -3994,7 +3995,7 @@ function buildProDayBlueprints(eventPool = []) {
       items: [
         active[0],
         food[2] || food[0],
-        routes[1] || routes[0],
+        masterclasses[0] || routes[1] || routes[0],
         eventPool[2] || active[1]
       ].filter(Boolean)
     },
@@ -4006,7 +4007,7 @@ function buildProDayBlueprints(eventPool = []) {
         sights[1] || sights[0],
         parks[1] || parks[0],
         food[3] || food[1] || food[0],
-        eventPool[3] || excursions[2] || sights[2]
+        masterclasses[1] || eventPool[3] || excursions[2] || sights[2]
       ].filter(Boolean)
     },
     {
@@ -4027,7 +4028,7 @@ function buildProDayBlueprints(eventPool = []) {
       items: [
         routes[2] || routes[0],
         food[0],
-        active[2] || parks[0],
+        masterclasses[2] || active[2] || parks[0],
         eventPool[5] || sights[3] || excursions[0]
       ].filter(Boolean)
     },

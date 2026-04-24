@@ -240,7 +240,7 @@
     },
     "hotels": {
       "label": "Отели",
-      "refreshDays": 3,
+      "refreshDays": 7,
       "rawDir": "data/catalog-imports/raw/hotels",
       "normalizedFile": "data/catalog-imports/normalized/hotels.json",
       "photosDir": "public/miniapp/photos/hotels",
@@ -332,7 +332,7 @@
     },
     "excursions": {
       "label": "Экскурсии",
-      "refreshDays": 1,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/excursions",
       "normalizedFile": "data/catalog-imports/normalized/excursions.json",
       "photosDir": "public/miniapp/photos/excursions",
@@ -405,7 +405,7 @@
     },
     "routes": {
       "label": "Пешие маршруты",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/routes",
       "normalizedFile": "data/catalog-imports/normalized/routes.json",
       "photosDir": "public/miniapp/photos/routes",
@@ -644,7 +644,7 @@
     },
     "roadtrip": {
       "label": "На машине",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/roadtrip",
       "normalizedFile": "data/catalog-imports/normalized/roadtrip.json",
       "photosDir": "public/miniapp/photos/roadtrip",
