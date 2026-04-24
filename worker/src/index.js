@@ -4940,9 +4940,13 @@ function corsResponse(payload, status, env, extraHeaders = {}, contentType = "te
   const headers = new Headers({
     "access-control-allow-origin": miniAppOrigin || "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-telegram-init-data",
+    "access-control-allow-headers": "content-type,authorization,x-telegram-init-data,x-automation-token,x-internal-token",
     "access-control-max-age": "86400",
     "content-type": contentType,
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "permissions-policy": "geolocation=(), microphone=(), camera=()",
     ...extraHeaders
   });
   return new Response(payload, { status, headers });
@@ -4990,7 +4994,8 @@ async function proxyExternalImage(rawUrl, env) {
   const headers = new Headers({
     "content-type": upstream.headers.get("content-type") || "image/jpeg",
     "cache-control": "public, max-age=86400, s-maxage=86400",
-    "access-control-allow-origin": safeOrigin(env?.MINI_APP_URL) || "*"
+    "access-control-allow-origin": safeOrigin(env?.MINI_APP_URL) || "*",
+    "x-content-type-options": "nosniff"
   });
 
   const contentLength = upstream.headers.get("content-length");
