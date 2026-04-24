@@ -1430,6 +1430,7 @@ function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelTe
           ${panelTitle ? `<h3>${escapeHtml(panelTitle)}</h3>` : ""}
           ${panelText ? `<p class="summary-short">${escapeHtml(panelText)}</p>` : ""}
           ${panelBadges.length ? `<div class="meta-badges explorer-badges">${panelBadges.map((value) => badge(value)).join("")}</div>` : ""}
+          <p class="explorer-panel-hint">Откройте карточку ниже, чтобы увидеть детали, фото, логистику и добавить место в план.</p>
         </article>
         <div class="list-grid selector-list">${cardsHtml}</div>
       </div>
@@ -1442,6 +1443,7 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
     const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
     const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
     const summary = catalogPreviewSummary(sectionId, item);
+    const meta = catalogPreviewMeta(sectionId, item);
     const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
     const previewImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
   
@@ -1453,7 +1455,7 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
           <span class="selector-state">${isActive ? "Открыто" : catalogPreviewState(sectionId)}</span>
         </div>
         <div class="selector-card-title">${escapeHtml(item.title)}</div>
-        ${item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : ""}
+        ${meta ? `<div class="selector-meta-line">${escapeHtml(meta)}</div>` : ""}
         ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
         ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
     </button>
@@ -1487,12 +1489,7 @@ function placeDetailCard(sectionId, item) {
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
       ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
-    actions([
-      actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
-      item.mapUrl ? actionButton("Маршрут на карте", "open", { url: item.mapUrl }, "primary") : "",
-      item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
-      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
-    ])
+    catalogDetailActions(sectionId, item, { mapLabel: "Маршрут на карте" })
     ], "active");
 }
 
@@ -1523,11 +1520,7 @@ function activeDetailCard(item) {
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
       ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
-    actions([
-      actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
-      item.mapUrl ? actionButton("Открыть карту", "open", { url: item.mapUrl }, "primary") : "",
-      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
-    ])
+    catalogDetailActions(sectionId, item, { mapLabel: "Открыть карту" })
   ], "active");
 }
 
@@ -1561,11 +1554,7 @@ function roadtripDetailCard(item) {
       ${item.howToGet ? factBlock("Логистика", item.howToGet) : ""}
       ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
-    actions([
-      actionButton(favoriteToggleLabel(catalogFavoriteId(sectionId, item.id)), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(catalogFavoriteId(sectionId, item.id)) ? "primary" : ""),
-      item.mapUrl ? actionButton("Маршрут на карте", "open", { url: item.mapUrl }, "primary") : "",
-      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
-    ])
+    catalogDetailActions(sectionId, item, { mapLabel: "Маршрут на карте" })
   ], "active");
 }
 
@@ -1594,13 +1583,51 @@ function foodDetailCard(item) {
       ${item.features?.length ? factListBlock("Главные фишки", item.features) : ""}
       ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
     </div>`,
-    actions([
-      actionButton(favoriteToggleLabel(catalogFavoriteId("food", item.id)), "favorite-catalog", { section: "food", id: item.id }, isFavorite(catalogFavoriteId("food", item.id)) ? "primary" : ""),
-      item.mapUrl ? actionButton("Открыть карту", "open", { url: item.mapUrl }, "primary") : "",
-      item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
-      item.sourceUrl ? actionButton("Источник", "open", { url: item.sourceUrl }) : ""
-    ])
+    catalogDetailActions("food", item, { mapLabel: "Открыть карту" })
   ], "active");
+}
+
+function masterclassDetailCard(item) {
+  const sectionId = "masterclasses";
+  const fallbackImage = SECTION_VISUALS[sectionId];
+  const primaryImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const detailBadges = buildCatalogDetailBadges(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+
+  return card([
+    primaryImage ? mediaImage(primaryImage, item.title, "", fallbackImage) : "",
+    `<div class="detail-topline">
+      <div class="preview-label">${escapeHtml(sectionLabel(sectionId))}</div>
+      ${detailBadges.length ? `<div class="meta-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : ""}
+    </div>`,
+    `<h2>${escapeHtml(item.title)}</h2>`,
+    item.subtitle ? `<div class="meta">${escapeHtml(item.subtitle)}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(item.description),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Что получится", item.highlights) : ""}
+      ${item.features?.length ? factListBlock("Формат", item.features) : ""}
+      ${item.bestFor ? factBlock("Кому подойдёт", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше записываться", item.timing) : ""}
+      ${item.foodNearby ? factBlock("Где сделать паузу", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Открыть карту", sourceLabel: "Запись / источник" })
+  ], "active");
+}
+
+function catalogDetailActions(sectionId, item, options = {}) {
+  const favoriteId = catalogFavoriteId(sectionId, item.id);
+  const mapLabel = options.mapLabel || "Открыть карту";
+  const sourceLabel = options.sourceLabel || "Источник";
+  return actions([
+    actionButton(favoriteToggleLabel(favoriteId), "favorite-catalog", { section: sectionId, id: item.id }, isFavorite(favoriteId) ? "primary" : ""),
+    item.mapUrl ? actionButton(mapLabel, "open", { url: item.mapUrl }, "primary") : "",
+    item.reviewUrl ? actionButton(item.reviewSource ? `Отзывы: ${item.reviewSource}` : "Отзывы", "open", { url: item.reviewUrl }) : "",
+    item.sourceUrl ? actionButton(sourceLabel, "open", { url: item.sourceUrl }) : ""
+  ]);
 }
 
 function detailQuickGrid(items) {
@@ -1623,6 +1650,18 @@ function buildCatalogCollectionText(sectionId, selected) {
       : "Выберите направление, чтобы увидеть, зачем туда ехать и как лучше строить выезд.";
   }
 
+  if (sectionId === "active") {
+    return selected
+      ? `Сейчас открыт сценарий ${selected.title}: внутри есть формат отдыха, логистика, сильные стороны и быстрые действия.`
+      : "Выберите формат активности, чтобы сравнить, где будет больше эмоций, движения или семейного отдыха.";
+  }
+
+  if (sectionId === "masterclasses") {
+    return selected
+      ? `Сейчас открыт мастер-класс ${selected.title}: внутри есть формат, результат, запись и понятные ориентиры по визиту.`
+      : "Выберите мастер-класс, чтобы понять, что получится сделать, кому подойдёт формат и где записаться.";
+  }
+
   return selected
     ? `Сейчас открыта карточка ${selected.title}: внутри только главное — фото, сильные стороны, логистика и полезные ориентиры.`
     : "Выберите место, чтобы открыть краткий, но полезный гид без лишнего текста.";
@@ -1637,6 +1676,8 @@ function buildCatalogCollectionBadges(sectionId, items, selected, totalCount = i
   if (photoCount) badges.push(`${photoCount} фото`);
   if (selected?.mapUrl) badges.push(sectionId === "food" ? "Есть карта" : "Есть маршрут");
   if (sectionId === "food" && selected?.reviewUrl) badges.push("Есть отзывы");
+  if (sectionId === "active") badges.push("Для компании и семьи");
+  if (sectionId === "masterclasses") badges.push("Можно забрать результат");
   if (sectionId === "roadtrip") badges.push("На авто удобнее");
 
   return badges.slice(0, 4);
@@ -1655,6 +1696,8 @@ function buildCatalogSectionStats(sectionId, items, selected, totalCount = items
   if (photoCount) stats.push(`${photoCount} фото`);
   if (selected?.reviewUrl) stats.push("Есть отзывы");
   if (selected?.mapUrl) stats.push(sectionId === "food" ? "Карта под рукой" : "Маршрут под рукой");
+  if (sectionId === "masterclasses" && selected?.sourceUrl) stats.push("Есть запись");
+  if (sectionId === "active" && selected?.foodNearby) stats.push("Есть пауза");
 
   return stats.slice(0, 4);
 }
@@ -1678,6 +1721,15 @@ function buildCatalogPreviewBadges(sectionId, item) {
     ].filter(Boolean);
   }
 
+  if (sectionId === "masterclasses") {
+    return [
+      item.highlights?.[0] || item.features?.[0] || "",
+      item.timing ? "Нужна запись" : "",
+      item.bestFor ? trim(item.bestFor, 28) : "",
+      item.mapUrl ? "Карта" : ""
+    ].filter(Boolean);
+  }
+
   if (sectionId === "roadtrip") {
     return [
       item.highlights?.[0] || "",
@@ -1698,6 +1750,7 @@ function buildCatalogPreviewBadges(sectionId, item) {
 function catalogPreviewLabel(sectionId) {
   return {
     active: "Сценарий отдыха",
+    masterclasses: "Творческий формат",
     roadtrip: "Выезд за город",
     food: "Где поесть",
     places: "Городской гид"
@@ -1707,6 +1760,7 @@ function catalogPreviewLabel(sectionId) {
 function catalogPreviewState(sectionId) {
   return {
     active: "Выбрать",
+    masterclasses: "Записаться",
     roadtrip: "Маршрут",
     food: "Смотреть",
     places: "Смотреть"
@@ -1722,11 +1776,35 @@ function catalogPreviewSummary(sectionId, item) {
     return trim(item.bestFor || item.highlights?.[0] || item.features?.[0] || item.description || item.subtitle || item.title, 140);
   }
 
+  if (sectionId === "masterclasses") {
+    return trim(item.bestFor || item.highlights?.[0] || item.features?.[0] || item.description || item.subtitle || item.title, 140);
+  }
+
   if (sectionId === "roadtrip") {
     return trim(item.bestFor || item.timing || item.howToGet || item.description || item.subtitle || item.title, 140);
   }
 
   return trim(item.description || item.reviewSummary || item.cuisine || item.subtitle || item.title, 140);
+}
+
+function catalogPreviewMeta(sectionId, item) {
+  if (sectionId === "food") {
+    return [item.cuisine, item.reviewSource ? `отзывы: ${item.reviewSource}` : "", item.subtitle].filter(Boolean).slice(0, 2).join(" · ");
+  }
+
+  if (sectionId === "active") {
+    return [item.subtitle, item.timing, item.foodNearby ? "есть где отдохнуть" : ""].filter(Boolean).slice(0, 2).join(" · ");
+  }
+
+  if (sectionId === "masterclasses") {
+    return [item.subtitle, item.timing, item.sourceUrl ? "запись по ссылке" : ""].filter(Boolean).slice(0, 2).join(" · ");
+  }
+
+  if (sectionId === "roadtrip") {
+    return [item.subtitle, item.timing, hasRoadtripNoCarOption(item) ? "есть вариант без авто" : "лучше на машине"].filter(Boolean).slice(0, 2).join(" · ");
+  }
+
+  return [item.subtitle, item.timing, item.foodNearby ? "рядом есть еда" : ""].filter(Boolean).slice(0, 2).join(" · ");
 }
 
 function buildCatalogDetailBadges(sectionId, item) {
@@ -1743,6 +1821,14 @@ function buildCatalogDetailBadges(sectionId, item) {
       item.highlights?.length ? `${item.highlights.length} акцента` : "",
       item.features?.length ? `${item.features.length} сильные стороны` : "",
       item.foodNearby ? "Есть пауза на еду" : ""
+    ].filter(Boolean);
+  }
+
+  if (sectionId === "masterclasses") {
+    return [
+      item.highlights?.length ? `${item.highlights.length} результата` : "",
+      item.features?.length ? `${item.features.length} детали формата` : "",
+      item.sourceUrl ? "Есть запись" : ""
     ].filter(Boolean);
   }
 
@@ -1775,6 +1861,23 @@ function buildPlaceQuickFacts(sectionId, item) {
       {
         label: "Логистика",
         value: trim(item.howToGet || item.timing || "", 88)
+      }
+    ].filter((item) => item.value);
+  }
+
+  if (sectionId === "masterclasses") {
+    return [
+      {
+        label: "Формат",
+        value: trim(item.subtitle || item.features?.[0] || "Мастер-класс", 88)
+      },
+      {
+        label: "Результат",
+        value: trim(item.highlights?.[0] || item.bestFor || "", 88)
+      },
+      {
+        label: "Запись",
+        value: trim(item.timing || item.howToGet || "Лучше уточнить места заранее", 88)
       }
     ].filter((item) => item.value);
   }
@@ -1815,6 +1918,7 @@ function buildPlaceQuickFacts(sectionId, item) {
 function renderCatalogDetailCard(sectionId, item) {
   if (sectionId === "food") return foodDetailCard(item);
   if (sectionId === "active") return activeDetailCard(item);
+  if (sectionId === "masterclasses") return masterclassDetailCard(item);
   if (sectionId === "roadtrip") return roadtripDetailCard(item);
   return placeDetailCard(sectionId, item);
 }

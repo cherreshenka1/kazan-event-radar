@@ -251,6 +251,37 @@ a {
   color: rgba(231, 237, 246, 0.64);
 }
 
+:root[data-theme="dark"] .selector-card {
+  border-color: rgba(231, 237, 246, 0.1);
+  background: rgba(23, 34, 50, 0.92);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="dark"] .selector-card.is-active {
+  border-color: rgba(79, 140, 255, 0.42);
+  background:
+    linear-gradient(180deg, rgba(79, 140, 255, 0.12), rgba(23, 34, 50, 0.95)),
+    rgba(23, 34, 50, 0.95);
+}
+
+:root[data-theme="dark"] .selector-meta-line,
+:root[data-theme="dark"] .explorer-panel-hint {
+  color: rgba(231, 237, 246, 0.68);
+}
+
+:root[data-theme="dark"] .detail-quick-card,
+:root[data-theme="dark"] .fact {
+  background:
+    linear-gradient(180deg, rgba(231, 237, 246, 0.08), rgba(231, 237, 246, 0.04)),
+    rgba(231, 237, 246, 0.05);
+}
+
+:root[data-theme="dark"] .detail-quick-card p:not(.subtle-title),
+:root[data-theme="dark"] .fact p:not(.subtle-title),
+:root[data-theme="dark"] .fact li {
+  color: rgba(231, 237, 246, 0.88);
+}
+
 :root[data-theme="dark"] .tab,
 :root[data-theme="dark"] .chip,
 :root[data-theme="dark"] .button,
@@ -600,6 +631,15 @@ h1 {
   margin-top: 14px;
 }
 
+.explorer-panel-hint {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(16, 32, 51, 0.08);
+  color: #52667f;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .grid {
   display: grid;
   gap: 14px;
@@ -697,6 +737,8 @@ h1 {
 }
 
 .selector-card {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   padding: 16px;
   border: 1px solid rgba(16, 32, 51, 0.12);
@@ -709,16 +751,40 @@ h1 {
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
+.selector-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(37, 99, 235, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 38%);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
 .selector-card:hover {
   transform: translateY(-2px);
   border-color: rgba(37, 99, 235, 0.24);
   box-shadow: 0 14px 30px rgba(18, 32, 51, 0.12);
 }
 
+.selector-card:hover::before,
+.selector-card.is-active::before {
+  opacity: 1;
+}
+
 .selector-card.is-active {
   border-color: rgba(37, 99, 235, 0.42);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(248, 251, 255, 0.98));
+  background:
+    linear-gradient(180deg, rgba(37, 99, 235, 0.1), rgba(248, 251, 255, 0.98)),
+    rgba(248, 251, 255, 0.98);
   box-shadow: 0 16px 34px rgba(37, 99, 235, 0.14);
+}
+
+.selector-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .selector-card-head,
@@ -758,6 +824,13 @@ h1 {
   letter-spacing: 0;
 }
 
+.selector-meta-line {
+  margin: 0 0 8px;
+  color: #52667f;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
 .selector-card .summary-short {
   margin-top: 8px;
 }
@@ -781,11 +854,20 @@ h1 {
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.62);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(245, 249, 255, 0.54)),
+    rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
 
 .detail-quick-card p {
   margin: 0;
+}
+
+.detail-quick-card p:not(.subtle-title) {
+  color: #1c3048;
+  font-weight: 560;
+  line-height: 1.42;
 }
 
 .card h2,
@@ -902,6 +984,8 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .detail-source-note {
@@ -1013,12 +1097,20 @@ h1 {
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.44);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.54), rgba(244, 248, 253, 0.42)),
+    rgba(255, 255, 255, 0.44);
 }
 
 .fact p,
 .fact ul {
   margin: 0;
+}
+
+.fact p:not(.subtle-title),
+.fact li {
+  color: #263b53;
+  line-height: 1.55;
 }
 
 .inline-note {
