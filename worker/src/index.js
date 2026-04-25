@@ -652,7 +652,12 @@ async function prepareDraftBatch(env, limit, options = {}) {
           [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
         ]
       });
-      drafts.push(draft);
+      const deliveredDraft = await markDraftManagerDelivered(env, draft.id, managerId);
+      drafts.push(deliveredDraft || {
+        ...draft,
+        managerChatId: String(managerId),
+        managerDeliveredAt: new Date().toISOString()
+      });
     } catch (error) {
       console.warn(`Failed to deliver draft ${draft.id}: ${error.message}`);
       await markDraft(env, draft.id, "failed");
@@ -2355,6 +2360,20 @@ async function markDraft(env, draftId, status) {
       photoKey: draft.photoKey || ""
     });
   }
+  await putJson(env, "publishing", publishing);
+  return draft;
+}
+
+async function markDraftManagerDelivered(env, draftId, managerId) {
+  const publishing = await getPublishing(env);
+  const draft = publishing.drafts.find((item) => item.id === draftId);
+  if (!draft) return null;
+
+  const now = new Date().toISOString();
+  draft.managerChatId = String(managerId || "");
+  draft.managerDeliveredAt = now;
+  draft.updatedAt = now;
+
   await putJson(env, "publishing", publishing);
   return draft;
 }
@@ -4166,7 +4185,7 @@ function getPreparedDraftCountForDate(publishing, value = new Date()) {
   const draftCount = Array.isArray(publishing?.drafts)
     ? publishing.drafts.filter((draft) => {
       if (!draft || typeof draft !== "object") return false;
-      if (!draft.createdAt || formatDateInput(draft.createdAt) !== dateKey) return false;
+      if (!draft.managerDeliveredAt || formatDateInput(draft.managerDeliveredAt) !== dateKey) return false;
       return draft.status !== "failed" && draft.status !== "expired";
     }).length
     : 0;
