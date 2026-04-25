@@ -881,7 +881,8 @@ function moderationDraftsCard(summary) {
     ].join("\n\n")),
     `<div class="fact-grid">
       ${factBlock("План в день", `${drafts.targetPerDay || 10} черновиков`)}
-      ${factBlock("Сегодня готово", `${drafts.preparedToday || 0} черновиков`)}
+      ${factBlock("Доставлено менеджеру", `${drafts.deliveredToday ?? drafts.preparedToday ?? 0} черновиков`)}
+      ${drafts.failedToday ? factBlock("Ошибки доставки", `${drafts.failedToday} за сегодня`) : ""}
       ${factBlock("Готовых кандидатов", `${readiness.readyCount || 0} из ${readiness.target || drafts.targetPerDay || 10}`)}
       ${factBlock("Уникальные превью", `${readiness.uniquePhotoCount || 0}`)}
     </div>`,

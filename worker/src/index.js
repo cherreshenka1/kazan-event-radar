@@ -229,13 +229,15 @@ async function handleRequest(request, env) {
       getPublishing(env)
     ]);
     const draftReadiness = await safeBuildDraftReadiness(env, publishing);
+    const draftDelivery = getDraftDeliveryStatsForDate(publishing, new Date());
     const status = buildSystemStatus(env, {
       eventMeta: meta,
       eventsRefresh,
       catalogRefresh,
       runtime,
       publishing,
-      draftReadiness
+      draftReadiness,
+      draftDelivery
     });
     return json({
       ok: status.ready,
@@ -247,6 +249,7 @@ async function handleRequest(request, env) {
       eventsRefreshAt: eventsRefresh?.finishedAt || null,
       catalogRefreshAt: catalogRefresh?.finishedAt || null,
       catalogSections: Array.isArray(catalogRefresh?.sections) ? catalogRefresh.sections.length : 0,
+      draftDelivery,
       draftReadiness,
       warnings: status.warnings
     }, 200, env);
@@ -660,7 +663,7 @@ async function prepareDraftBatch(env, limit, options = {}) {
       });
     } catch (error) {
       console.warn(`Failed to deliver draft ${draft.id}: ${error.message}`);
-      await markDraft(env, draft.id, "failed");
+      await markDraftManagerDeliveryFailed(env, draft.id, error);
     }
   }
 
@@ -2372,6 +2375,23 @@ async function markDraftManagerDelivered(env, draftId, managerId) {
   const now = new Date().toISOString();
   draft.managerChatId = String(managerId || "");
   draft.managerDeliveredAt = now;
+  delete draft.managerDeliveryFailedAt;
+  delete draft.managerDeliveryError;
+  draft.updatedAt = now;
+
+  await putJson(env, "publishing", publishing);
+  return draft;
+}
+
+async function markDraftManagerDeliveryFailed(env, draftId, error) {
+  const publishing = await getPublishing(env);
+  const draft = publishing.drafts.find((item) => item.id === draftId);
+  if (!draft) return null;
+
+  const now = new Date().toISOString();
+  draft.status = "failed";
+  draft.managerDeliveryFailedAt = now;
+  draft.managerDeliveryError = trim(error?.message || String(error || "unknown_error"), 240);
   draft.updatedAt = now;
 
   await putJson(env, "publishing", publishing);
@@ -3456,6 +3476,7 @@ function buildSystemStatus(env, context = {}) {
   const catalogRefresh = context.catalogRefresh || null;
   const publishing = context.publishing || null;
   const draftReadiness = context.draftReadiness || null;
+  const draftDelivery = context.draftDelivery || (publishing ? getDraftDeliveryStatsForDate(publishing, new Date()) : null);
 
   if (!String(env.TELEGRAM_BOT_TOKEN || "").trim()) {
     warnings.push({ level: "error", code: "telegram_bot_token", message: "TELEGRAM_BOT_TOKEN is not configured." });
@@ -3494,11 +3515,28 @@ function buildSystemStatus(env, context = {}) {
     });
   }
 
-  if (publishing && getPreparedDraftCountForDate(publishing, new Date()) === 0) {
+  if (publishing && Number(draftDelivery?.delivered || 0) === 0) {
     warnings.push({
       level: "warn",
       code: "drafts_today",
-      message: "No prepared drafts found for today."
+      message: "No manager-delivered drafts found for today."
+    });
+  }
+
+  const draftTarget = Math.max(1, Number(env.DRAFTS_PER_DAY || 10) || 10);
+  if (draftDelivery && Number(draftDelivery.delivered || 0) > 0 && Number(draftDelivery.delivered || 0) < draftTarget) {
+    warnings.push({
+      level: "warn",
+      code: "drafts_today_incomplete",
+      message: `Only ${draftDelivery.delivered} of ${draftTarget} manager drafts were delivered today.`
+    });
+  }
+
+  if (draftDelivery && Number(draftDelivery.created || 0) > 0 && Number(draftDelivery.delivered || 0) === 0) {
+    warnings.push({
+      level: "warn",
+      code: "draft_delivery_failed",
+      message: `Drafts were created today, but none were delivered to the manager. Failed deliveries: ${draftDelivery.failed}.`
     });
   }
 
@@ -3629,13 +3667,15 @@ async function buildModerationSummary(env, user) {
     getPublishing(env)
   ]);
   const draftReadiness = await safeBuildDraftReadiness(env, publishing);
+  const draftDelivery = getDraftDeliveryStatsForDate(publishing, new Date());
   const status = buildSystemStatus(env, {
     eventMeta,
     eventsRefresh,
     catalogRefresh,
     runtime,
     publishing,
-    draftReadiness
+    draftReadiness,
+    draftDelivery
   });
 
   return {
@@ -3652,6 +3692,12 @@ async function buildModerationSummary(env, user) {
       lastBatchAt: publishing.lastDraftBatchAt || null,
       lastBatchCount: publishing.lastDraftBatchCount || 0,
       preparedToday: getPreparedDraftCountForDate(publishing, new Date()),
+      deliveredToday: draftDelivery.delivered,
+      failedToday: draftDelivery.failed,
+      createdToday: draftDelivery.created,
+      lastDeliveredAt: draftDelivery.lastDeliveredAt,
+      lastDeliveryFailedAt: draftDelivery.lastFailedAt,
+      lastDeliveryError: draftDelivery.lastFailedError,
       readiness: draftReadiness
     },
     events: {
@@ -4175,22 +4221,48 @@ function serializeEventForPlan(item = {}) {
 }
 
 function getPreparedDraftCountForDate(publishing, value = new Date()) {
+  return getDraftDeliveryStatsForDate(publishing, value).delivered;
+}
+
+function getDraftDeliveryStatsForDate(publishing, value = new Date()) {
   const dateKey = formatDateInput(value);
-  if (!dateKey) return 0;
+  const drafts = Array.isArray(publishing?.drafts) ? publishing.drafts.filter((draft) => draft && typeof draft === "object") : [];
+  const result = {
+    date: dateKey || null,
+    created: 0,
+    delivered: 0,
+    failed: 0,
+    pending: 0,
+    lastDeliveredAt: null,
+    lastFailedAt: null,
+    lastFailedError: null
+  };
 
-  const batchCount = publishing?.lastDraftBatchAt && formatDateInput(publishing.lastDraftBatchAt) === dateKey
-    ? Math.max(0, Number(publishing.lastDraftBatchCount || 0) || 0)
-    : 0;
+  if (!dateKey) return result;
 
-  const draftCount = Array.isArray(publishing?.drafts)
-    ? publishing.drafts.filter((draft) => {
-      if (!draft || typeof draft !== "object") return false;
-      if (!draft.managerDeliveredAt || formatDateInput(draft.managerDeliveredAt) !== dateKey) return false;
-      return draft.status !== "failed" && draft.status !== "expired";
-    }).length
-    : 0;
+  for (const draft of drafts) {
+    if (draft.createdAt && formatDateInput(draft.createdAt) === dateKey) {
+      result.created += 1;
+      if (draft.status === "pending") result.pending += 1;
+    }
 
-  return Math.max(batchCount, draftCount);
+    if (draft.managerDeliveredAt && formatDateInput(draft.managerDeliveredAt) === dateKey && draft.status !== "failed" && draft.status !== "expired") {
+      result.delivered += 1;
+      if (!result.lastDeliveredAt || draft.managerDeliveredAt > result.lastDeliveredAt) {
+        result.lastDeliveredAt = draft.managerDeliveredAt;
+      }
+    }
+
+    if (draft.managerDeliveryFailedAt && formatDateInput(draft.managerDeliveryFailedAt) === dateKey) {
+      result.failed += 1;
+      if (!result.lastFailedAt || draft.managerDeliveryFailedAt > result.lastFailedAt) {
+        result.lastFailedAt = draft.managerDeliveryFailedAt;
+        result.lastFailedError = draft.managerDeliveryError || null;
+      }
+    }
+  }
+
+  return result;
 }
 
 function expireStalePendingDrafts(publishing, env, now = new Date()) {
