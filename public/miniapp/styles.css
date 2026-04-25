@@ -390,6 +390,13 @@ body.is-moderator .moderation-only {
   transform: translateY(-1px);
 }
 
+:root[data-theme="dark"] .topbar-button:hover,
+:root[data-theme="dark"] .topbar-menu-item:hover {
+  background: rgba(231, 237, 246, 0.12);
+  border-color: rgba(231, 237, 246, 0.18);
+  color: var(--text);
+}
+
 .topbar-button.is-active {
   background: linear-gradient(135deg, #2268ff, #20d486);
   color: #ffffff;
@@ -656,6 +663,23 @@ h1 {
 .button:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+:root[data-theme="dark"] .tab:hover,
+:root[data-theme="dark"] .chip:hover,
+:root[data-theme="dark"] .button:hover,
+:root[data-theme="dark"] .icon-button:hover {
+  background: rgba(231, 237, 246, 0.12);
+  border-color: rgba(231, 237, 246, 0.18);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .tab.is-active:hover,
+:root[data-theme="dark"] .chip.is-active:hover,
+:root[data-theme="dark"] .button.primary:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
 }
 
 .status {
@@ -1289,6 +1313,7 @@ h1 {
 
 :root[data-theme="dark"] .card:hover {
   background: color-mix(in srgb, var(--card) 88%, var(--card-hover));
+  border-color: rgba(231, 237, 246, 0.18);
 }
 
 .selector-card {
@@ -1322,6 +1347,14 @@ h1 {
   transform: translateY(-2px);
   border-color: rgba(37, 99, 235, 0.24);
   box-shadow: 0 14px 30px rgba(18, 32, 51, 0.12);
+}
+
+:root[data-theme="dark"] .selector-card:hover {
+  background:
+    linear-gradient(180deg, rgba(79, 140, 255, 0.1), rgba(23, 34, 50, 0.96)),
+    rgba(23, 34, 50, 0.96);
+  border-color: rgba(79, 140, 255, 0.32);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
 }
 
 .selector-card:hover::before,
