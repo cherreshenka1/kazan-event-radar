@@ -3203,6 +3203,25 @@ function applyCatalogOverrides(target, overrides) {
     if (typeof payload.title === "string" && payload.title.trim()) section.title = payload.title;
     if (typeof payload.intro === "string" && payload.intro.trim()) section.intro = payload.intro;
     if (Array.isArray(payload.levels)) section.levels = payload.levels;
-    if (Array.isArray(payload.items)) section.items = payload.items;
+    if (Array.isArray(payload.items)) section.items = mergeCatalogItems(section.items, payload.items);
   }
+}
+
+function mergeCatalogItems(baseItems = [], importedItems = []) {
+  const importedById = new Map(importedItems.filter((item) => item?.id).map((item) => [item.id, item]));
+  const usedIds = new Set();
+  const merged = [];
+
+  for (const baseItem of baseItems) {
+    if (!baseItem?.id) continue;
+    usedIds.add(baseItem.id);
+    merged.push(importedById.has(baseItem.id) ? { ...baseItem, ...importedById.get(baseItem.id), id: baseItem.id } : baseItem);
+  }
+
+  for (const importedItem of importedItems) {
+    if (!importedItem?.id || usedIds.has(importedItem.id)) continue;
+    merged.push(importedItem);
+  }
+
+  return merged;
 }
