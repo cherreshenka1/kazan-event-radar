@@ -603,6 +603,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.34);
+  overflow: visible;
   animation: softAppear 0.18s ease both;
 }
 
@@ -611,6 +612,11 @@ h1 {
   background:
     radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.66), transparent 34%),
     rgba(244, 247, 251, 0.98);
+}
+
+.chip-muted {
+  color: var(--hint);
+  border-style: dashed;
 }
 
 :root[data-theme="dark"] .event-category-extra {

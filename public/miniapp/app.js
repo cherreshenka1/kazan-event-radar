@@ -18,6 +18,20 @@ const PRO_INTEREST_OPTIONS = [
   { id: "masterclasses", label: "Мастер-классы" },
   { id: "roadtrip", label: "Выезды" }
 ];
+const EVENT_CATEGORY_OPTIONS = [
+  { id: "expected", label: "Самые ожидаемые" },
+  { id: "concert", label: "Концерты" },
+  { id: "theatre", label: "Спектакли" },
+  { id: "show", label: "Шоу" },
+  { id: "festival", label: "Фестивали" },
+  { id: "musical", label: "Мюзиклы" },
+  { id: "standup", label: "Стендап" },
+  { id: "sport", label: "Спорт" },
+  { id: "exhibition", label: "Выставки" },
+  { id: "kids", label: "Детям" },
+  { id: "excursion", label: "Экскурсии" }
+];
+const EVENT_CATEGORY_IDS = new Set(EVENT_CATEGORY_OPTIONS.map((item) => item.id));
 
 if (tg) {
   tg.ready();
@@ -42,7 +56,7 @@ const state = {
   proInterests: normalizeProInterests(params.get("proTags")),
   moderationEditSection: params.get("editSection") || "food",
   moderationEditItemId: params.get("editItem") || "",
-  eventCategory: params.get("category") || "all",
+  eventCategories: normalizeEventCategories(params.get("categories") || params.get("category")),
   eventCategoriesOpen: false,
   topMenuOpen: false,
   dateFrom: params.get("dateFrom") || "",
@@ -305,12 +319,32 @@ function bindEvents() {
       return;
     }
 
-    if (action === "event-category") {
-      state.eventCategory = button.dataset.category || "all";
+    if (action === "event-category-all") {
+      state.eventCategories = [];
       state.eventCategoriesOpen = false;
       state.selectedEventId = null;
       state.openEventId = null;
-      track("event_category", state.eventCategory);
+      track("event_category", "all");
+      await refreshEvents();
+      return;
+    }
+
+    if (action === "event-category-toggle") {
+      const category = button.dataset.category || "";
+      state.eventCategories = toggleEventCategory(category, state.eventCategories);
+      state.eventCategoriesOpen = true;
+      state.selectedEventId = null;
+      state.openEventId = null;
+      track("event_category_toggle", category, { active: state.eventCategories.includes(category) });
+      await refreshEvents();
+      return;
+    }
+
+    if (action === "event-categories-clear") {
+      state.eventCategories = [];
+      state.selectedEventId = null;
+      state.openEventId = null;
+      track("event_categories_clear", "all");
       await refreshEvents();
       return;
     }
@@ -678,7 +712,7 @@ function uniqueDisplayStrings(values) {
 function buildEventsPath() {
   const search = new URLSearchParams();
   search.set("limit", String(EVENTS_FETCH_LIMIT));
-  if (state.eventCategory && state.eventCategory !== "all") search.set("category", state.eventCategory);
+  if (state.eventCategories?.length) search.set("categories", state.eventCategories.join(","));
   if (state.dateFrom) search.set("dateFrom", state.dateFrom);
   if (state.dateTo) search.set("dateTo", state.dateTo);
   const suffix = search.toString();
@@ -1627,6 +1661,26 @@ function toggleProInterest(value, current) {
     : [...current, value];
 
   return next.length ? next : [...DEFAULT_PRO_INTERESTS];
+}
+
+function normalizeEventCategories(value) {
+  const parsed = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item && item !== "all");
+
+  return parsed.filter((item, index) => EVENT_CATEGORY_IDS.has(item) && parsed.indexOf(item) === index);
+}
+
+function toggleEventCategory(value, current = []) {
+  if (!EVENT_CATEGORY_IDS.has(value)) return current;
+  return current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value];
+}
+
+function eventCategoryLabel(value) {
+  return EVENT_CATEGORY_OPTIONS.find((item) => item.id === value)?.label || value;
 }
 
 function proPaceLabel(value) {
@@ -3369,8 +3423,8 @@ function syncUrl() {
     if (state.moderationEditItemId) next.set("editItem", state.moderationEditItemId);
   }
 
-  if (state.activeTab === "events" && state.eventCategory && state.eventCategory !== "all") {
-    next.set("category", state.eventCategory);
+  if (state.activeTab === "events" && state.eventCategories?.length) {
+    next.set("categories", state.eventCategories.join(","));
   }
 
   if (state.dateFrom) next.set("dateFrom", state.dateFrom);
@@ -3391,33 +3445,21 @@ function statBar(items) {
 }
 
 function eventCategoryChips() {
-  const categories = [
-    { id: "all", label: "Все" },
-    { id: "expected", label: "Самые ожидаемые" },
-    { id: "concert", label: "Концерты" },
-    { id: "theatre", label: "Спектакли" },
-    { id: "show", label: "Шоу" },
-    { id: "festival", label: "Фестивали" },
-    { id: "musical", label: "Мюзиклы" },
-    { id: "standup", label: "Стендап" },
-    { id: "sport", label: "Спорт" },
-    { id: "exhibition", label: "Выставки" },
-    { id: "kids", label: "Детям" },
-    { id: "excursion", label: "Экскурсии" }
-  ];
-  const mainCategories = categories.slice(0, 4);
-  const extraCategories = categories.slice(4);
-  const extraActive = extraCategories.some((item) => state.eventCategory === item.id);
+  const selectedCount = state.eventCategories?.length || 0;
+  const moreLabel = selectedCount
+    ? `Ещё категории · ${selectedCount}`
+    : (state.eventCategoriesOpen ? "Скрыть категории" : "Ещё категории");
 
   return `
     <div class="event-category-panel">
       <div class="chips event-category-main">
-        ${mainCategories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}
-        ${chip(state.eventCategoriesOpen ? "Скрыть" : "Ещё категории", "event-category-more", {}, state.eventCategoriesOpen || extraActive, "chip-more")}
+        ${chip("Все", "event-category-all", {}, !selectedCount)}
+        ${chip(moreLabel, "event-category-more", {}, state.eventCategoriesOpen || selectedCount > 0, "chip-more")}
       </div>
       ${state.eventCategoriesOpen ? `
         <div class="chips event-category-extra">
-          ${extraCategories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}
+          ${EVENT_CATEGORY_OPTIONS.map((item) => chip(item.label, "event-category-toggle", { category: item.id }, state.eventCategories.includes(item.id))).join("")}
+          ${selectedCount ? chip("Сбросить", "event-categories-clear", {}, false, "chip-muted") : ""}
         </div>
       ` : ""}
     </div>

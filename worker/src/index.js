@@ -329,7 +329,7 @@ async function handleRequest(request, env) {
     const filteredAll = items
       .filter((item) => item.categories?.includes("events") || item.eventDate)
       .filter((item) => isAllowedEventItem(item, env, filters))
-      .filter((item) => matchesEventCategory(item, filters.category))
+      .filter((item) => matchesEventCategories(item, filters.categories))
       .sort(compareEventPriority)
       .map(attachTicketLinksSafe);
 
@@ -350,7 +350,8 @@ async function handleRequest(request, env) {
         defaultFrom: formatDateInput(filters.defaultFrom),
         defaultTo: formatDateInput(filters.defaultTo),
         appliedFrom: formatDateInput(filters.from),
-        appliedTo: formatDateInput(filters.to)
+        appliedTo: formatDateInput(filters.to),
+        categories: filters.categories
       },
       items: filtered
     }, 200, env);
@@ -1801,6 +1802,15 @@ function matchesEventCategory(item, category = "all") {
   return item.kind === category;
 }
 
+function matchesEventCategories(item, categories = []) {
+  const normalized = (Array.isArray(categories) ? categories : [categories])
+    .map((category) => String(category || "").trim())
+    .filter(Boolean);
+
+  if (!normalized.length) return true;
+  return normalized.some((category) => matchesEventCategory(item, category));
+}
+
 function isFestivalEventItem(item) {
   const haystack = normalizeFingerprintTextSafe([
     item?.title || "",
@@ -1859,9 +1869,11 @@ function buildEventFilters(searchParams, env) {
   const customTo = parseDateInput(searchParams.get("dateTo"), true);
   const from = maxDate(defaultFrom, customFrom || defaultFrom);
   let to = minDate(allowed.to, customTo || defaultTo);
+  const categories = parseEventFilterCategories(searchParams);
   if (to < from) to = from;
   return {
-    category: searchParams.get("category") || "all",
+    category: categories[0] || "all",
+    categories,
     allowedFrom: allowed.from,
     allowedTo: allowed.to,
     defaultFrom,
@@ -1869,6 +1881,17 @@ function buildEventFilters(searchParams, env) {
     from,
     to
   };
+}
+
+function parseEventFilterCategories(searchParams) {
+  return uniqueStrings([
+    searchParams.get("categories") || "",
+    ...searchParams.getAll("category")
+  ]
+    .join(",")
+    .split(",")
+    .map((value) => normalizeText(value))
+    .filter((value) => value && value !== "all"));
 }
 
 function formatEventFilterLabel(filters) {
