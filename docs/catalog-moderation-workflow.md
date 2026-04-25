@@ -36,7 +36,13 @@ npm run catalog:moderation:candidates -- --limit-per-section=1 --max-images-per-
 2. Отметьте галочками только чистые и релевантные изображения.
 3. Нажмите `Export approvals JSON`.
 4. Сохраните результат как `config/catalog-moderation-approvals.json`.
-5. Запустите:
+5. Перед реальным применением можно проверить план:
+
+```powershell
+npm run catalog:moderation:dry-run
+```
+
+6. Если отчёт без ошибок, запустите:
 
 ```powershell
 npm run catalog:moderation:apply

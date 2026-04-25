@@ -68,7 +68,13 @@ Copy-Item data/catalog-moderation/approvals.template.json config/catalog-moderat
 ```
 
 8. Поставить `approved: true` только у проверенных карточек.
-9. Применить:
+9. Проверить применение без копирования файлов:
+
+```powershell
+npm run catalog:moderation:dry-run
+```
+
+10. Применить:
 
 ```powershell
 npm run catalog:moderation:apply

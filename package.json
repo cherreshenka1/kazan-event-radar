@@ -50,6 +50,7 @@
     "catalog:moderation:candidates": "node scripts/collect-catalog-moderation-candidates.mjs",
     "catalog:moderation:open": "node scripts/open-catalog-moderation-gallery.mjs",
     "catalog:moderation:apply": "node scripts/apply-catalog-moderation-approvals.mjs",
+    "catalog:moderation:dry-run": "node scripts/apply-catalog-moderation-approvals.mjs --dry-run",
     "catalog:food": "node scripts/import-food-catalog.mjs",
     "catalog:sights": "node scripts/import-sights-catalog.mjs",
     "catalog:parks": "node scripts/import-parks-catalog.mjs",

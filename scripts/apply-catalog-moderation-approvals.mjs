@@ -10,6 +10,7 @@ const APPROVALS_PATH = path.join(ROOT, "config", "catalog-moderation-approvals.j
 const PHOTOS_ROOT = path.join(ROOT, "public", "miniapp", "photos");
 const REPORT_PATH = path.join(ROOT, "data", "catalog-moderation", "applied-report.json");
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const options = parseOptions(process.argv.slice(2));
 
 await main().catch((error) => {
   console.error(error.message || error);
@@ -21,26 +22,32 @@ async function main() {
   const results = [];
 
   for (const item of approvals.items || []) {
-    results.push(await applyItem(item));
+    results.push(await applyItem(item, options));
   }
 
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({
     appliedAt: new Date().toISOString(),
     approvalsPath: relative(APPROVALS_PATH),
+    dryRun: options.dryRun,
     totals: {
       items: results.length,
       applied: results.filter((result) => result.status === "applied").length,
+      ready: results.filter((result) => result.status === "ready").length,
       skipped: results.filter((result) => result.status === "skipped").length,
       errors: results.filter((result) => result.status === "error").length
     },
     results
   }, null, 2)}\n`, "utf8");
 
-  runProjectScript("photos:manifest");
-  runProjectScript("photos:audit");
+  if (!options.dryRun) {
+    runProjectScript("photos:manifest");
+    runProjectScript("photos:audit");
+  }
 
-  console.log(`Applied catalog approvals: ${results.filter((result) => result.status === "applied").length}`);
+  console.log(options.dryRun
+    ? `Ready catalog approvals: ${results.filter((result) => result.status === "ready").length}`
+    : `Applied catalog approvals: ${results.filter((result) => result.status === "applied").length}`);
   console.log(`Report: ${relative(REPORT_PATH)}`);
 }
 
@@ -52,9 +59,10 @@ async function readApprovals() {
       throw new Error([
         "Approval file was not found.",
         "1. Run: npm run catalog:moderation:candidates",
-        "2. Copy data/catalog-moderation/approvals.template.json to config/catalog-moderation-approvals.json",
-        "3. Set approved: true only for checked cards",
-        "4. Run this command again"
+        "2. Run: npm run catalog:moderation:open",
+        "3. Tick approved photos and press Export approvals JSON",
+        "4. Save it as config/catalog-moderation-approvals.json",
+        "5. Run this command again"
       ].join("\n"));
     }
 
@@ -62,7 +70,7 @@ async function readApprovals() {
   }
 }
 
-async function applyItem(item) {
+async function applyItem(item, options) {
   if (!item?.approved) {
     return baseResult(item, "skipped", "not approved");
   }
@@ -97,6 +105,14 @@ async function applyItem(item) {
 
   if (!isInside(PHOTOS_ROOT, targetPath)) {
     return baseResult(item, "error", "target path points outside photos folder");
+  }
+
+  if (options.dryRun) {
+    return {
+      ...baseResult(item, "ready", "photo can be copied"),
+      sourceFile: relative(sourcePath),
+      targetFile: relative(targetPath)
+    };
   }
 
   await fs.mkdir(targetFolder, { recursive: true });
@@ -155,4 +171,10 @@ function safeFileBase(value) {
 
 function relative(targetPath) {
   return path.relative(ROOT, targetPath).replaceAll("\\", "/");
+}
+
+function parseOptions(args) {
+  return {
+    dryRun: args.includes("--dry-run")
+  };
 }
