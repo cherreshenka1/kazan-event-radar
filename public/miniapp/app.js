@@ -720,7 +720,7 @@ function renderEvents() {
     eventDateRail(),
     eventCategoryChips(),
     eventFilterPanel(),
-    statBar(buildEventStats()),
+    compactEventStats(),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`
       : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты."),
@@ -952,6 +952,18 @@ function buildEventStats() {
     hiddenCount ? `Ещё по фильтру: ${hiddenCount}` : "",
     state.syncedAt ? `Обновлено: ${formatDate(state.syncedAt)}` : "Обновление скоро"
   ];
+}
+
+function compactEventStats() {
+  const hiddenCount = Math.max(0, Number(state.totalEvents || 0) - state.events.length);
+  const parts = [
+    state.periodLabel || "",
+    state.events.length ? `${state.events.length} карточек` : "пусто",
+    hiddenCount ? `ещё ${hiddenCount}` : "",
+    state.syncedAt ? `обновлено ${formatCompactDateTime(state.syncedAt)}` : "обновление скоро"
+  ].filter(Boolean);
+
+  return `<div class="event-compact-stats">${escapeHtml(parts.join(" · "))}</div>`;
 }
 
 function renderSectionExplorer(sectionId, emptyText) {
@@ -3821,6 +3833,17 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short"
   });
+}
+
+function formatCompactDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).replace(",", "");
 }
 
 function getPresetRange(rangeId) {
