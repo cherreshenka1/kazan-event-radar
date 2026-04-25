@@ -1284,8 +1284,8 @@ function buildSupportStats(support) {
 function supportRequestCard(support) {
   return card([
     `<div class="preview-label">Запрос в поддержку</div>`,
-    `<h3>Опишите проблему или идею</h3>`,
-    `<p class="form-hint">Заполните то, что знаете. После отправки мы скопируем готовый текст обращения и откроем Telegram поддержки.</p>`,
+    `<h3>Опишите проблему</h3>`,
+    `<p class="form-hint">Заполните короткую форму. После отправки мы подготовим текст обращения и откроем Telegram поддержки.</p>`,
     `<form class="support-form" id="supportForm">
       <label>
         <span>Тип обращения</span>
@@ -1323,8 +1323,7 @@ function supportRequestCard(support) {
       </label>
     </form>`,
     actions([
-      actionButton("Отправить запрос в поддержку", "support-submit", {}, "primary"),
-      support.contactUrl ? actionButton("Открыть поддержку без формы", "open", { url: support.contactUrl }) : ""
+      actionButton("Отправить запрос в поддержку", "support-submit", {}, "primary")
     ])
   ], "support-card support-card-wide");
 }
