@@ -1162,6 +1162,7 @@ function moderationCardPipelineCard(summary) {
       ${factBlock("Галерея", moderation.galleryPath || "data/catalog-moderation/review-gallery.html")}
       ${factBlock("Фото-кандидаты", moderation.photosPath || "data/catalog-moderation/photo-candidates")}
       ${factBlock("Сбор", moderation.candidatesCommand || "npm run catalog:moderation:candidates")}
+      ${factBlock("Проверить", moderation.dryRunCommand || "npm run catalog:moderation:dry-run")}
       ${factBlock("Применить", moderation.applyCommand || "npm run catalog:moderation:apply")}
     </div>`
   ], "support-card moderation-card");
