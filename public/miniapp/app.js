@@ -1218,15 +1218,8 @@ function buildEventStats() {
 }
 
 function compactEventStats() {
-  const hiddenCount = Math.max(0, Number(state.totalEvents || 0) - state.events.length);
-  const parts = [
-    state.periodLabel || "",
-    state.events.length ? `${state.events.length} карточек` : "пусто",
-    hiddenCount ? `ещё ${hiddenCount}` : "",
-    state.syncedAt ? `обновлено ${formatCompactDateTime(state.syncedAt)}` : "обновление скоро"
-  ].filter(Boolean);
-
-  return `<div class="event-compact-stats">${escapeHtml(parts.join(" · "))}</div>`;
+  const label = state.events.length ? `${state.events.length} карточек` : "0 карточек";
+  return `<div class="event-compact-stats">${escapeHtml(label)}</div>`;
 }
 
 function renderSectionExplorer(sectionId, emptyText) {
