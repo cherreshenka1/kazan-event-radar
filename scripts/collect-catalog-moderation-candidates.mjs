@@ -138,6 +138,19 @@ async function collectItemCandidates(sectionId, item) {
     }
   }
 
+  if (!photoCandidates.length) {
+    const fallbackUrls = (await fetchCommonsImageUrls(photoSearchQueries))
+      .filter((url) => !imageUrls.includes(url));
+
+    for (const url of fallbackUrls.slice(0, options.maxImagesPerItem)) {
+      const downloaded = await downloadImageCandidate(sectionId, item.id, url, index);
+      if (downloaded) {
+        photoCandidates.push(downloaded);
+        index += 1;
+      }
+    }
+  }
+
   return {
     section: sectionId,
     id: item.id,
@@ -309,7 +322,7 @@ function buildPhotoSearchQueries(sectionId, item, snapshots) {
   const title = cleanText(item.title || item.subtitle || sectionLabel(sectionId), 80);
   const venueOrType = cleanText(item.venueTitle || item.category || sectionLabel(sectionId), 80);
   const snapshotTitle = cleanText(snapshots.find((snapshot) => snapshot.title)?.title || "", 80);
-  const commonsFriendlyQueries = sectionId === "masterclasses" ? masterclassCommonsQueries(item.id, title) : [];
+  const commonsFriendlyQueries = sectionCommonsQueries(sectionId, item.id, title);
 
   return unique([
     ...commonsFriendlyQueries,
@@ -342,6 +355,38 @@ function masterclassCommonsQueries(itemId, title) {
   };
 
   return byId[itemId] || [`${title} workshop`];
+}
+
+function sectionCommonsQueries(sectionId, itemId, title) {
+  if (sectionId === "masterclasses") return masterclassCommonsQueries(itemId, title);
+
+  const bySectionAndId = {
+    parks: {
+      elmay: ["Elmay Kazan park", "children park Kazan", "children playground park"],
+      festival_boulevard: ["Kazan festival boulevard", "urban boulevard park", "public park boulevard"],
+      lebyazhye_beach: ["Lake Lebyazhye Kazan", "Lebyazhye lake Kazan", "lake beach"]
+    },
+    hotels: {
+      doubletree: ["DoubleTree by Hilton Kazan", "hotel lobby", "hotel room"],
+      ramada: ["Ramada Kazan", "hotel lobby", "hotel room"],
+      bilyar_palace: ["Bilyar Palace Kazan", "hotel lobby", "hotel room"]
+    },
+    food: {
+      tugan_avylym: ["Tugan Avylym Kazan", "Tatar village Kazan", "Tatar cuisine restaurant"],
+      tatar_by_tubatay: ["Tatar cuisine", "restaurant interior", "chak chak"],
+      ichi: ["Japanese restaurant interior", "cocktail bar interior", "sushi restaurant"],
+      cheeseria: ["Italian restaurant interior", "cheese restaurant", "restaurant pasta"]
+    },
+    active: {
+      tiki_viki: ["indoor family entertainment center", "indoor playground", "family amusement park"],
+      quad_bike_rides: ["quad bike riding", "ATV tour", "off road quad bike"],
+      boat_rental: ["boat rental", "motor boat river", "rowing boat rental"],
+      kazan_flights: ["small aircraft sightseeing flight", "light aircraft", "aerial sightseeing"],
+      skydiving: ["skydiving", "parachute jump", "tandem skydive"]
+    }
+  };
+
+  return bySectionAndId[sectionId]?.[itemId] || [];
 }
 
 function buildMarkdown(report) {
