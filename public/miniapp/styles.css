@@ -108,12 +108,12 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 10px 11px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 9px;
   border: 1px solid var(--border);
-  border-radius: 28px;
+  border-radius: 24px;
   background:
     radial-gradient(circle at 8% 0%, rgba(111, 255, 184, 0.34), transparent 34%),
     radial-gradient(circle at 95% 15%, rgba(48, 120, 255, 0.26), transparent 36%),
@@ -148,7 +148,8 @@ a {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
+  flex: 1 1 auto;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -161,25 +162,26 @@ a {
 .topbar-brand small {
   display: block;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-brand strong {
   line-height: 1.15;
+  max-width: clamp(104px, 32vw, 190px);
 }
 
 .topbar-brand small {
-  margin-top: 2px;
-  color: var(--hint);
-  font-size: 0.78rem;
+  display: none;
 }
 
 .topbar-logo {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #0b1a2b, #12395a 48%, #42e58f);
   color: #f6fff9;
   font-weight: 800;
@@ -197,10 +199,12 @@ a {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   flex-wrap: nowrap;
   justify-content: flex-end;
-  padding: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 24px;
   background:
@@ -214,7 +218,7 @@ a {
 }
 
 .topbar-more-button {
-  min-width: 78px;
+  min-width: auto;
 }
 
 .topbar-dropdown {
@@ -309,8 +313,8 @@ body.is-moderator .moderation-only {
 
 .topbar-button {
   border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 18px;
-  padding: 9px 13px 8px;
+  border-radius: 16px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.62);
   color: var(--text);
   cursor: pointer;
@@ -327,12 +331,11 @@ body.is-moderator .moderation-only {
 
 .topbar-button span {
   font-weight: 650;
+  font-size: 0.92rem;
 }
 
 .topbar-button small {
-  margin-top: 3px;
-  color: rgba(53, 80, 112, 0.74);
-  font-size: 0.7rem;
+  display: none;
 }
 
 :root[data-theme="dark"] .topbar-button {
@@ -1803,12 +1806,13 @@ h1 {
   }
 
   .topbar {
-    align-items: flex-start;
+    align-items: center;
+    gap: 6px;
     border-radius: 20px;
   }
 
-  .topbar-brand small {
-    display: none;
+  .topbar-brand {
+    gap: 7px;
   }
 
   .topbar-actions {
@@ -1819,12 +1823,20 @@ h1 {
   }
 
   .topbar-button {
-    padding: 8px 10px;
-    font-size: 0.92rem;
+    padding: 7px 8px;
+    font-size: 0.86rem;
   }
 
-  .topbar-button small {
-    display: none;
+  .topbar-brand strong {
+    max-width: clamp(72px, 23vw, 132px);
+    font-size: 0.95rem;
+  }
+
+  .topbar-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 13px;
+    font-size: 0.72rem;
   }
 
   .hero {
