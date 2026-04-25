@@ -256,7 +256,6 @@ function resolvePreviewBackgroundUrl(item, overrideUrl = "") {
 
 function buildPosterHtml(item, backgroundUrl = "") {
   const palette = posterPalette(item.kind);
-  const summary = escapeHtml(trim(ensureSentence(extractPreviewLead(item)), 210));
   const metaLine = escapeHtml(buildMetaLine(item));
   const title = escapeHtml(item.posterTitle || item.title || "Событие в Казани");
   const label = escapeHtml(eventKindLabel(item.kind).toUpperCase());
@@ -318,9 +317,8 @@ function buildPosterHtml(item, backgroundUrl = "") {
             position: absolute;
             inset: 0;
             background:
-              linear-gradient(180deg, rgba(7, 14, 27, 0.06) 0%, rgba(7, 14, 27, 0.38) 48%, rgba(7, 14, 27, 0.76) 100%),
-              linear-gradient(135deg, rgba(7, 14, 27, 0.52) 0%, rgba(7, 14, 27, 0.14) 42%, rgba(7, 14, 27, 0.58) 100%);
-            backdrop-filter: blur(3px);
+              linear-gradient(180deg, rgba(7, 14, 27, 0.03) 0%, rgba(7, 14, 27, 0.22) 50%, rgba(7, 14, 27, 0.68) 100%),
+              linear-gradient(135deg, rgba(7, 14, 27, 0.56) 0%, rgba(7, 14, 27, 0.06) 42%, rgba(7, 14, 27, 0.46) 100%);
           }
 
           .poster-glow {
@@ -340,17 +338,17 @@ function buildPosterHtml(item, backgroundUrl = "") {
             flex-direction: column;
             justify-content: space-between;
             height: 100%;
-            padding: 56px 62px;
+            padding: 50px 56px;
           }
 
           .poster-panel {
-            width: min(720px, 100%);
-            padding: 36px 40px 34px;
+            width: min(650px, 100%);
+            padding: 30px 34px 32px;
             border-radius: 34px;
-            background: rgba(6, 14, 27, 0.46);
+            background: rgba(6, 14, 27, 0.34);
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 24px 70px rgba(2, 6, 23, 0.28);
-            backdrop-filter: blur(18px);
+            backdrop-filter: blur(10px);
           }
 
           .poster-topline {
@@ -387,8 +385,8 @@ function buildPosterHtml(item, backgroundUrl = "") {
 
           h1 {
             margin: 0;
-            max-width: 590px;
-            font-size: 54px;
+            max-width: 570px;
+            font-size: 56px;
             line-height: 1.04;
             font-weight: 760;
             letter-spacing: -0.03em;
@@ -401,15 +399,6 @@ function buildPosterHtml(item, backgroundUrl = "") {
             font-size: 24px;
             line-height: 1.32;
             font-weight: 500;
-          }
-
-          .poster-summary {
-            margin-top: 16px;
-            max-width: 580px;
-            color: rgba(226, 232, 240, 0.92);
-            font-size: 22px;
-            line-height: 1.46;
-            font-weight: 450;
           }
 
           .poster-footer {
@@ -444,7 +433,6 @@ function buildPosterHtml(item, backgroundUrl = "") {
             <div class="poster-badge">${label}</div>
             <h1>${title}</h1>
             <div class="poster-meta">${metaLine}</div>
-            <div class="poster-summary">${summary}</div>
           </section>
           <div class="poster-footer">
             <span class="poster-dot" aria-hidden="true"></span>

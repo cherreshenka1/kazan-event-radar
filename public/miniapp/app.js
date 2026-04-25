@@ -3844,9 +3844,15 @@ function quoteEventTitle(value) {
 }
 
 function eventVisualUrl(item, variant = "detail") {
-  const generatedPreview = eventGeneratedPreviewUrl(item);
-  if (generatedPreview) return generatedPreview;
+  const directImage = eventDirectVisualUrl(item);
+  if (directImage) return directImage;
   return eventFallbackVisualUrl(item, variant);
+}
+
+function eventDirectVisualUrl(item) {
+  return [item?.externalPreviewUrl, item?.imageUrl]
+    .map((value) => String(value || "").trim())
+    .find(Boolean) || "";
 }
 
 function eventFallbackVisualUrl(item, variant = "detail") {
@@ -3914,23 +3920,10 @@ function normalizeEventPreviewVenue(value) {
 
 function buildEventPosterSvg(item, variant = "detail") {
   const palette = eventPosterPalette(item.kind);
-  const titleLines = wrapPosterText(eventCardTitle(item) || "Событие в Казани", variant === "compact" ? 20 : 26, 3);
-  const metaLines = wrapPosterText(
-    [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime), eventVenueText(item)]
-      .filter(Boolean)
-      .join(" • ") || "Актуальная афиша Казани",
-    variant === "compact" ? 28 : 44,
-    2
-  );
   const typeLabel = eventTypeLabel(item).toUpperCase();
-  const titleFont = variant === "compact" ? 58 : 70;
-  const metaY = 480 + Math.max(0, titleLines.length - 2) * 48;
-  const titleNodes = titleLines
-    .map((line, index) => `<text x="88" y="${242 + index * 78}" fill="#F8FAFC" font-size="${titleFont}" font-weight="680" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">${escapeSvgText(line)}</text>`)
-    .join("");
-  const metaNodes = metaLines
-    .map((line, index) => `<text x="88" y="${metaY + index * 38}" fill="rgba(226,232,240,0.92)" font-size="28" font-weight="500" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">${escapeSvgText(line)}</text>`)
-    .join("");
+  const dateLabel = [formatEventDateOnly(item.eventDate || item.publishedAt), formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime)]
+    .filter(Boolean)
+    .join(", ");
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="${escapeSvgText(eventCardTitle(item) || "Событие")}">
@@ -3949,18 +3942,17 @@ function buildEventPosterSvg(item, variant = "detail") {
         </filter>
       </defs>
       <rect width="1200" height="675" rx="34" fill="url(#bg)"/>
-      <circle cx="1035" cy="126" r="210" fill="${palette.glow}" opacity="0.24" filter="url(#blur)"/>
-      <circle cx="928" cy="548" r="240" fill="${palette.accent}" opacity="0.18" filter="url(#blur)"/>
-      <rect x="72" y="64" width="320" height="42" rx="21" fill="rgba(9,18,31,0.28)" stroke="rgba(255,255,255,0.12)"/>
-      <text x="96" y="92" fill="#D8F7E7" font-size="22" font-weight="700" letter-spacing="1.4" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">KAZAN EVENT RADAR</text>
-      <rect x="72" y="132" width="${Math.max(180, 72 + typeLabel.length * 18)}" height="52" rx="26" fill="rgba(9,18,31,0.38)" stroke="rgba(255,255,255,0.12)"/>
-      <text x="96" y="166" fill="${palette.badge}" font-size="28" font-weight="700" letter-spacing="1.1" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">${escapeSvgText(typeLabel)}</text>
-      ${titleNodes}
-      ${metaNodes}
-      <rect x="72" y="563" width="366" height="54" rx="27" fill="rgba(9,18,31,0.4)" stroke="rgba(255,255,255,0.12)"/>
-      <text x="96" y="598" fill="#F8FAFC" font-size="24" font-weight="600" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">Полная карточка события</text>
-      <path d="M1020 102c0-16.569 13.431-30 30-30h52c16.569 0 30 13.431 30 30v52c0 16.569-13.431 30-30 30h-52c-16.569 0-30-13.431-30-30z" fill="rgba(9,18,31,0.28)" stroke="rgba(255,255,255,0.12)"/>
-      <path d="M1048 148l24-24m0 0h-19m19 0v19" stroke="#F8FAFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="1030" cy="116" r="230" fill="${palette.glow}" opacity="0.24" filter="url(#blur)"/>
+      <circle cx="210" cy="568" r="260" fill="${palette.accent}" opacity="0.18" filter="url(#blur)"/>
+      <circle cx="940" cy="520" r="150" fill="#ffffff" opacity="0.07" filter="url(#blur)"/>
+      <path d="M-40 520 C190 390 330 422 510 310 C720 178 852 212 1240 72" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="44" stroke-linecap="round"/>
+      <path d="M-20 585 C230 462 372 486 560 356 C760 218 930 258 1240 150" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="18" stroke-linecap="round"/>
+      <g opacity="0.92">
+        <rect x="72" y="64" width="${Math.max(184, 90 + typeLabel.length * 16)}" height="52" rx="26" fill="rgba(9,18,31,0.42)" stroke="rgba(255,255,255,0.14)"/>
+        <text x="96" y="98" fill="${palette.badge}" font-size="25" font-weight="760" letter-spacing="1.1" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">${escapeSvgText(typeLabel)}</text>
+      </g>
+      ${dateLabel ? `<text x="96" y="590" fill="rgba(248,250,252,0.88)" font-size="30" font-weight="640" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">${escapeSvgText(dateLabel)}</text>` : ""}
+      <text x="96" y="630" fill="rgba(226,232,240,0.72)" font-size="21" font-weight="600" letter-spacing="1.6" font-family="'Segoe UI', 'SF Pro Text', Arial, sans-serif">KAZAN EVENT RADAR</text>
     </svg>
   `.trim();
 }
