@@ -526,6 +526,12 @@ h1 {
 .chips {
   display: flex;
   gap: 8px;
+}
+
+.hero-badges,
+.stat-row,
+.meta-badges,
+.chip-grid {
   flex-wrap: wrap;
 }
 
@@ -552,18 +558,17 @@ h1 {
 .chips {
   margin: 16px 0;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  flex-wrap: nowrap;
 }
 
 .tabs::-webkit-scrollbar,
 .chips::-webkit-scrollbar {
   display: none;
-}
-
-.tabs {
-  flex-wrap: nowrap;
-  scroll-snap-type: x proximity;
 }
 
 .tab,
@@ -580,6 +585,11 @@ h1 {
 }
 
 .tab {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.chips .chip {
   flex: 0 0 auto;
   scroll-snap-align: start;
 }
