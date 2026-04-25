@@ -340,6 +340,18 @@ body.is-moderator .moderation-only {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.topbar-button-plan {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.5), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(210, 232, 255, 0.54));
+}
+
+:root[data-theme="dark"] .topbar-button-plan {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(231, 237, 246, 0.1), rgba(79, 140, 255, 0.12));
+}
+
 .topbar-button-pro::before {
   content: "";
   position: absolute;

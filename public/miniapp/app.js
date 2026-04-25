@@ -72,6 +72,7 @@ const contentNode = document.querySelector("#content");
 const tabNodes = [...document.querySelectorAll(".tab")];
 const topbarActionsNode = document.querySelector("#topbarActions");
 const themeToggleNode = document.querySelector("#themeToggle");
+const topbarPlanLabelNode = document.querySelector("#topbarPlanLabel");
 const heroEyebrowNode = document.querySelector("#heroEyebrow");
 const heroTitleNode = document.querySelector("#heroTitle");
 const heroTextNode = document.querySelector("#heroText");
@@ -587,6 +588,9 @@ function render() {
   topbarActionsNode?.querySelectorAll("[data-action='top-tab']").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.tab === state.activeTab);
   });
+  if (topbarPlanLabelNode) {
+    topbarPlanLabelNode.textContent = state.favorites.length ? `Мой план · ${state.favorites.length}` : "Мой план";
+  }
   document.body.classList.toggle("modal-open", state.activeTab === "events" && Boolean(state.openEventId));
   document.body.classList.toggle("is-support-tab", state.activeTab === "support");
   renderHero();
@@ -691,13 +695,10 @@ function renderHero() {
   heroEyebrowNode.textContent = content.eyebrow;
   heroTitleNode.textContent = content.title;
   heroTextNode.textContent = content.text;
-  heroBadgesNode.innerHTML = [
-    ...content.badges.map((item) => `<span class="hero-badge">${escapeHtml(item)}</span>`),
-    ...(state.activeTab === "pro" && state.pro?.overview?.donation?.url
-      ? [`<button class="hero-badge hero-badge-button" data-action="open" data-url="${escapeHtml(state.pro.overview.donation.url)}">Поддержать проект</button>`]
-      : []),
-    `<button class="hero-badge hero-badge-button" data-action="hero-favorites">Мой план${state.favorites.length ? ` · ${state.favorites.length}` : ""}</button>`
-  ].join("");
+  const heroBadges = state.activeTab === "pro" && state.pro?.overview?.donation?.url
+    ? [`<button class="hero-badge hero-badge-button" data-action="open" data-url="${escapeHtml(state.pro.overview.donation.url)}">Поддержать проект</button>`]
+    : [];
+  heroBadgesNode.innerHTML = heroBadges.join("");
 }
 
 function renderEvents() {
