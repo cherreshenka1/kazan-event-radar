@@ -3759,6 +3759,7 @@ async function buildModerationSummary(env, user) {
       candidatesCommand: "npm run catalog:moderation:candidates",
       applyCommand: "npm run catalog:moderation:apply",
       boardPath: "data/catalog-moderation/review-board.md",
+      galleryPath: "data/catalog-moderation/review-gallery.html",
       photosPath: "data/catalog-moderation/photo-candidates",
       approvalsPath: "config/catalog-moderation-approvals.json"
     }
