@@ -45,6 +45,9 @@ const state = {
   eventCategory: params.get("category") || "all",
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
+  datePickerOpen: false,
+  datePickerMonth: "",
+  dateDraftFrom: "",
   placeQuery: params.get("placeQuery") || "",
   foodQuery: params.get("foodQuery") || "",
   routeQuery: params.get("routeQuery") || "",
@@ -308,6 +311,8 @@ function bindEvents() {
       const range = getPresetRange(button.dataset.range);
       state.dateFrom = range.from;
       state.dateTo = range.to;
+      state.datePickerOpen = false;
+      state.dateDraftFrom = "";
       state.selectedEventId = null;
       state.openEventId = null;
       track("event_range_preset", button.dataset.range);
@@ -315,14 +320,58 @@ function bindEvents() {
       return;
     }
 
-    if (action === "event-date-select") {
+    if (action === "event-calendar-toggle") {
+      state.datePickerOpen = !state.datePickerOpen;
+      state.dateDraftFrom = "";
+      state.datePickerMonth = state.datePickerMonth || getCalendarMonthAnchor();
+      track("event_calendar_toggle", state.datePickerOpen ? "open" : "close");
+      render();
+      return;
+    }
+
+    if (action === "event-calendar-month") {
+      const offset = Number(button.dataset.offset || 0);
+      state.datePickerMonth = shiftCalendarMonth(getCalendarMonthAnchor(), offset);
+      state.datePickerOpen = true;
+      track("event_calendar_month", state.datePickerMonth);
+      render();
+      return;
+    }
+
+    if (action === "event-calendar-day") {
       const date = button.dataset.date || "";
+      if (!date) return;
+
+      if (!state.dateDraftFrom) {
+        state.dateDraftFrom = date;
+        state.datePickerOpen = true;
+        track("event_calendar_start", date);
+        render();
+        return;
+      }
+
+      const range = normalizeDateRange(state.dateDraftFrom, date);
+      state.dateFrom = range.from;
+      state.dateTo = range.to;
+      state.datePickerOpen = false;
+      state.dateDraftFrom = "";
+      state.selectedEventId = null;
+      state.openEventId = null;
+      track("event_calendar_range", `${state.dateFrom}:${state.dateTo}`);
+      await refreshEvents();
+      return;
+    }
+
+    if (action === "event-calendar-single") {
+      const date = state.dateDraftFrom || button.dataset.date || "";
       if (!date) return;
       state.dateFrom = date;
       state.dateTo = date;
+      state.datePickerOpen = false;
+      state.dateDraftFrom = "";
       state.selectedEventId = null;
       state.openEventId = null;
-      track("event_date_select", date);
+      track("event_calendar_single", date);
       await refreshEvents();
       return;
     }
@@ -330,6 +379,8 @@ function bindEvents() {
     if (action === "event-range-apply") {
       state.dateFrom = contentNode.querySelector('[name="dateFrom"]')?.value || "";
       state.dateTo = contentNode.querySelector('[name="dateTo"]')?.value || "";
+      state.datePickerOpen = false;
+      state.dateDraftFrom = "";
       state.selectedEventId = null;
       state.openEventId = null;
       track("event_range_apply", `${state.dateFrom || "auto"}:${state.dateTo || "auto"}`);
@@ -340,6 +391,8 @@ function bindEvents() {
     if (action === "event-range-clear") {
       state.dateFrom = "";
       state.dateTo = "";
+      state.datePickerOpen = false;
+      state.dateDraftFrom = "";
       state.selectedEventId = null;
       state.openEventId = null;
       track("event_range_clear", "default");
@@ -752,9 +805,8 @@ function renderEvents() {
   const opened = findEvent(state.openEventId) || null;
 
   contentNode.innerHTML = [
-    eventDateRail(),
+    eventDateRangePicker(),
     eventCategoryChips(),
-    eventFilterPanel(),
     compactEventStats(),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`
@@ -3332,49 +3384,51 @@ function eventCategoryChips() {
   return `<div class="chips">${categories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}</div>`;
 }
 
-function eventDateRail() {
-  const days = buildEventDateRailDays();
-  if (!days.length) return "";
-
-  const monthLabel = new Date(`${days[0].date}T00:00:00`).toLocaleDateString("ru-RU", { month: "long" });
-  return `
-    <article class="date-rail-card" aria-label="Выбор даты афиши">
-      <div class="date-rail-month">${escapeHtml(monthLabel)}</div>
-      <div class="date-rail">
-        ${days.map((day) => `
-          <button class="date-pill ${day.active ? "is-active" : ""}" type="button" data-action="event-date-select" data-date="${escapeHtml(day.date)}">
-            <strong>${escapeHtml(day.day)}</strong>
-            <span class="${day.weekend ? "is-weekend" : ""}">${escapeHtml(day.weekday)}</span>
-          </button>
-        `).join("")}
-      </div>
-    </article>
-  `;
-}
-
-function eventFilterPanel() {
+function eventDateRangePicker() {
   const presets = [
     { id: "today", label: "Сегодня" },
     { id: "3days", label: "3 дня" },
     { id: "week", label: "Неделя" },
     { id: "month", label: "Весь период" }
   ];
+  const from = getEffectiveDateFrom();
+  const to = getEffectiveDateTo();
+  const draft = state.dateDraftFrom;
+  const rangeFrom = draft || from;
+  const rangeTo = draft || to;
+  const pickerMonth = getCalendarMonthAnchor();
+  const nextMonth = shiftCalendarMonth(pickerMonth, 1);
 
   return `
-    <article class="card filter-panel">
-      <div class="chips">${presets.map((preset) => chip(preset.label, "event-range-preset", { range: preset.id }, isPresetActive(preset.id))).join("")}</div>
-      <div class="date-filter-row">
-        <label class="date-field">
-          <span>С</span>
-          <input type="date" name="dateFrom" value="${escapeHtml(getEffectiveDateFrom())}" min="${escapeHtml(state.allowedFrom || "")}" max="${escapeHtml(state.allowedTo || "")}">
-        </label>
-        <label class="date-field">
-          <span>По</span>
-          <input type="date" name="dateTo" value="${escapeHtml(getEffectiveDateTo())}" min="${escapeHtml(state.allowedFrom || "")}" max="${escapeHtml(state.allowedTo || "")}">
-        </label>
-        ${actionButton("Показать", "event-range-apply", {}, "primary")}
-        ${actionButton("Сбросить", "event-range-clear")}
+    <article class="card date-picker-card">
+      <div class="date-picker-summary">
+        <div>
+          <span>Период афиши</span>
+          <strong>${escapeHtml(formatDateRangeLabel(from, to))}</strong>
+        </div>
+        <button class="button ${state.datePickerOpen ? "primary" : ""}" type="button" data-action="event-calendar-toggle">
+          ${state.datePickerOpen ? "Скрыть" : "Выбрать даты"}
+        </button>
       </div>
+      ${state.datePickerOpen ? `
+        <div class="date-picker-dropdown">
+          <div class="chips compact-chips">${presets.map((preset) => chip(preset.label, "event-range-preset", { range: preset.id }, isPresetActive(preset.id))).join("")}</div>
+          <div class="date-picker-help">${escapeHtml(draft ? `Начало: ${formatDayMonth(draft)}. Теперь выберите дату окончания.` : "Нажмите дату начала, затем дату окончания периода.")}</div>
+          <div class="calendar-toolbar">
+            <button class="icon-button" type="button" data-action="event-calendar-month" data-offset="-1" aria-label="Предыдущий месяц">‹</button>
+            <strong>${escapeHtml(formatCalendarMonthTitle(pickerMonth, nextMonth))}</strong>
+            <button class="icon-button" type="button" data-action="event-calendar-month" data-offset="1" aria-label="Следующий месяц">›</button>
+          </div>
+          <div class="calendar-months">
+            ${calendarMonth(pickerMonth, rangeFrom, rangeTo)}
+            ${calendarMonth(nextMonth, rangeFrom, rangeTo)}
+          </div>
+          <div class="date-picker-actions">
+            ${draft ? actionButton("Показать выбранный день", "event-calendar-single", {}, "primary") : ""}
+            ${actionButton("Сбросить период", "event-range-clear")}
+          </div>
+        </div>
+      ` : ""}
     </article>
   `;
 }
@@ -4134,34 +4188,111 @@ function getPresetRange(rangeId) {
   return { from, to };
 }
 
-function buildEventDateRailDays() {
-  const start = getEffectiveDateFrom() || state.defaultFrom || state.allowedFrom || toDateInput(new Date());
-  const maxDate = state.allowedTo || state.defaultTo || "";
-  const days = [];
-
-  for (let offset = 0; offset < 8; offset += 1) {
-    const date = addDays(start, offset, maxDate);
-    if (!date || days.some((item) => item.date === date)) continue;
-    const parsed = new Date(`${date}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) continue;
-    const weekday = parsed.toLocaleDateString("ru-RU", { weekday: "short" }).replace(".", "").toUpperCase();
-    const day = String(parsed.getDate());
-    const dayIndex = parsed.getDay();
-    days.push({
-      date,
-      day,
-      weekday,
-      weekend: dayIndex === 0 || dayIndex === 6,
-      active: date === getEffectiveDateFrom() && getEffectiveDateFrom() === getEffectiveDateTo()
-    });
-  }
-
-  return days;
-}
-
 function isPresetActive(rangeId) {
   const preset = getPresetRange(rangeId);
   return preset.from === getEffectiveDateFrom() && preset.to === getEffectiveDateTo();
+}
+
+function calendarMonth(monthInput, rangeFrom, rangeTo) {
+  const [year, month] = monthInput.split("-").map((value) => Number(value));
+  const monthDate = new Date(year, month - 1, 1);
+  if (Number.isNaN(monthDate.getTime())) return "";
+
+  const monthName = monthDate.toLocaleDateString("ru-RU", { month: "long" });
+  const firstWeekday = (monthDate.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [];
+
+  for (let index = 0; index < firstWeekday; index += 1) {
+    cells.push('<span class="calendar-empty"></span>');
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = [
+      year,
+      String(month).padStart(2, "0"),
+      String(day).padStart(2, "0")
+    ].join("-");
+    const disabled = isDateDisabled(date);
+    const isStart = date === rangeFrom;
+    const isEnd = date === rangeTo;
+    const isInRange = rangeFrom && rangeTo && date >= rangeFrom && date <= rangeTo;
+    const classes = [
+      "calendar-day",
+      isInRange ? "is-in-range" : "",
+      isStart ? "is-start" : "",
+      isEnd ? "is-end" : "",
+      disabled ? "is-disabled" : ""
+    ].filter(Boolean).join(" ");
+    cells.push(`
+      <button class="${classes}" type="button" data-action="event-calendar-day" data-date="${escapeHtml(date)}" ${disabled ? "disabled" : ""}>
+        ${day}
+      </button>
+    `);
+  }
+
+  return `
+    <section class="calendar-month">
+      <h4>${escapeHtml(monthName)}</h4>
+      <div class="calendar-weekdays">
+        ${["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"].map((day) => `<span>${day}</span>`).join("")}
+      </div>
+      <div class="calendar-grid">${cells.join("")}</div>
+    </section>
+  `;
+}
+
+function isDateDisabled(date) {
+  const min = state.allowedFrom || state.defaultFrom || "";
+  const max = state.allowedTo || state.defaultTo || "";
+  return Boolean((min && date < min) || (max && date > max));
+}
+
+function getCalendarMonthAnchor() {
+  const anchor = state.datePickerMonth || state.dateDraftFrom || getEffectiveDateFrom() || state.defaultFrom || state.allowedFrom || toDateInput(new Date());
+  return String(anchor).slice(0, 7);
+}
+
+function shiftCalendarMonth(monthInput, offset) {
+  const [year, month] = String(monthInput || getCalendarMonthAnchor()).split("-").map((value) => Number(value));
+  const date = new Date(year, month - 1 + offset, 1);
+  if (Number.isNaN(date.getTime())) return getCalendarMonthAnchor();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatCalendarMonthTitle(firstMonth, secondMonth) {
+  const first = parseMonthInput(firstMonth);
+  const second = parseMonthInput(secondMonth);
+  if (!first || !second) return "Выбор периода";
+  const firstLabel = first.toLocaleDateString("ru-RU", { month: "long" });
+  const secondLabel = second.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  return `${firstLabel} - ${secondLabel}`;
+}
+
+function parseMonthInput(monthInput) {
+  const [year, month] = String(monthInput || "").split("-").map((value) => Number(value));
+  const date = new Date(year, month - 1, 1);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeDateRange(first, second) {
+  if (!first || !second) return { from: first || "", to: second || first || "" };
+  return first <= second ? { from: first, to: second } : { from: second, to: first };
+}
+
+function formatDateRangeLabel(from, to) {
+  if (!from && !to) return "Ближайшие события";
+  if (from && (!to || from === to)) return formatDayMonth(from);
+  return `${formatDayMonth(from)} - ${formatDayMonth(to)}`;
+}
+
+function formatDayMonth(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value || "";
+  return date.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long"
+  });
 }
 
 function addDays(dateString, days, maxDate) {

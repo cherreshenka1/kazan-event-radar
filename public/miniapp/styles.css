@@ -637,6 +637,174 @@ h1 {
   line-height: 1.35;
 }
 
+.date-picker-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.date-picker-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.date-picker-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.date-picker-summary span,
+.date-picker-help {
+  color: var(--hint);
+  font-size: 0.9rem;
+}
+
+.date-picker-summary strong {
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.date-picker-dropdown {
+  display: grid;
+  gap: 14px;
+  padding-top: 2px;
+  animation: softAppear 0.18s ease both;
+}
+
+.compact-chips {
+  gap: 8px;
+}
+
+.compact-chips .chip {
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calendar-toolbar strong {
+  text-align: center;
+  font-size: 0.98rem;
+  text-transform: capitalize;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.45rem;
+  line-height: 1;
+  box-shadow: 0 10px 22px rgba(16, 32, 51, 0.08);
+}
+
+:root[data-theme="dark"] .icon-button {
+  background: rgba(231, 237, 246, 0.08);
+}
+
+.calendar-months {
+  display: grid;
+  gap: 14px;
+}
+
+.calendar-month {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+:root[data-theme="dark"] .calendar-month {
+  background: rgba(231, 237, 246, 0.06);
+}
+
+.calendar-month h4 {
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+  text-transform: capitalize;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 8px;
+  color: var(--hint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.calendar-empty {
+  min-height: 38px;
+}
+
+.calendar-day {
+  min-height: 38px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.calendar-day:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  background: rgba(42, 103, 255, 0.14);
+}
+
+.calendar-day.is-in-range {
+  background: rgba(42, 103, 255, 0.14);
+}
+
+.calendar-day.is-start,
+.calendar-day.is-end {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 800;
+  box-shadow: 0 12px 24px rgba(42, 103, 255, 0.22);
+}
+
+.calendar-day.is-disabled {
+  color: var(--hint);
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.date-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@keyframes softAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .date-rail-card {
   padding: 6px 0 4px;
   overflow: hidden;
