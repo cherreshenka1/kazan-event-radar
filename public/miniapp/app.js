@@ -865,6 +865,7 @@ function renderEvents() {
 
   contentNode.innerHTML = [
     eventDateRangePicker(),
+    compactEventStats(),
     eventCategoryChips(),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`

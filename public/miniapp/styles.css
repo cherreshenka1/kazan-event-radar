@@ -781,10 +781,21 @@ h1 {
 }
 
 .event-compact-stats {
-  margin: -2px 2px 2px;
-  color: var(--hint);
-  font-size: 0.88rem;
-  line-height: 1.35;
+  width: fit-content;
+  margin: -2px 2px 4px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+  box-shadow: 0 10px 24px rgba(16, 32, 51, 0.08);
+}
+
+:root[data-theme="dark"] .event-compact-stats {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .date-picker-card {
