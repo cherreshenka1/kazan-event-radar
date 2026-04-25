@@ -413,6 +413,12 @@ function buildHtmlGallery(report) {
       p { margin: 8px 0; color: var(--muted); line-height: 1.45; }
       code, textarea { font-family: Consolas, monospace; }
       textarea { width: 100%; min-height: 88px; resize: vertical; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--text); font-size: 12px; }
+      input[type="text"] { width: 100%; margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--text); }
+      .toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 18px; padding: 12px; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(16px); }
+      .button { border: 0; border-radius: 999px; padding: 10px 14px; background: var(--accent); color: white; font-weight: 800; cursor: pointer; }
+      .approve-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--text); font-weight: 800; }
+      .approve-row input { width: 18px; height: 18px; }
+      .field-label { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
       a { color: var(--accent); }
     </style>
   </head>
@@ -425,10 +431,51 @@ function buildHtmlGallery(report) {
         <span class="pill">Cards: ${cards.length}</span>
         <span class="pill">With candidates: ${withPhotos}</span>
       </div>
+      <div class="toolbar">
+        <span>Tick clean images, then export approvals.</span>
+        <button class="button" type="button" id="exportApprovals">Export approvals JSON</button>
+      </div>
       <section class="grid">
         ${cards.map(({ section, item }) => htmlGalleryCard(section, item)).join("\n")}
       </section>
     </main>
+    <script>
+      const generatedAt = ${JSON.stringify(report.generatedAt)};
+      document.querySelector("#exportApprovals")?.addEventListener("click", async () => {
+        const items = [...document.querySelectorAll("[data-approval-card]")].map((card) => ({
+          section: card.dataset.section,
+          id: card.dataset.id,
+          title: card.dataset.title,
+          approved: Boolean(card.querySelector("[data-approval-check]")?.checked),
+          photoCandidateFile: card.querySelector("[data-approval-file]")?.value || "",
+          photoSearchQuery: card.dataset.query || "",
+          targetFileName: "1",
+          note: card.querySelector("[data-approval-note]")?.value || ""
+        }));
+        const payload = {
+          generatedAt: new Date().toISOString(),
+          basedOn: generatedAt,
+          instructions: [
+            "Save this JSON as config/catalog-moderation-approvals.json.",
+            "Only approved: true items will be applied.",
+            "Run npm run catalog:moderation:apply after saving."
+          ],
+          items
+        };
+        const text = JSON.stringify(payload, null, 2) + "\\n";
+        try {
+          await navigator.clipboard.writeText(text);
+          alert("Approvals JSON copied to clipboard.");
+        } catch {
+          const blob = new Blob([text], { type: "application/json" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "catalog-moderation-approvals.json";
+          link.click();
+          URL.revokeObjectURL(link.href);
+        }
+      });
+    </script>
   </body>
 </html>
 `;
@@ -448,7 +495,7 @@ function htmlGalleryCard(section, item) {
     note: ""
   };
 
-  return `<article>
+  return `<article data-approval-card data-section="${escapeHtml(item.section)}" data-id="${escapeHtml(item.id)}" data-title="${escapeHtml(item.title)}" data-query="${escapeHtml(item.photoSearchQueries?.[0] || "")}">
     ${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.title)}" loading="lazy" />` : `<div class="empty-image">No candidate</div>`}
     <div class="body">
       <div class="section">${escapeHtml(section.title || section.sectionId)}</div>
@@ -456,6 +503,11 @@ function htmlGalleryCard(section, item) {
       ${item.subtitle ? `<p>${escapeHtml(item.subtitle)}</p>` : ""}
       <p>Candidates: ${item.photoCandidates.length}. Sources: ${item.sourceCount}. ${item.moderationNotes.length ? escapeHtml(item.moderationNotes.join(" ")) : "Ready for review."}</p>
       ${item.sourceUrl ? `<p><a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener">Source</a></p>` : ""}
+      <label class="approve-row"><input type="checkbox" data-approval-check ${candidate ? "" : "disabled"} /> Approve this photo</label>
+      <label class="field-label">Selected file</label>
+      <input type="text" data-approval-file value="${escapeHtml(candidate?.file || "")}" readonly />
+      <label class="field-label">Moderator note</label>
+      <input type="text" data-approval-note placeholder="Optional note" />
       <textarea readonly>${escapeHtml(JSON.stringify(approvalSnippet, null, 2))}</textarea>
     </div>
   </article>`;
