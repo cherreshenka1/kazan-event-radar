@@ -34,6 +34,46 @@
       "id": "jewelry",
       "guideUrl": "https://kzn.kassir.ru/obrazovanie",
       "notes": "Украшения своими руками оставляем как быстрый творческий формат с понятным результатом."
+    },
+    {
+      "id": "soap_cosmetics",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Мыло и натуральная косметика закрывают практичный творческий формат, где результат можно забрать с собой."
+    },
+    {
+      "id": "perfume",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Парфюмерные мастер-классы важны как эстетичный формат для свиданий, подарков и камерных компаний."
+    },
+    {
+      "id": "leather",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Кожа и аксессуары добавляют ремесленный формат с практичным результатом."
+    },
+    {
+      "id": "mosaic",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Мозаика и витраж подходят для визуального творческого досуга и интерьерных работ."
+    },
+    {
+      "id": "resin_art",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Эпоксидная смола добавляет современный арт-формат с эффектным, но часто не моментальным результатом."
+    },
+    {
+      "id": "barista",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Кофейные занятия полезны как короткий гастрономический формат и дневная пауза между маршрутами."
+    },
+    {
+      "id": "tea_ceremony",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Чайная церемония закрывает спокойный вечерний формат и дегустационный досуг."
+    },
+    {
+      "id": "calligraphy",
+      "guideUrl": "https://kzn.kassir.ru/obrazovanie",
+      "notes": "Каллиграфия и леттеринг дают камерный творческий формат с красивым сувенирным результатом."
     }
   ]
 }
