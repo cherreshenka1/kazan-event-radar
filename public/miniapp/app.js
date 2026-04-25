@@ -40,6 +40,8 @@ const state = {
   selectedProDays: params.get("proDays") || "3",
   proPace: params.get("proPace") || "balanced",
   proInterests: normalizeProInterests(params.get("proTags")),
+  moderationEditSection: params.get("editSection") || "food",
+  moderationEditItemId: params.get("editItem") || "",
   eventCategory: params.get("category") || "all",
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
@@ -364,6 +366,18 @@ function bindEvents() {
       return;
     }
 
+    if (action === "moderation-card-save") {
+      if (!canModerate()) return;
+      await saveModerationCatalogCard(false);
+      return;
+    }
+
+    if (action === "moderation-card-reset") {
+      if (!canModerate()) return;
+      await saveModerationCatalogCard(true);
+      return;
+    }
+
     if (action === "favorite-event") {
       await toggleFavorite(eventFavoritePayload(findEvent(button.dataset.id)));
       return;
@@ -423,6 +437,27 @@ function bindEvents() {
     track("section_search", input.value.trim(), { section: sectionId });
     syncUrl();
     render();
+  });
+
+  contentNode.addEventListener("change", (event) => {
+    const control = event.target.closest("[data-moderation-edit]");
+    if (!control || !canModerate()) return;
+
+    if (control.dataset.moderationEdit === "section") {
+      state.moderationEditSection = control.value;
+      state.moderationEditItemId = getSectionItems(state.moderationEditSection)[0]?.id || "";
+      track("moderation_edit_section", state.moderationEditSection);
+      syncUrl();
+      render();
+      return;
+    }
+
+    if (control.dataset.moderationEdit === "item") {
+      state.moderationEditItemId = control.value;
+      track("moderation_edit_item", state.moderationEditItemId, { section: state.moderationEditSection });
+      syncUrl();
+      render();
+    }
   });
 }
 
@@ -832,6 +867,7 @@ function renderModeration() {
     ),
     statBar(buildModerationStats(summary)),
     `<div class="support-layout moderation-layout">
+      ${moderationCatalogEditorCard()}
       ${moderationDraftsCard(summary)}
       ${moderationCardPipelineCard(summary)}
       ${moderationRefreshCard(summary)}
@@ -875,6 +911,122 @@ function buildModerationStats(summary) {
     `Событий в базе: ${summary.events?.total || 0}`,
     summary.catalog?.refreshAt ? `Каталог: ${formatDate(summary.catalog.refreshAt)}` : "Каталог: ждёт обновления"
   ];
+}
+
+function moderationCatalogEditorCard() {
+  const sections = getEditableCatalogSections();
+  const sectionId = sections.some((section) => section.id === state.moderationEditSection)
+    ? state.moderationEditSection
+    : sections[0]?.id || "food";
+  state.moderationEditSection = sectionId;
+
+  const items = getSectionItems(sectionId);
+  const item = items.find((entry) => entry.id === state.moderationEditItemId) || items[0] || null;
+  state.moderationEditItemId = item?.id || "";
+
+  return card([
+    `<div class="preview-label">Редактор карточек</div>`,
+    `<h3>Правка прямо в Mini App</h3>`,
+    `<p class="form-hint">Изменения сохраняются как быстрые оверрайды и сразу применяются в каталоге. Исходные файлы проекта при этом не переписываются.</p>`,
+    `<form class="support-form moderation-edit-form" id="moderationCardForm">
+      <div class="form-row-2">
+        <label>
+          <span>Раздел</span>
+          <select name="sectionId" data-moderation-edit="section">
+            ${sections.map((section) => `<option value="${escapeHtml(section.id)}" ${section.id === sectionId ? "selected" : ""}>${escapeHtml(section.label)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Карточка</span>
+          <select name="itemId" data-moderation-edit="item">
+            ${items.map((entry) => `<option value="${escapeHtml(entry.id)}" ${entry.id === item?.id ? "selected" : ""}>${escapeHtml(entry.title || entry.id)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      ${item ? moderationEditFields(item) : `<p class="form-hint">В разделе пока нет карточек для редактирования.</p>`}
+    </form>`,
+    item ? actions([
+      actionButton("Сохранить карточку", "moderation-card-save", {}, "primary"),
+      actionButton("Сбросить правку", "moderation-card-reset")
+    ]) : ""
+  ], "support-card support-card-wide moderation-card");
+}
+
+function moderationEditFields(item) {
+  return `
+    <label>
+      <span>Название</span>
+      <input name="title" type="text" maxlength="140" value="${escapeHtml(item.title || "")}" />
+    </label>
+    <label>
+      <span>Подзаголовок</span>
+      <input name="subtitle" type="text" maxlength="180" value="${escapeHtml(item.subtitle || "")}" />
+    </label>
+    <label>
+      <span>Описание</span>
+      <textarea name="description" rows="5" maxlength="1400">${escapeHtml(item.description || "")}</textarea>
+    </label>
+    <label>
+      <span>Ключевые пункты, каждый с новой строки</span>
+      <textarea name="highlights" rows="4" maxlength="1200">${escapeHtml(listToTextarea(item.highlights))}</textarea>
+    </label>
+    <div class="form-row-2">
+      <label>
+        <span>Кухня / формат</span>
+        <input name="cuisine" type="text" maxlength="240" value="${escapeHtml(item.cuisine || "")}" />
+      </label>
+      <label>
+        <span>Интерьер / атмосфера</span>
+        <input name="interior" type="text" maxlength="360" value="${escapeHtml(item.interior || "")}" />
+      </label>
+    </div>
+    <label>
+      <span>Фишки / особенности, каждая с новой строки</span>
+      <textarea name="features" rows="3" maxlength="900">${escapeHtml(listToTextarea(item.features))}</textarea>
+    </label>
+    <label>
+      <span>Ключевые блюда / результаты мастер-класса, каждый с новой строки</span>
+      <textarea name="signatureDishes" rows="3" maxlength="900">${escapeHtml(listToTextarea(item.signatureDishes))}</textarea>
+    </label>
+    <div class="form-row-2">
+      <label>
+        <span>Как добраться</span>
+        <textarea name="howToGet" rows="4" maxlength="900">${escapeHtml(item.howToGet || "")}</textarea>
+      </label>
+      <label>
+        <span>Кому подойдёт / зачем идти</span>
+        <textarea name="bestFor" rows="4" maxlength="900">${escapeHtml(item.bestFor || "")}</textarea>
+      </label>
+    </div>
+    <label>
+      <span>Кратко по отзывам</span>
+      <textarea name="reviewSummary" rows="3" maxlength="900">${escapeHtml(item.reviewSummary || "")}</textarea>
+    </label>
+    <div class="form-row-2">
+      <label>
+        <span>Когда лучше</span>
+        <input name="timing" type="text" maxlength="240" value="${escapeHtml(item.timing || "")}" />
+      </label>
+      <label>
+        <span>Где перекусить / пауза</span>
+        <input name="foodNearby" type="text" maxlength="300" value="${escapeHtml(item.foodNearby || "")}" />
+      </label>
+    </div>
+    <div class="form-row-2">
+      <label>
+        <span>Ссылка на источник</span>
+        <input name="sourceUrl" type="url" maxlength="500" value="${escapeHtml(item.sourceUrl || "")}" />
+      </label>
+      <label>
+        <span>Ссылка на карту</span>
+        <input name="mapUrl" type="url" maxlength="500" value="${escapeHtml(item.mapUrl || "")}" />
+      </label>
+    </div>
+    <label>
+      <span>Фото, каждое с новой строки. Можно: подпись | ссылка</span>
+      <textarea name="photoLinks" rows="4" maxlength="1800">${escapeHtml(photoLinksToTextarea(item.photoLinks))}</textarea>
+    </label>
+  `;
 }
 
 function moderationDraftsCard(summary) {
@@ -2337,6 +2489,59 @@ async function createReminder(eventId) {
   }
 }
 
+async function saveModerationCatalogCard(reset = false) {
+  const form = contentNode.querySelector("#moderationCardForm");
+  if (!form) return;
+
+  const formData = new FormData(form);
+  const sectionId = String(formData.get("sectionId") || state.moderationEditSection || "").trim();
+  const itemId = String(formData.get("itemId") || state.moderationEditItemId || "").trim();
+  if (!sectionId || !itemId) {
+    toast("Выберите раздел и карточку.");
+    return;
+  }
+
+  const fields = reset ? {} : {
+    title: String(formData.get("title") || "").trim(),
+    subtitle: String(formData.get("subtitle") || "").trim(),
+    description: String(formData.get("description") || "").trim(),
+    highlights: textareaToList(formData.get("highlights")),
+    features: textareaToList(formData.get("features")),
+    signatureDishes: textareaToList(formData.get("signatureDishes")),
+    howToGet: String(formData.get("howToGet") || "").trim(),
+    bestFor: String(formData.get("bestFor") || "").trim(),
+    timing: String(formData.get("timing") || "").trim(),
+    foodNearby: String(formData.get("foodNearby") || "").trim(),
+    cuisine: String(formData.get("cuisine") || "").trim(),
+    interior: String(formData.get("interior") || "").trim(),
+    reviewSummary: String(formData.get("reviewSummary") || "").trim(),
+    sourceUrl: String(formData.get("sourceUrl") || "").trim(),
+    mapUrl: String(formData.get("mapUrl") || "").trim(),
+    photoLinks: textareaToPhotoLinks(formData.get("photoLinks"))
+  };
+
+  try {
+    const result = await api("/api/moderation/catalog-card", {
+      method: "POST",
+      body: JSON.stringify({ sectionId, itemId, fields, reset })
+    });
+
+    if (result.item && state.catalog?.[sectionId]?.items) {
+      state.catalog[sectionId].items = state.catalog[sectionId].items.map((item) => item.id === itemId ? result.item : item);
+    } else {
+      const catalog = await api("/api/catalog");
+      state.catalog = catalog.catalog;
+      state.sections = catalog.sections;
+    }
+
+    track(reset ? "moderation_card_reset" : "moderation_card_save", `${sectionId}:${itemId}`);
+    toast(reset ? "Правка карточки сброшена." : "Карточка сохранена.");
+    render();
+  } catch (error) {
+    toast(`Не удалось сохранить карточку: ${error.message}`);
+  }
+}
+
 async function removeFavorite(favoriteId) {
   const favorite = state.favorites.find((item) => item.id === favoriteId);
   if (!favorite) return;
@@ -2767,6 +2972,16 @@ function getSectionItems(sectionId) {
   return state.catalog?.[sectionId]?.items || [];
 }
 
+function getEditableCatalogSections() {
+  return Object.entries(state.catalog || {})
+    .filter(([, section]) => Array.isArray(section?.items) && section.items.length)
+    .map(([id, section]) => ({
+      id,
+      label: sectionLabel(id) || section.title || id
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, "ru"));
+}
+
 function getSelectedSectionId(sectionId) {
   if (sectionId === "food") return state.selectedFoodId;
   if (sectionId === "active") return state.selectedActiveId;
@@ -3072,6 +3287,11 @@ function syncUrl() {
     if (state.proInterests.length) next.set("proTags", state.proInterests.join(","));
   }
 
+  if (state.activeTab === "moderation") {
+    if (state.moderationEditSection) next.set("editSection", state.moderationEditSection);
+    if (state.moderationEditItemId) next.set("editItem", state.moderationEditItemId);
+  }
+
   if (state.activeTab === "events" && state.eventCategory && state.eventCategory !== "all") {
     next.set("category", state.eventCategory);
   }
@@ -3232,8 +3452,44 @@ function getSectionPrimaryImage(sectionId, item, fallbackUrl = "") {
   return photoLinks[0]?.url || item?.imageUrl || item?.externalPreviewUrl || fallbackUrl || "";
 }
 
+function listToTextarea(items) {
+  return Array.isArray(items) ? items.filter(Boolean).join("\n") : "";
+}
+
+function textareaToList(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function photoLinksToTextarea(items) {
+  if (!Array.isArray(items)) return "";
+  return items
+    .map((item) => item?.url ? `${item.label || "Фото"} | ${item.url}` : "")
+    .filter(Boolean)
+    .join("\n");
+}
+
+function textareaToPhotoLinks(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line, index) => {
+      const raw = line.trim();
+      if (!raw) return null;
+      const [label, url] = raw.includes("|") ? raw.split("|").map((part) => part.trim()) : [`Фото ${index + 1}`, raw];
+      if (!url) return null;
+      return { label: label || `Фото ${index + 1}`, url };
+    })
+    .filter(Boolean);
+}
+
 function getSectionPhotoLinks(sectionId, item) {
   if (!item?.id || !sectionId) {
+    return getFallbackPhotoLinks(item);
+  }
+
+  if (Array.isArray(item?.photoLinks) && item.photoLinks.some((link) => link?.url)) {
     return getFallbackPhotoLinks(item);
   }
 
@@ -3246,6 +3502,15 @@ function getSectionPhotoLinks(sectionId, item) {
 }
 
 function getFallbackPhotoLinks(item) {
+  if (Array.isArray(item?.photoLinks) && item.photoLinks.some((link) => link?.url)) {
+    return item.photoLinks
+      .filter((link) => String(link?.url || "").trim())
+      .map((link, index) => ({
+        label: link.label || `Фото ${index + 1}`,
+        url: link.url
+      }));
+  }
+
   const candidates = [item?.imageUrl, item?.externalPreviewUrl]
     .map((value) => String(value || "").trim())
     .filter(Boolean)

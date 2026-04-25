@@ -277,8 +277,17 @@ async function handleRequest(request, env) {
     return json(await buildModerationSummary(env, user), 200, env);
   }
 
+  if (url.pathname === "/api/moderation/catalog-card" && request.method === "POST") {
+    const user = await requireMiniAppModerator(request, env);
+    await enforceRateLimit(env, "moderation-write", user.id, getPositiveNumber(env.RATE_LIMIT_ADMIN_PER_MINUTE, DEFAULT_ADMIN_WRITE_RATE_LIMIT));
+    const body = await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT);
+    const result = await saveCatalogCardOverride(env, body, user);
+    await track(env, { type: "miniapp", action: "catalog_card_edit", label: `${result.sectionId}:${result.itemId}`, userId: user.id });
+    return json(result, 200, env);
+  }
+
   if (url.pathname === "/api/catalog") {
-    return json({ sections: MAIN_SECTIONS, catalog: CATALOG }, 200, env);
+    return json({ sections: MAIN_SECTIONS, catalog: await getCatalogWithOverrides(env) }, 200, env);
   }
 
   if (url.pathname === "/api/pro/overview") {
@@ -3947,6 +3956,151 @@ async function getUser(env, userId) {
 
 async function getRuntime(env) {
   return await getJson(env, "runtime", { managerChatId: null, managerUsername: null, channelId: null, channelTitle: null });
+}
+
+async function getCatalogWithOverrides(env) {
+  const overrides = await getCatalogOverrides(env);
+  return applyCatalogOverrides(CATALOG, overrides);
+}
+
+async function getCatalogOverrides(env) {
+  return await getJson(env, "catalog:overrides", {
+    updatedAt: null,
+    items: {}
+  });
+}
+
+async function saveCatalogCardOverride(env, body, user) {
+  const sectionId = normalizeKeyPart(body?.sectionId || body?.section || "");
+  const itemId = String(body?.itemId || body?.id || "").trim();
+
+  if (!sectionId || !itemId) throw new HttpError("sectionId and itemId are required.", 400);
+  const section = CATALOG?.[sectionId];
+  if (!section || !Array.isArray(section.items)) throw new HttpError("Catalog section was not found.", 404);
+  const baseItem = section.items.find((item) => item?.id === itemId);
+  if (!baseItem) throw new HttpError("Catalog item was not found.", 404);
+
+  const patch = sanitizeCatalogCardPatch(body?.fields || body?.patch || {});
+  const overrides = await getCatalogOverrides(env);
+  overrides.items = overrides.items && typeof overrides.items === "object" ? overrides.items : {};
+  overrides.items[sectionId] = overrides.items[sectionId] && typeof overrides.items[sectionId] === "object" ? overrides.items[sectionId] : {};
+
+  if (body?.reset === true) {
+    delete overrides.items[sectionId][itemId];
+  } else {
+    overrides.items[sectionId][itemId] = {
+      ...(overrides.items[sectionId][itemId] || {}),
+      ...patch,
+      updatedAt: new Date().toISOString(),
+      updatedBy: user?.username || String(user?.id || "")
+    };
+  }
+
+  overrides.updatedAt = new Date().toISOString();
+  await putJson(env, "catalog:overrides", overrides);
+
+  const catalog = applyCatalogOverrides(CATALOG, overrides);
+  const updatedItem = catalog?.[sectionId]?.items?.find((item) => item?.id === itemId) || baseItem;
+  return {
+    ok: true,
+    sectionId,
+    itemId,
+    item: updatedItem,
+    reset: body?.reset === true,
+    updatedAt: overrides.updatedAt
+  };
+}
+
+function applyCatalogOverrides(baseCatalog, overrides) {
+  const catalog = JSON.parse(JSON.stringify(baseCatalog || {}));
+  const items = overrides?.items && typeof overrides.items === "object" ? overrides.items : {};
+
+  for (const [sectionId, sectionOverrides] of Object.entries(items)) {
+    const section = catalog?.[sectionId];
+    if (!section || !Array.isArray(section.items) || !sectionOverrides || typeof sectionOverrides !== "object") continue;
+
+    section.items = section.items.map((item) => {
+      const patch = sectionOverrides[item?.id];
+      if (!patch || typeof patch !== "object") return item;
+      return {
+        ...item,
+        ...patch,
+        id: item.id
+      };
+    });
+  }
+
+  return catalog;
+}
+
+function sanitizeCatalogCardPatch(fields) {
+  const allowedTextFields = [
+    "title",
+    "subtitle",
+    "description",
+    "howToGet",
+    "bestFor",
+    "timing",
+    "foodNearby",
+    "cuisine",
+    "interior",
+    "reviewSummary",
+    "sourceUrl",
+    "mapUrl",
+    "reviewUrl"
+  ];
+  const allowedListFields = ["highlights", "features", "signatureDishes"];
+  const patch = {};
+
+  for (const field of allowedTextFields) {
+    if (!(field in (fields || {}))) continue;
+    patch[field] = trim(String(fields[field] || ""), field.endsWith("Url") ? 500 : 1400);
+  }
+
+  for (const field of allowedListFields) {
+    if (!(field in (fields || {}))) continue;
+    patch[field] = normalizeStringList(fields[field]).slice(0, 12);
+  }
+
+  if ("photoLinks" in (fields || {})) {
+    patch.photoLinks = normalizePhotoLinks(fields.photoLinks).slice(0, 12);
+  }
+
+  return patch;
+}
+
+function normalizeStringList(value) {
+  if (Array.isArray(value)) return value.map((item) => trim(String(item || ""), 240)).filter(Boolean);
+  return String(value || "")
+    .split(/\r?\n|;/)
+    .map((item) => trim(item, 240))
+    .filter(Boolean);
+}
+
+function normalizePhotoLinks(value) {
+  const entries = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+  return entries
+    .map((entry, index) => {
+      if (entry && typeof entry === "object") {
+        const url = trim(entry.url || "", 500);
+        if (!url) return null;
+        return {
+          label: trim(entry.label || `Фото ${index + 1}`, 80),
+          url
+        };
+      }
+
+      const raw = trim(String(entry || ""), 600);
+      if (!raw) return null;
+      const [maybeLabel, maybeUrl] = raw.includes("|") ? raw.split("|").map((part) => part.trim()) : ["", raw];
+      const url = trim(maybeUrl || raw, 500);
+      if (!url) return null;
+      return {
+        label: trim(maybeLabel || `Фото ${index + 1}`, 80),
+        url
+      };
+    })
+    .filter(Boolean);
 }
 
 async function getPublishing(env) {
