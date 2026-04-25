@@ -616,15 +616,30 @@ h1 {
 
 .event-category-main {
   flex-wrap: nowrap;
+  align-items: center;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
 .event-category-extra {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.34);
   overflow: visible;
   animation: softAppear 0.18s ease both;
+}
+
+.event-category-extra .chip {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.25;
+  padding: 11px 13px;
 }
 
 .chip-more {

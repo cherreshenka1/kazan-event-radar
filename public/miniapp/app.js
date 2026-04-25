@@ -3443,9 +3443,9 @@ function statBar(items) {
 
 function eventCategoryChips() {
   const selectedCount = state.eventCategories?.length || 0;
-  const moreLabel = selectedCount
-    ? `Ещё категории · ${selectedCount}`
-    : (state.eventCategoriesOpen ? "Скрыть категории" : "Ещё категории");
+  const moreLabel = state.eventCategoriesOpen
+    ? "Скрыть категории"
+    : (selectedCount ? `Ещё категории · ${selectedCount}` : "Ещё категории");
 
   return `
     <div class="event-category-panel">
@@ -3454,7 +3454,7 @@ function eventCategoryChips() {
         ${chip(moreLabel, "event-category-more", {}, state.eventCategoriesOpen || selectedCount > 0, "chip-more")}
       </div>
       ${state.eventCategoriesOpen ? `
-        <div class="chips event-category-extra">
+        <div class="event-category-extra">
           ${EVENT_CATEGORY_OPTIONS.map((item) => chip(item.label, "event-category-toggle", { category: item.id }, state.eventCategories.includes(item.id))).join("")}
           ${selectedCount ? chip("Сбросить", "event-categories-clear", {}, false, "chip-muted") : ""}
         </div>
