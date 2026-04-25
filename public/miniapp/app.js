@@ -524,6 +524,13 @@ function bindEvents() {
         return;
       }
 
+      if (action === "section-search-apply") {
+        const sectionId = button.dataset.section;
+        const input = contentNode.querySelector(`[data-section-search="${sectionId}"]`);
+        await applySectionSearch(sectionId, input?.value || "");
+        return;
+      }
+
       if (action === "favorite-focus") {
         state.selectedFavoriteId = button.dataset.id;
         track("favorite_focus", state.selectedFavoriteId);
@@ -537,16 +544,13 @@ function bindEvents() {
     }
   });
 
-  contentNode.addEventListener("input", (event) => {
+  contentNode.addEventListener("keydown", async (event) => {
     const input = event.target.closest("[data-section-search]");
     if (!input) return;
+    if (event.key !== "Enter") return;
 
-    const sectionId = input.dataset.sectionSearch;
-    setSectionQuery(sectionId, input.value || "");
-    syncSelectionForQuery(sectionId);
-    track("section_search", input.value.trim(), { section: sectionId });
-    syncUrl();
-    render();
+    event.preventDefault();
+    await applySectionSearch(input.dataset.sectionSearch, input.value || "");
   });
 
   contentNode.addEventListener("change", (event) => {
@@ -3103,6 +3107,16 @@ function setSectionQuery(sectionId, value) {
   if (sectionId === "roadtrip") state.roadtripQuery = next;
 }
 
+async function applySectionSearch(sectionId, value) {
+  if (!sectionId) return;
+  const query = String(value || "").trim();
+  setSectionQuery(sectionId, query);
+  syncSelectionForQuery(sectionId);
+  track("section_search", query, { section: sectionId });
+  syncUrl();
+  render();
+}
+
 function syncSelectionForQuery(sectionId) {
   if (sectionId === "places") {
     const items = getFilteredPlaceItems();
@@ -3219,13 +3233,16 @@ function sectionSearchToolbar(sectionId, placeholder, filteredCount, totalCount)
       </div>
       <label class="search-field">
         <span class="search-label">${escapeHtml(placeholder)}</span>
-        <input
-          type="text"
-          value="${escapeHtml(query)}"
-          data-section-search="${escapeHtml(sectionId)}"
-          placeholder="${escapeHtml(placeholder)}"
-          autocomplete="off"
-        />
+        <div class="search-input-row">
+          <input
+            type="text"
+            value="${escapeHtml(query)}"
+            data-section-search="${escapeHtml(sectionId)}"
+            placeholder="${escapeHtml(placeholder)}"
+            autocomplete="off"
+          />
+          ${actionButton("Поиск", "section-search-apply", { section: sectionId }, "primary")}
+        </div>
       </label>
     </section>
   `;

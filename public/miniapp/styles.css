@@ -1151,6 +1151,13 @@ h1 {
   gap: 6px;
 }
 
+.search-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .search-label {
   color: var(--hint);
   font-size: 0.92rem;
@@ -1176,6 +1183,11 @@ h1 {
   box-shadow:
     0 0 0 4px rgba(37, 99, 235, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.search-input-row .button {
+  min-height: 46px;
+  padding-inline: 18px;
 }
 
 .section-note .summary-short {
@@ -1797,6 +1809,10 @@ h1 {
     min-height: 164px;
     padding: 18px;
     border-radius: 22px;
+  }
+
+  .search-input-row {
+    grid-template-columns: 1fr;
   }
 
   .card {
