@@ -4231,11 +4231,11 @@ function getPresetRange(rangeId) {
   }
 
   if (rangeId === "3days") {
-    return { from, to: addDays(from, 3, to) };
+    return { from, to: addDays(from, 2, to) };
   }
 
   if (rangeId === "week") {
-    return { from, to: addDays(from, 7, to) };
+    return { from, to: addDays(from, 6, to) };
   }
 
   return { from, to };
