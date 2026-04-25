@@ -866,7 +866,6 @@ function renderEvents() {
   contentNode.innerHTML = [
     eventDateRangePicker(),
     eventCategoryChips(),
-    compactEventStats(),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`
       : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты."),
@@ -882,16 +881,9 @@ function renderPlaces() {
 
   contentNode.innerHTML = [
       `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
-      sectionHeader(section.title, section.intro, SECTION_VISUALS[state.placeSection] || SECTION_VISUALS.places),
-      sectionFocusNote(state.placeSection),
       sectionSearchToolbar("places", `Поиск по разделу «${section.title}»`, items.length, allItems.length),
-      statBar(buildCatalogSectionStats(state.placeSection, items, selected, allItems.length)),
       items.length
         ? renderCatalogExplorerLayout({
-          panelLabel: sectionLabel(state.placeSection),
-          panelTitle: `${items.length || 0} точек в подборке`,
-          panelText: buildCatalogCollectionText(state.placeSection, selected),
-          panelBadges: buildCatalogCollectionBadges(state.placeSection, items, selected, allItems.length),
           cardsHtml: items.map((item) => catalogPreviewCard(state.placeSection, item, item.id === selected?.id, "place-item", { id: item.id })).join(""),
           detailHtml: selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
         })
@@ -906,16 +898,9 @@ function renderFood() {
   const selected = items.find((item) => item.id === state.selectedFoodId) || items[0] || null;
 
   contentNode.innerHTML = [
-      sectionHeader(section.title, section.intro, SECTION_VISUALS.food),
-      sectionFocusNote("food"),
       sectionSearchToolbar("food", "Поиск по кухне, блюдам, атмосфере и отзывам", items.length, allItems.length),
-      statBar(buildCatalogSectionStats("food", items, selected, allItems.length)),
       items.length
         ? renderCatalogExplorerLayout({
-          panelLabel: "Еда",
-          panelTitle: `${items.length || 0} ресторанов и бистро`,
-          panelText: buildCatalogCollectionText("food", selected),
-          panelBadges: buildCatalogCollectionBadges("food", items, selected, allItems.length),
           cardsHtml: items.map((item) => catalogPreviewCard("food", item, item.id === selected?.id, "section-item", { section: "food", id: item.id })).join(""),
           detailHtml: selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
         })
@@ -1230,16 +1215,9 @@ function renderSectionExplorer(sectionId, emptyText) {
   const selected = items.find((item) => item.id === selectedId) || items[0] || null;
 
   contentNode.innerHTML = [
-      sectionHeader(section.title, section.intro, SECTION_VISUALS[sectionId]),
-      sectionFocusNote(sectionId),
       sectionSearchToolbar(sectionId, buildSectionSearchPlaceholder(sectionId), items.length, allItems.length),
-      statBar(buildCatalogSectionStats(sectionId, items, selected, allItems.length)),
       items.length
         ? renderCatalogExplorerLayout({
-          panelLabel: sectionLabel(sectionId),
-          panelTitle: `${items.length || 0} вариантов`,
-          panelText: buildCatalogCollectionText(sectionId, selected),
-          panelBadges: buildCatalogCollectionBadges(sectionId, items, selected, allItems.length),
           cardsHtml: items.map((item) => catalogPreviewCard(sectionId, item, item.id === selected?.id, "section-item", { section: sectionId, id: item.id })).join(""),
           detailHtml: selected ? renderCatalogDetailCard(sectionId, selected) : empty(emptyText)
         })
@@ -1252,20 +1230,12 @@ function renderRoutes() {
   const allItems = getActiveRouteItems();
   const items = getFilteredRouteItems();
   const selected = items.find((route) => route.id === state.selectedRouteId) || items[0] || null;
-  const activeLevel = routes.levels.find((level) => level.id === state.routeLevel);
 
   contentNode.innerHTML = [
       `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
-      sectionHeader("Пешие маршруты", routes.levels.find((level) => level.id === state.routeLevel)?.description || routes.intro, SECTION_VISUALS.routes),
-      sectionFocusNote("routes"),
       sectionSearchToolbar("routes", "Поиск по маршрутам, точкам и логистике", items.length, allItems.length),
-      statBar(buildRouteSectionStats(items, selected, allItems.length)),
       items.length
         ? renderCatalogExplorerLayout({
-          panelLabel: "Пешие маршруты",
-          panelTitle: activeLevel ? `${items.length || 0} маршрутов: ${activeLevel.title.toLowerCase()} уровень` : `${items.length || 0} маршрутов`,
-          panelText: buildRouteCollectionText(selected, activeLevel),
-          panelBadges: buildRouteCollectionBadges(items, selected, activeLevel, allItems.length),
           cardsHtml: items.map((route) => routePreviewCard(route, route.id === selected?.id)).join(""),
           detailHtml: selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
         })
@@ -1919,16 +1889,17 @@ function renderEventModal(item) {
 }
 
 function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelText = "", panelBadges = [], cardsHtml = "", detailHtml = "" }) {
+  const hasPanelContent = panelLabel || panelTitle || panelText || panelBadges.length;
   return `
     <section class="two-column explorer-shell">
       <div class="explorer-sidebar">
-        <article class="card explorer-panel">
+        ${hasPanelContent ? `<article class="card explorer-panel">
           ${panelLabel ? `<div class="preview-label">${escapeHtml(panelLabel)}</div>` : ""}
           ${panelTitle ? `<h3>${escapeHtml(panelTitle)}</h3>` : ""}
           ${panelText ? `<p class="summary-short">${escapeHtml(panelText)}</p>` : ""}
           ${panelBadges.length ? `<div class="meta-badges explorer-badges">${panelBadges.map((value) => badge(value)).join("")}</div>` : ""}
           <p class="explorer-panel-hint">Откройте карточку ниже, чтобы увидеть детали, фото, логистику и добавить место в план.</p>
-        </article>
+        </article>` : ""}
         <div class="list-grid selector-list">${cardsHtml}</div>
       </div>
       <div class="explorer-detail">${detailHtml}</div>
@@ -1938,7 +1909,6 @@ function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelTe
 
 function catalogPreviewCard(sectionId, item, isActive, action, data) {
     const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
-    const badges = buildCatalogPreviewBadges(sectionId, item).slice(0, 3);
     const summary = catalogPreviewSummary(sectionId, item);
     const meta = catalogPreviewMeta(sectionId, item);
     const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
@@ -1954,7 +1924,6 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
         <div class="selector-card-title">${escapeHtml(item.title)}</div>
         ${meta ? `<div class="selector-meta-line">${escapeHtml(meta)}</div>` : ""}
         ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
-        ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
     </button>
   `;
 }
@@ -2465,7 +2434,6 @@ function buildFoodQuickFacts(item) {
 }
 
 function routePreviewCard(route, isActive) {
-  const badges = buildRoutePreviewBadges(route).slice(0, 3);
   const summary = trim(route.description || route.foodNearby || route.howToGet || route.subtitle || route.title, 150);
   const previewImage = getSectionPrimaryImage("routes", route, SECTION_VISUALS.routes);
 
@@ -2479,7 +2447,6 @@ function routePreviewCard(route, isActive) {
       <div class="selector-card-title">${escapeHtml(route.title)}</div>
       ${route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : ""}
       ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
-      ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
     </button>
   `;
 }
