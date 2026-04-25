@@ -332,6 +332,11 @@ function bindEvents() {
       return;
     }
 
+    if (action === "support-submit") {
+      await submitSupportRequest();
+      return;
+    }
+
     if (action === "open") {
       track("outbound_link", button.dataset.url, { label: button.textContent.trim() });
       openLink(button.dataset.url);
@@ -583,6 +588,7 @@ function render() {
     button.classList.toggle("is-active", button.dataset.tab === state.activeTab);
   });
   document.body.classList.toggle("modal-open", state.activeTab === "events" && Boolean(state.openEventId));
+  document.body.classList.toggle("is-support-tab", state.activeTab === "support");
   renderHero();
   syncUrl();
 
@@ -665,8 +671,8 @@ function renderHero() {
     },
     support: {
       eyebrow: "Помощь",
-      title: "Быстрая поддержка без лишней бюрократии",
-      text: "Если что-то не открылось, не сохранилось или выглядит странно, здесь есть быстрые шаги, FAQ и прямая связь.",
+      title: "Напишите, что случилось",
+      text: "Короткая форма обращения без лишних блоков: раздел, карточка, что произошло и как с вами связаться.",
       badges: buildSupportHeroBadges()
     },
     favorites: {
@@ -829,18 +835,8 @@ function renderSupport() {
   const support = getSupportInfo();
 
   contentNode.innerHTML = [
-    sectionHeader(
-      "Помощь и поддержка",
-      "Здесь собраны быстрые ответы, понятные шаги при сбое и удобные кнопки для связи. Без тяжёлой тикет-системы, но уже с нормальной опорой для пользователей.",
-      SECTION_VISUALS.support
-    ),
-    statBar(buildSupportStats(support)),
     `<div class="support-layout">
-      ${supportQuickActionsCard(support)}
-      ${supportDataFreshnessCard()}
-      ${supportFaqCard()}
-      ${supportTroubleshootingCard()}
-      ${supportFeedbackCard(support)}
+      ${supportRequestCard(support)}
     </div>`
   ].join("");
 }
@@ -1022,10 +1018,8 @@ function renderFavorites() {
 function buildSupportHeroBadges() {
   const support = getSupportInfo();
   return [
-    "FAQ внутри",
-    support.contactUrl ? "Есть быстрая связь" : "Связь добавим позже",
-    "Данные обновляются",
-    support.channelUrl ? "Есть канал с обновлениями" : "Канал подключается"
+    support.contactUrl ? "Поддержка подключена" : "Поддержка настраивается",
+    "Ответ в Telegram"
   ];
 }
 
@@ -1039,23 +1033,52 @@ function buildSupportStats(support) {
   ];
 }
 
-function supportQuickActionsCard(support) {
+function supportRequestCard(support) {
   return card([
-    `<div class="preview-label">Быстрые действия</div>`,
-    `<h3>Что можно сделать сразу</h3>`,
-    richTextBlock([
-      "Если что-то не загрузилось, сначала обновите мини-приложение и откройте нужную вкладку ещё раз.",
-      "Если проблема повторилась, можно сразу написать нам и коротко описать, в каком разделе это произошло."
-    ].join("\n\n")),
-    `<div class="fact-grid">
-      ${factBlock("Когда писать", "Если не открывается карточка, не работает напоминание, не сохраняется план или пропали данные в разделе.")}
-      ${factBlock("Что приложить", "Название события или места, раздел, примерное время ошибки и короткое описание того, что вы нажали.")}
-    </div>`,
+    `<div class="preview-label">Запрос в поддержку</div>`,
+    `<h3>Опишите проблему или идею</h3>`,
+    `<p class="form-hint">Заполните то, что знаете. После отправки мы скопируем готовый текст обращения и откроем Telegram поддержки.</p>`,
+    `<form class="support-form" id="supportForm">
+      <label>
+        <span>Тип обращения</span>
+        <select name="kind">
+          <option value="Ошибка">Ошибка или баг</option>
+          <option value="Жалоба">Жалоба на карточку</option>
+          <option value="Идея">Идея или предложение</option>
+          <option value="Данные">Неверная дата, место или ссылка</option>
+        </select>
+      </label>
+      <label>
+        <span>Раздел</span>
+        <select name="section">
+          <option value="Афиша">Афиша</option>
+          <option value="Места">Места</option>
+          <option value="Еда">Еда</option>
+          <option value="Пешие маршруты">Пешие маршруты</option>
+          <option value="Активный отдых">Активный отдых</option>
+          <option value="На машине">На машине</option>
+          <option value="Pro">Pro</option>
+          <option value="Другое">Другое</option>
+        </select>
+      </label>
+      <label>
+        <span>Название карточки или события</span>
+        <input name="title" type="text" maxlength="120" placeholder="Например: концерт, ресторан или маршрут" />
+      </label>
+      <label>
+        <span>Что произошло</span>
+        <textarea name="message" rows="5" maxlength="900" placeholder="Напишите коротко: что нажали, что ожидали увидеть и что получилось вместо этого."></textarea>
+      </label>
+      <label>
+        <span>Как с вами связаться</span>
+        <input name="contact" type="text" maxlength="120" placeholder="@username или телефон, если хотите ответ" />
+      </label>
+    </form>`,
     actions([
-      support.contactUrl ? actionButton("Написать в поддержку", "open", { url: support.contactUrl }, "primary") : "",
-      support.channelUrl ? actionButton("Открыть канал", "open", { url: support.channelUrl }) : ""
+      actionButton("Отправить запрос в поддержку", "support-submit", {}, "primary"),
+      support.contactUrl ? actionButton("Открыть поддержку без формы", "open", { url: support.contactUrl }) : ""
     ])
-  ], "support-card");
+  ], "support-card support-card-wide");
 }
 
 function supportDataFreshnessCard() {
@@ -3676,6 +3699,70 @@ function openLink(url) {
   if (!url) return;
   if (tg?.openLink) tg.openLink(url);
   else window.open(url, "_blank", "noopener");
+}
+
+async function submitSupportRequest() {
+  const form = contentNode.querySelector("#supportForm");
+  const support = getSupportInfo();
+  if (!form) return;
+
+  const formData = new FormData(form);
+  const payload = {
+    kind: String(formData.get("kind") || "Обращение").trim(),
+    section: String(formData.get("section") || "Другое").trim(),
+    title: String(formData.get("title") || "").trim(),
+    message: String(formData.get("message") || "").trim(),
+    contact: String(formData.get("contact") || "").trim()
+  };
+
+  if (!payload.message && !payload.title) {
+    toast("Заполните хотя бы название карточки или описание проблемы.");
+    return;
+  }
+
+  const text = buildSupportRequestText(payload);
+  await copyText(text);
+  track("support_request_submit", payload.kind, { section: payload.section, hasContact: Boolean(payload.contact) });
+  toast("Текст обращения скопирован. Сейчас открою поддержку.");
+
+  window.setTimeout(() => {
+    openLink(support.contactUrl || "https://t.me/cherreshenkaw");
+  }, 350);
+}
+
+function buildSupportRequestText(payload) {
+  const user = tg?.initDataUnsafe?.user || {};
+  const userLabel = user.username ? `@${user.username}` : [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  const lines = [
+    "Запрос в поддержку Kazan Event Radar",
+    "",
+    `Тип: ${payload.kind}`,
+    `Раздел: ${payload.section}`,
+    payload.title ? `Карточка: ${payload.title}` : "",
+    "",
+    payload.message ? `Описание:\n${payload.message}` : "",
+    "",
+    payload.contact ? `Контакт: ${payload.contact}` : "",
+    userLabel ? `Telegram: ${userLabel}` : "",
+    `Время: ${new Date().toLocaleString("ru-RU")}`
+  ];
+  return lines.filter((line) => line !== "").join("\n");
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
 }
 
 function toast(message) {

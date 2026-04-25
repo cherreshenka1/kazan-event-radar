@@ -382,6 +382,10 @@ body.is-moderator .moderation-only {
   animation: fade-up 0.5s ease, soft-zoom 0.55s ease;
 }
 
+body.is-support-tab .hero {
+  display: none;
+}
+
 .hero-copy {
   max-width: 680px;
   padding: 18px 20px;
@@ -519,6 +523,52 @@ h1 {
 
 .support-card-wide {
   grid-column: 1 / -1;
+}
+
+.support-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.support-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--hint);
+  font-size: 0.94rem;
+}
+
+.support-form input,
+.support-form select,
+.support-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.support-form input:focus,
+.support-form select:focus,
+.support-form textarea:focus {
+  border-color: rgba(37, 99, 235, 0.46);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.form-hint {
+  margin: 0;
+  color: var(--hint);
+}
+
+:root[data-theme="dark"] .support-form input,
+:root[data-theme="dark"] .support-form select,
+:root[data-theme="dark"] .support-form textarea {
+  background: rgba(231, 237, 246, 0.08);
+  border-color: var(--border);
 }
 
 .moderation-layout .moderation-card {
