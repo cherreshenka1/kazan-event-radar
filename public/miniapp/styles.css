@@ -899,6 +899,19 @@ h1 {
   text-transform: capitalize;
 }
 
+:root[data-theme="dark"] .date-picker-summary span,
+:root[data-theme="dark"] .date-picker-help,
+:root[data-theme="dark"] .calendar-weekdays {
+  color: rgba(231, 237, 246, 0.72);
+}
+
+:root[data-theme="dark"] .date-picker-summary strong,
+:root[data-theme="dark"] .calendar-toolbar strong,
+:root[data-theme="dark"] .calendar-month h4,
+:root[data-theme="dark"] .calendar-day {
+  color: #eef4ff;
+}
+
 .calendar-weekdays,
 .calendar-grid {
   display: grid;
@@ -950,6 +963,22 @@ h1 {
   color: var(--hint);
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+:root[data-theme="dark"] .calendar-day:not(.is-disabled):hover,
+:root[data-theme="dark"] .calendar-day.is-in-range {
+  background: rgba(79, 140, 255, 0.22);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .calendar-day.is-start,
+:root[data-theme="dark"] .calendar-day.is-end {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+:root[data-theme="dark"] .calendar-day.is-disabled {
+  color: rgba(231, 237, 246, 0.42);
 }
 
 .date-picker-actions {
@@ -1256,6 +1285,10 @@ h1 {
 .card:hover {
   transform: translateY(-2px);
   background: color-mix(in srgb, #f4f7fb 92%, var(--card-hover));
+}
+
+:root[data-theme="dark"] .card:hover {
+  background: color-mix(in srgb, var(--card) 88%, var(--card-hover));
 }
 
 .selector-card {
