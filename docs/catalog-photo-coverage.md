@@ -1,14 +1,14 @@
 # Покрытие фотографиями каталога
 
-Обновлено: 2026-04-25T11:13:17.523Z
+Обновлено: 2026-04-25T13:56:00.185Z
 
 Этот файл помогает быстро понять, куда нужно добавить фотографии для карточек Mini App.
 
 Рекомендуемый формат: `cover.jpg`, `01.jpg`, `02.jpg` или `.webp` внутри папки нужной карточки.
 
-Итого: 0/226 карточек с фото.
+Итого: 0/234 карточек с фото.
 
-Пустых папок: 226.
+Пустых папок: 234.
 
 Папок не хватает: 0.
 
@@ -256,7 +256,7 @@
 
 ## Мастер-классы
 
-Фото есть: 0/7. Пустые папки: 7. Нет папки: 0.
+Фото есть: 0/15. Пустые папки: 15. Нет папки: 0.
 
 | Статус | Карточка | Папка |
 | --- | --- | --- |
@@ -267,6 +267,14 @@
 | папка пустая | Свечи и ароматы | `public/miniapp/photos/masterclasses/candles` |
 | папка пустая | Флористика | `public/miniapp/photos/masterclasses/floristics` |
 | папка пустая | Украшения своими руками | `public/miniapp/photos/masterclasses/jewelry` |
+| папка пустая | Мыло и натуральная косметика | `public/miniapp/photos/masterclasses/soap_cosmetics` |
+| папка пустая | Парфюмерный мастер-класс | `public/miniapp/photos/masterclasses/perfume` |
+| папка пустая | Изделия из кожи | `public/miniapp/photos/masterclasses/leather` |
+| папка пустая | Мозаика и витраж | `public/miniapp/photos/masterclasses/mosaic` |
+| папка пустая | Эпоксидная смола | `public/miniapp/photos/masterclasses/resin_art` |
+| папка пустая | Кофейный мастер-класс | `public/miniapp/photos/masterclasses/barista` |
+| папка пустая | Чайная церемония | `public/miniapp/photos/masterclasses/tea_ceremony` |
+| папка пустая | Каллиграфия и леттеринг | `public/miniapp/photos/masterclasses/calligraphy` |
 
 ## На машине
 

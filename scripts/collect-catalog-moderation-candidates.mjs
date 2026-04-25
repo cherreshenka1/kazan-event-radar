@@ -11,6 +11,7 @@ const MODERATION_ROOT = projectPath("data", "catalog-moderation");
 const PHOTO_CANDIDATES_ROOT = path.join(MODERATION_ROOT, "photo-candidates");
 const REPORT_JSON = path.join(MODERATION_ROOT, "review-board.json");
 const REPORT_MD = path.join(MODERATION_ROOT, "review-board.md");
+const REPORT_HTML = path.join(MODERATION_ROOT, "review-gallery.html");
 const APPROVALS_TEMPLATE = path.join(MODERATION_ROOT, "approvals.template.json");
 const SECTION_ORDER = ["parks", "sights", "hotels", "excursions", "food", "routes", "active", "masterclasses", "roadtrip"];
 const IMAGE_EXTENSIONS_BY_TYPE = {
@@ -87,9 +88,11 @@ async function main() {
   await fs.mkdir(MODERATION_ROOT, { recursive: true });
   await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   await fs.writeFile(REPORT_MD, buildMarkdown(report), "utf8");
+  await fs.writeFile(REPORT_HTML, buildHtmlGallery(report), "utf8");
   await fs.writeFile(APPROVALS_TEMPLATE, `${JSON.stringify(approvals, null, 2)}\n`, "utf8");
 
   console.log(`Catalog moderation board: ${path.relative(ROOT, REPORT_MD)}`);
+  console.log(`Catalog moderation gallery: ${path.relative(ROOT, REPORT_HTML)}`);
   console.log(`Approvals template: ${path.relative(ROOT, APPROVALS_TEMPLATE)}`);
   console.log(`Photo candidates: ${path.relative(ROOT, PHOTO_CANDIDATES_ROOT)}`);
 }
@@ -309,6 +312,84 @@ function buildMarkdown(report) {
   return `${lines.join("\n")}\n`;
 }
 
+function buildHtmlGallery(report) {
+  const cards = report.sections.flatMap((section) => section.items.map((item) => ({ section, item })));
+  const withPhotos = cards.filter(({ item }) => item.photoCandidates.length).length;
+
+  return `<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kazan Event Radar catalog moderation</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #eef4fb; --card: #ffffff; --text: #172235; --muted: #607086; --border: #d8e2ef; --accent: #2563eb; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #101927; --card: #162235; --text: #f4f7fb; --muted: #aab7c8; --border: #2b3a50; --accent: #67e8f9; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: var(--text); }
+      main { width: min(1180px, calc(100% - 28px)); margin: 28px auto 60px; }
+      h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 48px); line-height: 1; }
+      .lead { margin: 0 0 22px; color: var(--muted); font-size: 16px; line-height: 1.55; }
+      .summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+      .pill { border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; background: color-mix(in srgb, var(--card) 80%, transparent); color: var(--muted); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+      article { overflow: hidden; border: 1px solid var(--border); border-radius: 22px; background: var(--card); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.08); }
+      img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #d9e3ef; }
+      .empty-image { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 10; background: linear-gradient(135deg, #d9e3ef, #eff6ff); color: #526275; font-weight: 700; }
+      .body { padding: 14px; }
+      .section { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+      h2 { margin: 8px 0 8px; font-size: 20px; line-height: 1.15; }
+      p { margin: 8px 0; color: var(--muted); line-height: 1.45; }
+      code, textarea { font-family: Consolas, monospace; }
+      textarea { width: 100%; min-height: 88px; resize: vertical; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--text); font-size: 12px; }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Catalog photo moderation</h1>
+      <p class="lead">Review candidates manually. Approve only clean, relevant photos without watermarks, third-party labels, or obvious advertising overlays.</p>
+      <div class="summary">
+        <span class="pill">Updated: ${escapeHtml(report.generatedAt)}</span>
+        <span class="pill">Cards: ${cards.length}</span>
+        <span class="pill">With candidates: ${withPhotos}</span>
+      </div>
+      <section class="grid">
+        ${cards.map(({ section, item }) => htmlGalleryCard(section, item)).join("\n")}
+      </section>
+    </main>
+  </body>
+</html>
+`;
+}
+
+function htmlGalleryCard(section, item) {
+  const candidate = item.photoCandidates[0] || null;
+  const src = candidate ? path.relative(MODERATION_ROOT, path.join(ROOT, candidate.file)).replaceAll("\\", "/") : "";
+  const approvalSnippet = {
+    section: item.section,
+    id: item.id,
+    title: item.title,
+    approved: false,
+    photoCandidateFile: candidate?.file || "",
+    photoSearchQuery: item.photoSearchQueries?.[0] || "",
+    targetFileName: "1",
+    note: ""
+  };
+
+  return `<article>
+    ${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.title)}" loading="lazy" />` : `<div class="empty-image">No candidate</div>`}
+    <div class="body">
+      <div class="section">${escapeHtml(section.title || section.sectionId)}</div>
+      <h2>${escapeHtml(item.title)}</h2>
+      ${item.subtitle ? `<p>${escapeHtml(item.subtitle)}</p>` : ""}
+      <p>Candidates: ${item.photoCandidates.length}. Sources: ${item.sourceCount}. ${item.moderationNotes.length ? escapeHtml(item.moderationNotes.join(" ")) : "Ready for review."}</p>
+      ${item.sourceUrl ? `<p><a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener">Source</a></p>` : ""}
+      <textarea readonly>${escapeHtml(JSON.stringify(approvalSnippet, null, 2))}</textarea>
+    </div>
+  </article>`;
+}
+
 function isAllowedCandidateImageUrl(url) {
   const normalized = String(url || "").toLowerCase();
   if (!normalized || !/^https?:\/\//i.test(normalized)) return false;
@@ -371,4 +452,13 @@ function sectionLabel(sectionId) {
 
 function escapeMarkdown(value) {
   return String(value || "").replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
