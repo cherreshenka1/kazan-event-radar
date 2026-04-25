@@ -143,13 +143,6 @@ async function bootstrap() {
       state.moderation = await loadModerationSummary().catch(() => null);
     }
 
-    if (!state.selectedPlaceId) state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
-    if (!state.selectedRouteId) state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
-    if (!state.selectedFoodId) state.selectedFoodId = getSectionItems("food")[0]?.id || null;
-    if (!state.selectedActiveId) state.selectedActiveId = getSectionItems("active")[0]?.id || null;
-    if (!state.selectedMasterclassId) state.selectedMasterclassId = getSectionItems("masterclasses")[0]?.id || null;
-    if (!state.selectedRoadtripId) state.selectedRoadtripId = getSectionItems("roadtrip")[0]?.id || null;
-    if (!state.selectedFavoriteId) state.selectedFavoriteId = state.favorites[0]?.id || null;
     state.selectedProDays = resolveSelectedProDays(state.selectedProDays, state.pro);
 
     setStatus("");
@@ -239,7 +232,7 @@ function bindEvents() {
 
     if (action === "place-section") {
       state.placeSection = button.dataset.section;
-      state.selectedPlaceId = getActivePlaceItems()[0]?.id || null;
+      state.selectedPlaceId = null;
       track("place_section_click", state.placeSection);
       syncUrl();
       render();
@@ -247,7 +240,7 @@ function bindEvents() {
     }
 
     if (action === "place-item") {
-      state.selectedPlaceId = button.dataset.id;
+      state.selectedPlaceId = toggleSelection(state.selectedPlaceId, button.dataset.id);
       track("place_item_click", state.selectedPlaceId, { section: state.placeSection });
       syncUrl();
       render();
@@ -258,10 +251,10 @@ function bindEvents() {
       const section = button.dataset.section;
       const itemId = button.dataset.id;
 
-      if (section === "food") state.selectedFoodId = itemId;
-      if (section === "active") state.selectedActiveId = itemId;
-      if (section === "masterclasses") state.selectedMasterclassId = itemId;
-      if (section === "roadtrip") state.selectedRoadtripId = itemId;
+      if (section === "food") state.selectedFoodId = toggleSelection(state.selectedFoodId, itemId);
+      if (section === "active") state.selectedActiveId = toggleSelection(state.selectedActiveId, itemId);
+      if (section === "masterclasses") state.selectedMasterclassId = toggleSelection(state.selectedMasterclassId, itemId);
+      if (section === "roadtrip") state.selectedRoadtripId = toggleSelection(state.selectedRoadtripId, itemId);
 
       track("section_item_click", itemId, { section });
       syncUrl();
@@ -271,7 +264,7 @@ function bindEvents() {
 
     if (action === "route-level") {
       state.routeLevel = button.dataset.level;
-      state.selectedRouteId = getActiveRouteItems()[0]?.id || null;
+      state.selectedRouteId = null;
       track("route_level_click", state.routeLevel);
       syncUrl();
       render();
@@ -279,7 +272,7 @@ function bindEvents() {
     }
 
     if (action === "route-item") {
-      state.selectedRouteId = button.dataset.id;
+      state.selectedRouteId = toggleSelection(state.selectedRouteId, button.dataset.id);
       track("route_item_click", state.selectedRouteId, { level: state.routeLevel });
       syncUrl();
       render();
@@ -532,7 +525,7 @@ function bindEvents() {
       }
 
       if (action === "favorite-focus") {
-        state.selectedFavoriteId = button.dataset.id;
+        state.selectedFavoriteId = toggleSelection(state.selectedFavoriteId, button.dataset.id);
         track("favorite_focus", state.selectedFavoriteId);
         syncUrl();
       render();
@@ -882,15 +875,19 @@ function renderPlaces() {
   const section = state.catalog[state.placeSection];
   const allItems = getActivePlaceItems();
   const items = getFilteredPlaceItems();
-  const selected = items.find((item) => item.id === state.selectedPlaceId) || items[0] || null;
 
   contentNode.innerHTML = [
       `<div class="chips">${["parks", "sights", "hotels", "excursions"].map((id) => chip(sectionLabel(id), "place-section", { section: id }, state.placeSection === id)).join("")}</div>`,
       sectionSearchToolbar("places", `Поиск по разделу «${section.title}»`, items.length, allItems.length),
       items.length
         ? renderCatalogExplorerLayout({
-          cardsHtml: items.map((item) => catalogPreviewCard(state.placeSection, item, item.id === selected?.id, "place-item", { id: item.id })).join(""),
-          detailHtml: selected ? placeDetailCard(state.placeSection, selected) : empty("Выберите место, чтобы открыть подробную карточку.")
+          cardsHtml: items.map((item) => {
+            const isActive = item.id === state.selectedPlaceId;
+            return [
+              catalogPreviewCard(state.placeSection, item, isActive, "place-item", { id: item.id }),
+              isActive ? inlineCardDetail(placeDetailCard(state.placeSection, item)) : ""
+            ].join("");
+          }).join("")
         })
         : empty(`По запросу в разделе «${section.title}» пока ничего не найдено.`)
     ].join("");
@@ -900,14 +897,18 @@ function renderFood() {
   const section = state.catalog.food;
   const allItems = getSectionItems("food");
   const items = getFilteredSectionItems("food");
-  const selected = items.find((item) => item.id === state.selectedFoodId) || items[0] || null;
 
   contentNode.innerHTML = [
       sectionSearchToolbar("food", "Поиск по кухне, блюдам, атмосфере и отзывам", items.length, allItems.length),
       items.length
         ? renderCatalogExplorerLayout({
-          cardsHtml: items.map((item) => catalogPreviewCard("food", item, item.id === selected?.id, "section-item", { section: "food", id: item.id })).join(""),
-          detailHtml: selected ? foodDetailCard(selected) : empty("Выберите место, чтобы открыть карточку ресторана.")
+          cardsHtml: items.map((item) => {
+            const isActive = item.id === state.selectedFoodId;
+            return [
+              catalogPreviewCard("food", item, isActive, "section-item", { section: "food", id: item.id }),
+              isActive ? inlineCardDetail(foodDetailCard(item)) : ""
+            ].join("");
+          }).join("")
         })
         : empty("По этому запросу в разделе еды пока ничего не нашлось.")
     ].join("");
@@ -1219,14 +1220,18 @@ function renderSectionExplorer(sectionId, emptyText) {
   const allItems = getSectionItems(sectionId);
   const items = getFilteredSectionItems(sectionId);
   const selectedId = getSelectedSectionId(sectionId);
-  const selected = items.find((item) => item.id === selectedId) || items[0] || null;
 
   contentNode.innerHTML = [
       sectionSearchToolbar(sectionId, buildSectionSearchPlaceholder(sectionId), items.length, allItems.length),
       items.length
         ? renderCatalogExplorerLayout({
-          cardsHtml: items.map((item) => catalogPreviewCard(sectionId, item, item.id === selected?.id, "section-item", { section: sectionId, id: item.id })).join(""),
-          detailHtml: selected ? renderCatalogDetailCard(sectionId, selected) : empty(emptyText)
+          cardsHtml: items.map((item) => {
+            const isActive = item.id === selectedId;
+            return [
+              catalogPreviewCard(sectionId, item, isActive, "section-item", { section: sectionId, id: item.id }),
+              isActive ? inlineCardDetail(renderCatalogDetailCard(sectionId, item)) : ""
+            ].join("");
+          }).join("")
         })
         : empty("По этому запросу пока нет подходящих карточек.")
     ].join("");
@@ -1236,15 +1241,19 @@ function renderRoutes() {
   const routes = state.catalog.routes;
   const allItems = getActiveRouteItems();
   const items = getFilteredRouteItems();
-  const selected = items.find((route) => route.id === state.selectedRouteId) || items[0] || null;
 
   contentNode.innerHTML = [
       `<div class="chips">${routes.levels.map((level) => chip(level.title, "route-level", { level: level.id }, state.routeLevel === level.id)).join("")}</div>`,
       sectionSearchToolbar("routes", "Поиск по маршрутам, точкам и логистике", items.length, allItems.length),
       items.length
         ? renderCatalogExplorerLayout({
-          cardsHtml: items.map((route) => routePreviewCard(route, route.id === selected?.id)).join(""),
-          detailHtml: selected ? routeDetailCard(selected) : empty("Выберите маршрут, чтобы увидеть детали и карту.")
+          cardsHtml: items.map((route) => {
+            const isActive = route.id === state.selectedRouteId;
+            return [
+              routePreviewCard(route, isActive),
+              isActive ? inlineCardDetail(routeDetailCard(route)) : ""
+            ].join("");
+          }).join("")
         })
         : empty("По этому запросу пока нет подходящих маршрутов.")
     ].join("");
@@ -1263,8 +1272,13 @@ function renderFavorites() {
         panelTitle: `${state.favorites.length} сохранённых карточек`,
         panelText: buildFavoriteCollectionText(selected),
         panelBadges: buildFavoriteCollectionBadges(state.favorites, selected),
-        cardsHtml: state.favorites.map((item) => favoritePreviewCard(item, item.id === state.selectedFavoriteId)).join(""),
-        detailHtml: selected ? favoriteDetailCard(selected) : empty("Выберите карточку, чтобы посмотреть детали.")
+        cardsHtml: state.favorites.map((item) => {
+          const isActive = item.id === state.selectedFavoriteId;
+          return [
+            favoritePreviewCard(item, isActive),
+            isActive ? inlineCardDetail(favoriteDetailCard(item)) : ""
+          ].join("");
+        }).join("")
       })
       : empty("Пока пусто. Добавьте в избранное хотя бы одно событие или место.")
   ].join("");
@@ -1896,8 +1910,9 @@ function renderEventModal(item) {
 
 function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelText = "", panelBadges = [], cardsHtml = "", detailHtml = "" }) {
   const hasPanelContent = panelLabel || panelTitle || panelText || panelBadges.length;
+  const hasExternalDetail = Boolean(detailHtml);
   return `
-    <section class="two-column explorer-shell">
+    <section class="${hasExternalDetail ? "two-column explorer-shell" : "explorer-shell explorer-inline-shell"}">
       <div class="explorer-sidebar">
         ${hasPanelContent ? `<article class="card explorer-panel">
           ${panelLabel ? `<div class="preview-label">${escapeHtml(panelLabel)}</div>` : ""}
@@ -1908,9 +1923,13 @@ function renderCatalogExplorerLayout({ panelLabel = "", panelTitle = "", panelTe
         </article>` : ""}
         <div class="list-grid selector-list">${cardsHtml}</div>
       </div>
-      <div class="explorer-detail">${detailHtml}</div>
+      ${hasExternalDetail ? `<div class="explorer-detail">${detailHtml}</div>` : ""}
     </section>
   `;
+}
+
+function inlineCardDetail(detailHtml) {
+  return detailHtml ? `<div class="inline-card-detail">${detailHtml}</div>` : "";
 }
 
 function catalogPreviewCard(sectionId, item, isActive, action, data) {
@@ -2747,7 +2766,7 @@ function normalizeFavoriteSelection() {
   }
 
   if (!state.favorites.some((item) => item.id === state.selectedFavoriteId)) {
-    state.selectedFavoriteId = state.favorites[0]?.id || null;
+    state.selectedFavoriteId = null;
   }
 }
 
@@ -3117,11 +3136,16 @@ async function applySectionSearch(sectionId, value) {
   render();
 }
 
+function toggleSelection(currentId, nextId) {
+  const normalizedNext = String(nextId || "");
+  return currentId === normalizedNext ? null : normalizedNext;
+}
+
 function syncSelectionForQuery(sectionId) {
   if (sectionId === "places") {
     const items = getFilteredPlaceItems();
     if (!items.some((item) => item.id === state.selectedPlaceId)) {
-      state.selectedPlaceId = items[0]?.id || null;
+      state.selectedPlaceId = null;
     }
     return;
   }
@@ -3129,23 +3153,23 @@ function syncSelectionForQuery(sectionId) {
   if (sectionId === "routes") {
     const items = getFilteredRouteItems();
     if (!items.some((item) => item.id === state.selectedRouteId)) {
-      state.selectedRouteId = items[0]?.id || null;
+      state.selectedRouteId = null;
     }
     return;
   }
 
   const items = getFilteredSectionItems(sectionId);
   if (sectionId === "food" && !items.some((item) => item.id === state.selectedFoodId)) {
-    state.selectedFoodId = items[0]?.id || null;
+    state.selectedFoodId = null;
   }
   if (sectionId === "active" && !items.some((item) => item.id === state.selectedActiveId)) {
-    state.selectedActiveId = items[0]?.id || null;
+    state.selectedActiveId = null;
   }
   if (sectionId === "masterclasses" && !items.some((item) => item.id === state.selectedMasterclassId)) {
-    state.selectedMasterclassId = items[0]?.id || null;
+    state.selectedMasterclassId = null;
   }
   if (sectionId === "roadtrip" && !items.some((item) => item.id === state.selectedRoadtripId)) {
-    state.selectedRoadtripId = items[0]?.id || null;
+    state.selectedRoadtripId = null;
   }
 }
 
