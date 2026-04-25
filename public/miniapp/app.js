@@ -3214,14 +3214,8 @@ function sectionSearchToolbar(sectionId, placeholder, filteredCount, totalCount)
   return `
     <section class="card search-toolbar">
       <div class="search-toolbar-top">
-        <div>
-          <div class="preview-label">Быстрый поиск</div>
-          <h3>${escapeHtml(countLabel)}</h3>
-        </div>
-        <div class="search-toolbar-actions">
-          ${query ? `<span class="meta-badge">Запрос: ${escapeHtml(trim(query, 36))}</span>` : ""}
-          ${query ? actionButton("Сбросить", "section-search-clear", { section: sectionId }) : ""}
-        </div>
+        <span class="search-count-pill">${escapeHtml(countLabel)}</span>
+        ${query ? actionButton("Сбросить", "section-search-clear", { section: sectionId }) : ""}
       </div>
       <label class="search-field">
         <span class="search-label">${escapeHtml(placeholder)}</span>
