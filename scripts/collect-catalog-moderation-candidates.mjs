@@ -115,12 +115,17 @@ async function collectItemCandidates(sectionId, item) {
     });
   }
 
-  const imageUrls = unique([
+  const photoSearchQueries = buildPhotoSearchQueries(sectionId, item, snapshots);
+  let imageUrls = unique([
     item.externalPreviewUrl,
     item.imageUrl,
     ...snapshots.map((snapshot) => snapshot.image),
     ...(Array.isArray(item.photoLinks) ? item.photoLinks.map((link) => link.url).filter((url) => /^https?:\/\//i.test(url || "")) : [])
   ]).filter(isAllowedCandidateImageUrl);
+
+  if (!imageUrls.length) {
+    imageUrls = await fetchCommonsImageUrls(photoSearchQueries);
+  }
 
   const photoCandidates = [];
   let index = 1;
@@ -143,7 +148,7 @@ async function collectItemCandidates(sectionId, item) {
     snapshots,
     draft: buildDraft(sectionId, item, snapshots),
     photoCandidates,
-    photoSearchQueries: buildPhotoSearchQueries(sectionId, item, snapshots),
+    photoSearchQueries,
     moderationNotes: buildModerationNotes(sectionId, item, photoCandidates, snapshots)
   };
 }
@@ -212,6 +217,48 @@ async function downloadImageCandidate(sectionId, itemId, url, index) {
   }
 }
 
+async function fetchCommonsImageUrls(queries) {
+  const urls = [];
+
+  for (const query of queries.slice(0, 3)) {
+    try {
+      const apiUrl = new URL("https://commons.wikimedia.org/w/api.php");
+      apiUrl.searchParams.set("action", "query");
+      apiUrl.searchParams.set("format", "json");
+      apiUrl.searchParams.set("generator", "search");
+      apiUrl.searchParams.set("gsrnamespace", "6");
+      apiUrl.searchParams.set("gsrlimit", "8");
+      apiUrl.searchParams.set("gsrsearch", query);
+      apiUrl.searchParams.set("prop", "imageinfo");
+      apiUrl.searchParams.set("iiprop", "url|mime|size");
+
+      const response = await fetch(apiUrl, {
+        signal: AbortSignal.timeout(14000),
+        headers: {
+          "user-agent": "KazanEventRadar/1.0 (photo moderation candidates; https://github.com/cherreshenka1/kazan-event-radar)"
+        }
+      });
+      if (!response.ok) continue;
+
+      const payload = await response.json();
+      const pages = Object.values(payload?.query?.pages || {});
+      for (const page of pages) {
+        const image = page.imageinfo?.[0];
+        if (!image?.url || !isAllowedCandidateImageUrl(image.url)) continue;
+        if (image.mime && !IMAGE_EXTENSIONS_BY_TYPE[String(image.mime).toLowerCase()]) continue;
+        if (image.size && image.size > options.maxImageBytes) continue;
+        urls.push(image.url);
+      }
+    } catch {
+      // Commons is a fallback only; source candidates still work if this fails.
+    }
+
+    if (urls.length >= options.maxImagesPerItem) break;
+  }
+
+  return unique(urls);
+}
+
 function buildDraft(sectionId, item, snapshots) {
   const sourceSummary = cleanText(snapshots.find((snapshot) => snapshot.description)?.description || "", 220);
   return {
@@ -262,15 +309,39 @@ function buildPhotoSearchQueries(sectionId, item, snapshots) {
   const title = cleanText(item.title || item.subtitle || sectionLabel(sectionId), 80);
   const venueOrType = cleanText(item.venueTitle || item.category || sectionLabel(sectionId), 80);
   const snapshotTitle = cleanText(snapshots.find((snapshot) => snapshot.title)?.title || "", 80);
+  const commonsFriendlyQueries = sectionId === "masterclasses" ? masterclassCommonsQueries(item.id, title) : [];
 
   return unique([
+    ...commonsFriendlyQueries,
     `${title} Казань фото`,
     `${title} ${venueOrType} Казань`,
     snapshotTitle ? `${snapshotTitle} Казань фото` : "",
     sectionId === "masterclasses" ? `${title} мастер-класс Казань фото` : "",
     sectionId === "food" ? `${title} ресторан Казань интерьер блюда` : "",
     sectionId === "active" ? `${title} активный отдых Казань фото` : ""
-  ]).slice(0, 4);
+  ]).slice(0, 6);
+}
+
+function masterclassCommonsQueries(itemId, title) {
+  const byId = {
+    pottery: ["pottery workshop", "ceramic workshop"],
+    cooking: ["cooking class", "culinary workshop"],
+    painting: ["painting workshop", "art class"],
+    embroidery: ["embroidery workshop", "textile workshop"],
+    candles: ["candle making workshop"],
+    floristics: ["floristry workshop", "flower arrangement"],
+    jewelry: ["jewelry making workshop"],
+    soap_cosmetics: ["soap making workshop", "natural cosmetics workshop"],
+    perfume: ["perfume workshop", "perfume making"],
+    leather: ["leather craft workshop"],
+    mosaic: ["mosaic workshop", "stained glass workshop"],
+    resin_art: ["resin art workshop", "epoxy resin art"],
+    barista: ["barista workshop", "coffee brewing class"],
+    tea_ceremony: ["tea ceremony", "tea tasting"],
+    calligraphy: ["calligraphy workshop", "lettering workshop"]
+  };
+
+  return byId[itemId] || [`${title} workshop`];
 }
 
 function buildMarkdown(report) {
