@@ -4,6 +4,11 @@ import { CATALOG, MAIN_SECTIONS } from "../../src/data/catalog.js";
 import { renderAdminDashboard } from "../../src/lib/adminDashboard.js";
 
 const DAILY_DRAFTS_CRON = "0 6 * * *";
+const DAILY_DRAFTS_SAFETY_CRONS = new Set([
+  DAILY_DRAFTS_CRON,
+  "30 6 * * *",
+  "0 7 * * *"
+]);
 const HOURLY_SCAN_CRON = "15 * * * *";
 const FAST_SCAN_CRON = "*/5 * * * *";
 const DEFAULT_EVENTS_API_LIMIT = 600;
@@ -188,11 +193,11 @@ export default {
   },
 
   async scheduled(event, env) {
-    if (event.cron === DAILY_DRAFTS_CRON) {
+    if (DAILY_DRAFTS_SAFETY_CRONS.has(event.cron)) {
       try {
         await ensureDailyDraftBatch(env, Number(env.DRAFTS_PER_DAY || 10), {
           refresh: false,
-          reason: "daily_drafts"
+          reason: event.cron === DAILY_DRAFTS_CRON ? "daily_drafts" : "daily_drafts_safety"
         });
       } catch (error) {
         console.warn(`Daily drafts job failed: ${error.message}`);
