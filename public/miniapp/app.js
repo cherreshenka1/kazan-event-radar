@@ -4124,13 +4124,23 @@ async function submitSupportRequest() {
   }
 
   const text = buildSupportRequestText(payload);
-  await copyText(text);
-  track("support_request_submit", payload.kind, { section: payload.section, hasContact: Boolean(payload.contact) });
-  toast("Текст обращения скопирован. Сейчас открою поддержку.");
+  try {
+    await api("/api/support/request", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    track("support_request_submit", payload.kind, { section: payload.section, hasContact: Boolean(payload.contact), mode: "direct" });
+    form.reset();
+    toast("Запрос отправлен в поддержку.");
+  } catch {
+    await copyText(text);
+    track("support_request_submit", payload.kind, { section: payload.section, hasContact: Boolean(payload.contact), mode: "fallback" });
+    toast("Текст обращения скопирован. Сейчас открою поддержку.");
 
-  window.setTimeout(() => {
-    openLink(support.contactUrl || "https://t.me/cherreshenkaw");
-  }, 350);
+    window.setTimeout(() => {
+      openLink(support.contactUrl || "https://t.me/cherreshenkaw");
+    }, 350);
+  }
 }
 
 function buildSupportRequestText(payload) {

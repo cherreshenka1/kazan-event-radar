@@ -291,6 +291,16 @@ async function handleRequest(request, env) {
     return json(result, 200, env);
   }
 
+  if (url.pathname === "/api/support/request" && request.method === "POST") {
+    const user = await optionalTelegramUser(request, env);
+    const subject = user?.id || getRequestIdentity(request);
+    await enforceRateLimit(env, "support-request", subject, 6);
+    const body = await readJsonBody(request, 12 * 1024);
+    const result = await sendSupportRequest(env, body, user);
+    await track(env, { type: "miniapp", action: "support_request", label: result.kind, userId: user?.id || null });
+    return json(result, 200, env);
+  }
+
   if (url.pathname === "/api/catalog") {
     return json({ sections: MAIN_SECTIONS, catalog: await getCatalogWithOverrides(env) }, 200, env);
   }
@@ -4096,6 +4106,53 @@ function sanitizeCatalogCardPatch(fields) {
   }
 
   return patch;
+}
+
+async function sendSupportRequest(env, body, user) {
+  const managerId = await resolveManagerChatId(env);
+  if (!managerId) throw new HttpError("Support manager chat is not configured.", 503);
+
+  const kind = trim(body?.kind || "Обращение", 80);
+  const section = trim(body?.section || "Другое", 80);
+  const title = trim(body?.title || "", 140);
+  const message = trim(body?.message || "", 1200);
+  const contact = trim(body?.contact || "", 140);
+
+  if (!title && !message) {
+    throw new HttpError("Title or message is required.", 400);
+  }
+
+  const userLabel = user?.username
+    ? `@${user.username}`
+    : [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
+  const text = [
+    "Запрос в поддержку Kazan Event Radar",
+    "",
+    `Тип: ${kind}`,
+    `Раздел: ${section}`,
+    title ? `Карточка: ${title}` : "",
+    "",
+    message ? `Описание:\n${message}` : "",
+    "",
+    contact ? `Контакт: ${contact}` : "",
+    userLabel ? `Telegram: ${userLabel}` : "",
+    user?.id ? `Telegram ID: ${user.id}` : "",
+    `Время: ${formatMoscowDateTime(new Date())}`
+  ].filter((line) => line !== "").join("\n");
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: managerId,
+    text,
+    disable_web_page_preview: true
+  });
+
+  return {
+    ok: true,
+    sent: true,
+    kind,
+    section,
+    managerChatId: String(managerId)
+  };
 }
 
 function normalizeStringList(value) {
