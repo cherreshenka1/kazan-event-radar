@@ -43,6 +43,8 @@ const state = {
   moderationEditSection: params.get("editSection") || "food",
   moderationEditItemId: params.get("editItem") || "",
   eventCategory: params.get("category") || "all",
+  eventCategoriesOpen: false,
+  topMenuOpen: false,
   dateFrom: params.get("dateFrom") || "",
   dateTo: params.get("dateTo") || "",
   datePickerOpen: false,
@@ -149,6 +151,7 @@ function bindEvents() {
     tab.addEventListener("click", () => {
       state.activeTab = tab.dataset.tab;
       if (state.activeTab !== "events") state.openEventId = null;
+      state.topMenuOpen = false;
       track("tab_click", state.activeTab);
       syncUrl();
       render();
@@ -161,9 +164,17 @@ function bindEvents() {
 
     const action = button.dataset.action;
 
+    if (action === "top-menu-toggle") {
+      state.topMenuOpen = !state.topMenuOpen;
+      track("topbar_menu_toggle", state.topMenuOpen ? "open" : "close");
+      render();
+      return;
+    }
+
     if (action === "top-tab") {
       state.activeTab = button.dataset.tab || "events";
       if (state.activeTab !== "events") state.openEventId = null;
+      state.topMenuOpen = false;
       track("topbar_tab_click", state.activeTab);
       syncUrl();
       render();
@@ -173,15 +184,19 @@ function bindEvents() {
     if (action === "top-collab") {
       const support = getSupportInfo();
       const url = support.contactUrl || "https://t.me/cherreshenkaw";
+      state.topMenuOpen = false;
       track("topbar_collab_click", url);
       openLink(url);
+      render();
       return;
     }
 
     if (action === "theme-toggle") {
       const nextTheme = getStoredTheme() === "dark" ? "light" : "dark";
+      state.topMenuOpen = false;
       applyTheme(nextTheme);
       track("theme_toggle", nextTheme);
+      render();
     }
   });
 
@@ -292,10 +307,18 @@ function bindEvents() {
 
     if (action === "event-category") {
       state.eventCategory = button.dataset.category || "all";
+      state.eventCategoriesOpen = false;
       state.selectedEventId = null;
       state.openEventId = null;
       track("event_category", state.eventCategory);
       await refreshEvents();
+      return;
+    }
+
+    if (action === "event-category-more") {
+      state.eventCategoriesOpen = !state.eventCategoriesOpen;
+      track("event_category_more", state.eventCategoriesOpen ? "open" : "close");
+      render();
       return;
     }
 
@@ -685,9 +708,11 @@ function render() {
 
   tabNodes.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === state.activeTab));
   document.body.classList.toggle("is-moderator", canModerate());
+  document.body.classList.toggle("topbar-menu-open", state.topMenuOpen);
   topbarActionsNode?.querySelectorAll("[data-action='top-tab']").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.tab === state.activeTab);
   });
+  topbarActionsNode?.querySelector("[data-action='top-menu-toggle']")?.setAttribute("aria-expanded", state.topMenuOpen ? "true" : "false");
   if (topbarPlanLabelNode) {
     topbarPlanLabelNode.textContent = state.favorites.length ? `Мой план · ${state.favorites.length}` : "Мой план";
   }
@@ -3380,8 +3405,23 @@ function eventCategoryChips() {
     { id: "kids", label: "Детям" },
     { id: "excursion", label: "Экскурсии" }
   ];
+  const mainCategories = categories.slice(0, 4);
+  const extraCategories = categories.slice(4);
+  const extraActive = extraCategories.some((item) => state.eventCategory === item.id);
 
-  return `<div class="chips">${categories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}</div>`;
+  return `
+    <div class="event-category-panel">
+      <div class="chips event-category-main">
+        ${mainCategories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}
+        ${chip(state.eventCategoriesOpen ? "Скрыть" : "Ещё категории", "event-category-more", {}, state.eventCategoriesOpen || extraActive, "chip-more")}
+      </div>
+      ${state.eventCategoriesOpen ? `
+        <div class="chips event-category-extra">
+          ${extraCategories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
 }
 
 function eventDateRangePicker() {

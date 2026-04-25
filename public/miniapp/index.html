@@ -21,30 +21,38 @@
           </span>
         </button>
         <div class="topbar-actions" id="topbarActions">
-          <button class="topbar-button topbar-button-moderation moderation-only" type="button" data-action="top-tab" data-tab="moderation">
-            <span>Модерация</span>
-            <small>черновики и контроль</small>
-          </button>
-          <button class="topbar-button" type="button" data-action="top-tab" data-tab="support">
-            <span>Помощь</span>
-            <small>если что-то сломалось</small>
-          </button>
           <button class="topbar-button topbar-button-plan" type="button" data-action="top-tab" data-tab="favorites">
             <span id="topbarPlanLabel">Мой план</span>
             <small>сохранённое</small>
           </button>
-          <button class="topbar-button" type="button" data-action="top-collab">
-            <span>Сотрудничество</span>
-            <small>связь напрямую</small>
-          </button>
-          <button class="topbar-button topbar-button-pro" type="button" data-action="top-tab" data-tab="pro">
-            <span>Pro</span>
-            <small>план отпуска</small>
-          </button>
-          <button class="topbar-button" type="button" data-action="theme-toggle" id="themeToggle">
-            <span>Тёмная</span>
-            <small>тема</small>
-          </button>
+          <div class="topbar-menu">
+            <button class="topbar-button topbar-more-button" type="button" data-action="top-menu-toggle" aria-expanded="false">
+              <span>Ещё</span>
+              <small>меню</small>
+            </button>
+            <div class="topbar-dropdown" aria-label="Дополнительные действия">
+              <button class="topbar-menu-item topbar-button-moderation moderation-only" type="button" data-action="top-tab" data-tab="moderation">
+                <span>Модерация</span>
+                <small>черновики и контроль</small>
+              </button>
+              <button class="topbar-menu-item" type="button" data-action="top-tab" data-tab="support">
+                <span>Помощь</span>
+                <small>форма обращения</small>
+              </button>
+              <button class="topbar-menu-item" type="button" data-action="top-collab">
+                <span>Сотрудничество</span>
+                <small>связь напрямую</small>
+              </button>
+              <button class="topbar-menu-item topbar-button-pro" type="button" data-action="top-tab" data-tab="pro">
+                <span>Pro</span>
+                <small>план отпуска</small>
+              </button>
+              <button class="topbar-menu-item" type="button" data-action="theme-toggle" id="themeToggle">
+                <span>Тёмная</span>
+                <small>тема</small>
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
