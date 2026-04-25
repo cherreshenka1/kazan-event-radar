@@ -313,6 +313,18 @@ function bindEvents() {
       return;
     }
 
+    if (action === "event-date-select") {
+      const date = button.dataset.date || "";
+      if (!date) return;
+      state.dateFrom = date;
+      state.dateTo = date;
+      state.selectedEventId = null;
+      state.openEventId = null;
+      track("event_date_select", date);
+      await refreshEvents();
+      return;
+    }
+
     if (action === "event-range-apply") {
       state.dateFrom = contentNode.querySelector('[name="dateFrom"]')?.value || "";
       state.dateTo = contentNode.querySelector('[name="dateTo"]')?.value || "";
@@ -705,11 +717,7 @@ function renderEvents() {
   const opened = findEvent(state.openEventId) || null;
 
   contentNode.innerHTML = [
-    sectionHeader(
-      "Актуальная афиша",
-      "Только будущие события. Коротко, по делу и с удобным открытием полной карточки и ссылкой на детали.",
-      SECTION_VISUALS.events
-    ),
+    eventDateRail(),
     eventCategoryChips(),
     eventFilterPanel(),
     statBar(buildEventStats()),
@@ -3092,6 +3100,26 @@ function eventCategoryChips() {
   return `<div class="chips">${categories.map((item) => chip(item.label, "event-category", { category: item.id }, state.eventCategory === item.id)).join("")}</div>`;
 }
 
+function eventDateRail() {
+  const days = buildEventDateRailDays();
+  if (!days.length) return "";
+
+  const monthLabel = new Date(`${days[0].date}T00:00:00`).toLocaleDateString("ru-RU", { month: "long" });
+  return `
+    <article class="date-rail-card" aria-label="Выбор даты афиши">
+      <div class="date-rail-month">${escapeHtml(monthLabel)}</div>
+      <div class="date-rail">
+        ${days.map((day) => `
+          <button class="date-pill ${day.active ? "is-active" : ""}" type="button" data-action="event-date-select" data-date="${escapeHtml(day.date)}">
+            <strong>${escapeHtml(day.day)}</strong>
+            <span class="${day.weekend ? "is-weekend" : ""}">${escapeHtml(day.weekday)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
 function eventFilterPanel() {
   const presets = [
     { id: "today", label: "Сегодня" },
@@ -3818,6 +3846,31 @@ function getPresetRange(rangeId) {
   return { from, to };
 }
 
+function buildEventDateRailDays() {
+  const start = getEffectiveDateFrom() || state.defaultFrom || state.allowedFrom || toDateInput(new Date());
+  const maxDate = state.allowedTo || state.defaultTo || "";
+  const days = [];
+
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addDays(start, offset, maxDate);
+    if (!date || days.some((item) => item.date === date)) continue;
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) continue;
+    const weekday = parsed.toLocaleDateString("ru-RU", { weekday: "short" }).replace(".", "").toUpperCase();
+    const day = String(parsed.getDate());
+    const dayIndex = parsed.getDay();
+    days.push({
+      date,
+      day,
+      weekday,
+      weekend: dayIndex === 0 || dayIndex === 6,
+      active: date === getEffectiveDateFrom() && getEffectiveDateFrom() === getEffectiveDateTo()
+    });
+  }
+
+  return days;
+}
+
 function isPresetActive(rangeId) {
   const preset = getPresetRange(rangeId);
   return preset.from === getEffectiveDateFrom() && preset.to === getEffectiveDateTo();
@@ -3836,6 +3889,16 @@ function addDays(dateString, days, maxDate) {
   ].join("-");
   if (!maxDate) return formatted;
   return formatted > maxDate ? maxDate : formatted;
+}
+
+function toDateInput(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
 }
 
 function getEffectiveDateFrom() {

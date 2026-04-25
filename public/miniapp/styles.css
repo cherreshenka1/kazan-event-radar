@@ -624,6 +624,79 @@ h1 {
   gap: 14px;
 }
 
+.date-rail-card {
+  padding: 6px 0 4px;
+  overflow: hidden;
+}
+
+.date-rail-month {
+  margin: 0 0 2px 10px;
+  color: var(--hint);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.date-rail {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding: 0 8px 4px;
+  scrollbar-width: none;
+}
+
+.date-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.date-pill {
+  min-width: 58px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.date-pill strong,
+.date-pill span {
+  display: block;
+  line-height: 1.12;
+}
+
+.date-pill strong {
+  font-size: 1.42rem;
+  font-weight: 650;
+}
+
+.date-pill span {
+  margin-top: 7px;
+  color: var(--hint);
+  font-size: 0.78rem;
+}
+
+.date-pill span.is-weekend {
+  color: #ef4444;
+}
+
+.date-pill.is-active {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 22px rgba(16, 32, 51, 0.1);
+}
+
+.date-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+:root[data-theme="dark"] .date-pill.is-active,
+:root[data-theme="dark"] .date-pill:hover {
+  background: rgba(231, 237, 246, 0.1);
+}
+
 .date-filter-row {
   display: flex;
   flex-wrap: wrap;
