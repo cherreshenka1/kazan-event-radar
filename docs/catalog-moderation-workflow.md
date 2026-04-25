@@ -18,6 +18,12 @@
 npm run catalog:moderation:candidates
 ```
 
+После сборки можно открыть визуальную галерею одной командой:
+
+```powershell
+npm run catalog:moderation:open
+```
+
 Для короткой проверки можно ограничить количество карточек:
 
 ```powershell
@@ -26,12 +32,11 @@ npm run catalog:moderation:candidates -- --limit-per-section=1 --max-images-per-
 
 ## Как одобрить фото
 
-1. Откройте `data/catalog-moderation/review-board.md`.
-2. Посмотрите изображения в `data/catalog-moderation/photo-candidates`.
-3. Скопируйте `data/catalog-moderation/approvals.template.json` в `config/catalog-moderation-approvals.json`.
-4. У выбранных карточек поставьте `approved: true`.
-5. Оставьте в `photoCandidateFile` только выбранное фото.
-6. Запустите:
+1. Откройте `data/catalog-moderation/review-gallery.html` или запустите `npm run catalog:moderation:open`.
+2. Отметьте галочками только чистые и релевантные изображения.
+3. Нажмите `Export approvals JSON`.
+4. Сохраните результат как `config/catalog-moderation-approvals.json`.
+5. Запустите:
 
 ```powershell
 npm run catalog:moderation:apply

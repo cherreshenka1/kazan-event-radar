@@ -54,7 +54,7 @@ npm run catalog:moderation:candidates
 2. Открыть интерактивную галерею:
 
 ```powershell
-Start-Process data/catalog-moderation/review-gallery.html
+npm run catalog:moderation:open
 ```
 
 3. Отметить галочками только чистые и подходящие фото: без водяных знаков, чужого брендинга и рекламных плашек.
