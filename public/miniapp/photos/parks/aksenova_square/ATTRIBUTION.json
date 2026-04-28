@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:05:49.303Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Aksyonov garden (2015-09-12) 02.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aksyonov_garden_(2015-09-12)_02.jpg",
+      "artist": "Мэрия Казани",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+    }
+  ]
+}

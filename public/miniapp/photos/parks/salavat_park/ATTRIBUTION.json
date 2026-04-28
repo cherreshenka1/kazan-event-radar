@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:05:34.805Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Salawat Küpere toraqlığı küreneşe.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Salawat_K%C3%BCpere_toraql%C4%B1%C4%9F%C4%B1_k%C3%BCrene%C5%9Fe.jpg",
+      "artist": "Рөстәм Кадыйров (Röstäm Qadıyrof)",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+    }
+  ]
+}

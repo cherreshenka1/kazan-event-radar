@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:07:02.941Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.png",
+      "sourceTitle": "File:Музей чак-чака.png",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%9C%D1%83%D0%B7%D0%B5%D0%B9_%D1%87%D0%B0%D0%BA-%D1%87%D0%B0%D0%BA%D0%B0.png",
+      "artist": "Сулейманова Раушания",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:06:45.657Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kremlyovskaya street in Kazan by Vasilij Turin .jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kremlyovskaya_street_in_Kazan_by_Vasilij_Turin_.jpg",
+      "artist": "В. С. Турин",
+      "license": "Public domain",
+      "licenseUrl": ""
+    }
+  ]
+}

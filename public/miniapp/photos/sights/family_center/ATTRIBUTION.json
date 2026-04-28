@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:06:21.494Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Family center Kazan - the Cup 1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Family_center_Kazan_-_the_Cup_1.jpg",
+      "artist": "Reda Kerbush",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

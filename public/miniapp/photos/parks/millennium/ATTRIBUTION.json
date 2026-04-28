@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:04:50.309Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Baskethall Kazan.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Baskethall_Kazan.jpg",
+      "artist": "TY-214 ( talk )",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    }
+  ]
+}

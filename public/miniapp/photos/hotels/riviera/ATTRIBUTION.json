@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:08:22.421Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan view from Riviera Hotel 08-2016 img1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan_view_from_Riviera_Hotel_08-2016_img1.jpg",
+      "artist": "A.Savin",
+      "license": "FAL",
+      "licenseUrl": "http://artlibre.org/licence/lal/en"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:05:58.602Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Square of Glory, Kazan.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Square_of_Glory,_Kazan.jpg",
+      "artist": "MarSaf",
+      "license": "CC0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    }
+  ]
+}

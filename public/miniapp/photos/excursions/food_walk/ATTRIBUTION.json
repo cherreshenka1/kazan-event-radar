@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:08:58.340Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Central shopping street, Kazan.JPG",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Central_shopping_street,_Kazan.JPG",
+      "artist": "",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by-sa/3.0/"
+    }
+  ]
+}

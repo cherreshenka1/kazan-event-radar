@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:07:30.408Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Татарстан. Казань. Памятник Мусе Джалилю.7.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%A2%D0%B0%D1%82%D0%B0%D1%80%D1%81%D1%82%D0%B0%D0%BD._%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C._%D0%9F%D0%B0%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D0%BA_%D0%9C%D1%83%D1%81%D0%B5_%D0%94%D0%B6%D0%B0%D0%BB%D0%B8%D0%BB%D1%8E.7.jpg",
+      "artist": "Marat Kamalevsky",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T15:54:54.003Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan Kremlin exterior view 08-2016 img1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan_Kremlin_exterior_view_08-2016_img1.jpg",
+      "artist": "A.Savin",
+      "license": "FAL",
+      "licenseUrl": "http://artlibre.org/licence/lal/en"
+    }
+  ]
+}

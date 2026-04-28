@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:06:14.171Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:The Spirit of Kazan.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Spirit_of_Kazan.jpg",
+      "artist": "No machine-readable author provided. Untifler assumed (based on copyright claims).",
+      "license": "Public domain",
+      "licenseUrl": ""
+    }
+  ]
+}

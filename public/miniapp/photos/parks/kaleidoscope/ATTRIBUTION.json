@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:05:44.872Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Парк Калейдоскоп (Казань).jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%9F%D0%B0%D1%80%D0%BA_%D0%9A%D0%B0%D0%BB%D0%B5%D0%B9%D0%B4%D0%BE%D1%81%D0%BA%D0%BE%D0%BF_(%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C).jpg",
+      "artist": "MarSaf",
+      "license": "CC0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    }
+  ]
+}

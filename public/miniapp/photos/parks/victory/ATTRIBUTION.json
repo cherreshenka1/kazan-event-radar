@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:04:35.219Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Victory Park (Kazan) 03.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Victory_Park_(Kazan)_03.jpg",
+      "artist": "MBH",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+    }
+  ]
+}

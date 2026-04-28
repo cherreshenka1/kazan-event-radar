@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:04:44.379Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Fuks Garden4.JPG",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fuks_Garden4.JPG",
+      "artist": "Mario Lanza",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    }
+  ]
+}

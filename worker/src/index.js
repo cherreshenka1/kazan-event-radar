@@ -291,6 +291,15 @@ async function handleRequest(request, env) {
     return json(result, 200, env);
   }
 
+  if (url.pathname === "/api/moderation/catalog-card-draft" && request.method === "POST") {
+    const user = await requireMiniAppModerator(request, env);
+    await enforceRateLimit(env, "moderation-write", user.id, getPositiveNumber(env.RATE_LIMIT_ADMIN_PER_MINUTE, DEFAULT_ADMIN_WRITE_RATE_LIMIT));
+    const body = await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT);
+    const result = await createCatalogCardReviewDraft(env, body, user);
+    await track(env, { type: "miniapp", action: "catalog_card_draft", label: `${result.sectionId}:${result.itemId}`, userId: user.id });
+    return json(result, 200, env);
+  }
+
   if (url.pathname === "/api/support/request" && request.method === "POST") {
     const user = await optionalTelegramUser(request, env);
     const subject = user?.id || getRequestIdentity(request);
@@ -545,6 +554,45 @@ async function handleTelegramMessage(message, env) {
     return;
   }
 
+  if (command === "/cardchat") {
+    if (!isManagerIdentity(user, env)) {
+      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру карточек." });
+      return;
+    }
+
+    const runtime = await getRuntime(env);
+    runtime.cardReviewChatId = String(chat.id);
+    runtime.cardReviewChatTitle = chat.title || runtime.cardReviewChatTitle || null;
+    runtime.cardReviewConfiguredAt = new Date().toISOString();
+    await putJson(env, "runtime", runtime);
+    await telegramApi(env, "sendMessage", {
+      chat_id: chat.id,
+      text: [
+        "Чат согласования карточек подключён.",
+        "",
+        `Chat ID: ${chat.id}`,
+        "Сюда можно будет отправлять новые карточки и фото-кандидаты до публикации."
+      ].join("\n")
+    });
+    return;
+  }
+
+  if (command === "/cardreview" || command === "/cards") {
+    if (!isManagerIdentity(user, env)) {
+      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру карточек." });
+      return;
+    }
+
+    const cardReviewChatId = await resolveCardReviewChatId(env);
+    await telegramApi(env, "sendMessage", {
+      chat_id: chat.id,
+      text: cardReviewChatId
+        ? `Чат согласования карточек: ${cardReviewChatId}\n\nЧтобы переназначить чат, добавь бота в нужную группу и отправь там /cardchat.`
+        : "Чат согласования карточек пока не подключён. Добавь бота в нужную группу и отправь там /cardchat."
+    });
+    return;
+  }
+
   if (command === "/drafts" || command === "/draft") {
     if (!isManagerIdentity(user, env)) {
       await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру публикаций." });
@@ -592,6 +640,12 @@ async function handleCallback(callback, env) {
 
   if (!isManagerIdentity(user, env)) {
     await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Публикациями управляет только менеджер канала." });
+    return;
+  }
+
+  const [, cardAction, cardDraftId] = data.match(/^card:(approve|reject):(.+)$/) || [];
+  if (cardDraftId) {
+    await handleCatalogCardReviewCallback(env, user, callback.message?.chat?.id || user.id, cardAction, cardDraftId);
     return;
   }
 
@@ -3732,6 +3786,9 @@ async function buildModerationSummary(env, user) {
   ]);
   const draftReadiness = await safeBuildDraftReadiness(env, publishing);
   const draftDelivery = getDraftDeliveryStatsForDate(publishing, new Date());
+  const cardReviewChatId = env.CARD_REVIEW_CHAT_ID || runtime.cardReviewChatId || null;
+  const cardReviewDrafts = await getCatalogCardReviewDrafts(env);
+  const pendingCardReviewDrafts = Object.values(cardReviewDrafts.items || {}).filter((item) => item.status === "pending").length;
   const status = buildSystemStatus(env, {
     eventMeta,
     eventsRefresh,
@@ -3783,6 +3840,10 @@ async function buildModerationSummary(env, user) {
     },
     cardModeration: {
       mode: "local_approval_pipeline",
+      reviewChatConnected: Boolean(cardReviewChatId),
+      reviewChatId: cardReviewChatId,
+      reviewChatCommand: "/cardchat",
+      pendingDrafts: pendingCardReviewDrafts,
       candidatesCommand: "npm run catalog:moderation:missing-photos",
       fullCandidatesCommand: "npm run catalog:moderation:candidates",
       dryRunCommand: "npm run catalog:moderation:dry-run",
@@ -4067,6 +4128,124 @@ async function saveCatalogCardOverride(env, body, user) {
     reset: body?.reset === true,
     updatedAt: overrides.updatedAt
   };
+}
+
+async function createCatalogCardReviewDraft(env, body, user) {
+  const sectionId = normalizeKeyPart(body?.sectionId || body?.section || "");
+  const itemId = String(body?.itemId || body?.id || "").trim();
+  if (!sectionId || !itemId) throw new HttpError("sectionId and itemId are required.", 400);
+
+  const section = CATALOG?.[sectionId];
+  if (!section || !Array.isArray(section.items)) throw new HttpError("Catalog section was not found.", 404);
+  const baseItem = section.items.find((item) => item?.id === itemId);
+  if (!baseItem) throw new HttpError("Catalog item was not found.", 404);
+
+  const reviewChatId = await resolveCardReviewChatId(env);
+  if (!reviewChatId) throw new HttpError("Card review chat is not configured. Send /cardchat in the review chat first.", 503);
+
+  const patch = sanitizeCatalogCardPatch(body?.fields || body?.patch || {});
+  const now = new Date().toISOString();
+  const draft = {
+    id: cryptoRandomId().slice(0, 18),
+    status: "pending",
+    sectionId,
+    itemId,
+    title: patch.title || baseItem.title || itemId,
+    baseTitle: baseItem.title || itemId,
+    patch,
+    body: { sectionId, itemId, fields: patch, reset: false },
+    createdAt: now,
+    createdBy: user?.username || String(user?.id || ""),
+    managerChatId: String(reviewChatId)
+  };
+
+  const store = await getCatalogCardReviewDrafts(env);
+  store.items = store.items && typeof store.items === "object" ? store.items : {};
+  store.items[draft.id] = draft;
+  store.updatedAt = now;
+  await putJson(env, "catalog:cardReviewDrafts", store);
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: reviewChatId,
+    text: formatCatalogCardReviewDraft(draft),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "Одобрить карточку", callback_data: `card:approve:${draft.id}` }],
+        [{ text: "Отклонить", callback_data: `card:reject:${draft.id}` }]
+      ]
+    }
+  });
+
+  return {
+    ok: true,
+    draftId: draft.id,
+    sectionId,
+    itemId,
+    status: draft.status,
+    reviewChatId: String(reviewChatId),
+    createdAt: now
+  };
+}
+
+async function handleCatalogCardReviewCallback(env, user, chatId, action, draftId) {
+  const store = await getCatalogCardReviewDrafts(env);
+  const draft = store.items?.[draftId];
+  if (!draft || draft.status !== "pending") {
+    await telegramApi(env, "sendMessage", { chat_id: chatId, text: "Черновик карточки уже обработан или не найден." });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  if (action === "reject") {
+    draft.status = "rejected";
+    draft.reviewedAt = now;
+    draft.reviewedBy = user?.username || String(user?.id || "");
+    store.items[draftId] = draft;
+    store.updatedAt = now;
+    await putJson(env, "catalog:cardReviewDrafts", store);
+    await telegramApi(env, "sendMessage", { chat_id: chatId, text: `Карточка отклонена: ${draft.title}` });
+    return;
+  }
+
+  const result = await saveCatalogCardOverride(env, draft.body, user);
+  draft.status = "approved";
+  draft.reviewedAt = now;
+  draft.reviewedBy = user?.username || String(user?.id || "");
+  draft.appliedAt = result.updatedAt || now;
+  store.items[draftId] = draft;
+  store.updatedAt = now;
+  await putJson(env, "catalog:cardReviewDrafts", store);
+  await telegramApi(env, "sendMessage", { chat_id: chatId, text: `Карточка одобрена и применена: ${draft.title}` });
+}
+
+async function getCatalogCardReviewDrafts(env) {
+  const store = await getJson(env, "catalog:cardReviewDrafts", { items: {}, updatedAt: null });
+  return {
+    items: store?.items && typeof store.items === "object" ? store.items : {},
+    updatedAt: store?.updatedAt || null
+  };
+}
+
+function formatCatalogCardReviewDraft(draft) {
+  const fields = Object.entries(draft.patch || {})
+    .filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value))
+    .slice(0, 8)
+    .map(([key, value]) => {
+      const normalized = Array.isArray(value) ? value.join("; ") : String(value);
+      return `• ${key}: ${normalized.slice(0, 220)}`;
+    });
+
+  return [
+    "Черновик карточки на согласование",
+    "",
+    `${draft.title}`,
+    `Раздел: ${draft.sectionId}`,
+    `Карточка: ${draft.itemId}`,
+    "",
+    fields.length ? fields.join("\n") : "Изменения без текстовых полей.",
+    "",
+    "После одобрения карточка применится в Mini App."
+  ].join("\n");
 }
 
 function applyCatalogOverrides(baseCatalog, overrides) {
@@ -4584,6 +4763,11 @@ function expireStalePendingDrafts(publishing, env, now = new Date()) {
 
 async function resolveManagerChatId(env) {
   return env.TELEGRAM_MANAGER_CHAT_ID || (await getRuntime(env)).managerChatId;
+}
+
+async function resolveCardReviewChatId(env) {
+  const runtime = await getRuntime(env);
+  return env.CARD_REVIEW_CHAT_ID || runtime.cardReviewChatId || env.TELEGRAM_MANAGER_CHAT_ID || runtime.managerChatId;
 }
 
 async function resolveChannelId(env) {

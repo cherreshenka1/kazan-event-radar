@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:05:30.577Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Festival boulevard, Kazan (2024-05-26) 41.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Festival_boulevard,_Kazan_(2024-05-26)_41.jpg",
+      "artist": "Vyacheslav Kirillin",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

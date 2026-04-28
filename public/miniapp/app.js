@@ -1063,7 +1063,7 @@ function moderationCatalogEditorCard() {
   return card([
     `<div class="preview-label">Редактор карточек</div>`,
     `<h3>Правка прямо в Mini App</h3>`,
-    `<p class="form-hint">Изменения сохраняются как быстрые оверрайды и сразу применяются в каталоге. Исходные файлы проекта при этом не переписываются.</p>`,
+    `<p class="form-hint">Изменения уходят в чат согласования карточек и применяются только после одобрения менеджером. Сброс правки выполняется сразу.</p>`,
     `<form class="support-form moderation-edit-form" id="moderationCardForm">
       <div class="form-row-2">
         <label>
@@ -1198,6 +1198,8 @@ function moderationCardPipelineCard(summary) {
       "Это безопасный формат: я подготавливаю материал, а ты подтверждаешь только то, что выглядит чисто и подходит проекту."
     ].join("\n\n")),
     `<div class="fact-grid">
+      ${factBlock("Чат согласования", moderation.reviewChatConnected ? "подключён" : "отправь /cardchat в нужном чате")}
+      ${factBlock("На проверке", `${moderation.pendingDrafts || 0} карточек`)}
       ${factBlock("Доска", moderation.boardPath || "data/catalog-moderation/review-board.md")}
       ${factBlock("Галерея", moderation.galleryPath || "data/catalog-moderation/review-gallery.html")}
       ${factBlock("Фото-кандидаты", moderation.photosPath || "data/catalog-moderation/photo-candidates")}
@@ -2574,7 +2576,8 @@ async function saveModerationCatalogCard(reset = false) {
   };
 
   try {
-    const result = await api("/api/moderation/catalog-card", {
+    const endpoint = reset ? "/api/moderation/catalog-card" : "/api/moderation/catalog-card-draft";
+    const result = await api(endpoint, {
       method: "POST",
       body: JSON.stringify({ sectionId, itemId, fields, reset })
     });
@@ -2587,8 +2590,12 @@ async function saveModerationCatalogCard(reset = false) {
       state.sections = catalog.sections;
     }
 
+    if (canModerate()) {
+      state.moderation = await loadModerationSummary().catch(() => state.moderation);
+    }
+
     track(reset ? "moderation_card_reset" : "moderation_card_save", `${sectionId}:${itemId}`);
-    toast(reset ? "Правка карточки сброшена." : "Карточка сохранена.");
+    toast(reset ? "Правка карточки сброшена." : "Черновик карточки отправлен на согласование.");
     render();
   } catch (error) {
     toast(`Не удалось сохранить карточку: ${error.message}`);
