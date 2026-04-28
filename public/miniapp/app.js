@@ -3648,6 +3648,7 @@ function getFallbackPhotoLinks(item) {
   const candidates = [item?.imageUrl, item?.externalPreviewUrl]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
+    .filter((value) => isCleanExternalImageUrl(value))
     .filter((value, index, array) => array.indexOf(value) === index);
 
   return candidates.map((url, index) => ({
@@ -3853,7 +3854,37 @@ function eventVisualUrl(item, variant = "detail") {
 function eventDirectVisualUrl(item) {
   return [item?.externalPreviewUrl, item?.imageUrl]
     .map((value) => String(value || "").trim())
-    .find(Boolean) || "";
+    .find((value) => isCleanExternalImageUrl(value)) || "";
+}
+
+function isCleanExternalImageUrl(value) {
+  const url = String(value || "").trim();
+  if (!/^https?:\/\//i.test(url)) return false;
+
+  const normalized = safeDecodeURIComponent(url).toLowerCase();
+  const blockedMarkers = [
+    "wmark",
+    "watermark",
+    "tickets",
+    "ticket",
+    "logo",
+    "banner",
+    "poster",
+    "announce",
+    "1200x628_wmark",
+    "generated/events",
+    "/brand/"
+  ];
+
+  return !blockedMarkers.some((marker) => normalized.includes(marker));
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value || "");
+  }
 }
 
 function eventFallbackVisualUrl(item, variant = "detail") {
