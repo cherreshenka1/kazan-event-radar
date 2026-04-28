@@ -614,32 +614,13 @@ async function handleTelegramMessage(message, env) {
     return;
   }
 
-  if (command === "/cardchat-legacy-disabled") {
-    if (!isManagerIdentity(user, env)) {
-      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру карточек." });
-      return;
-    }
-
-    const runtime = await getRuntime(env);
-    runtime.cardReviewChatId = String(chat.id);
-    runtime.cardReviewChatTitle = chat.title || runtime.cardReviewChatTitle || null;
-    runtime.cardReviewConfiguredAt = new Date().toISOString();
-    await putJson(env, "runtime", runtime);
-    await telegramApi(env, "sendMessage", {
-      chat_id: chat.id,
-      text: [
-        "Чат согласования карточек подключён.",
-        "",
-        `Chat ID: ${chat.id}`,
-        "Сюда можно будет отправлять новые карточки и фото-кандидаты до публикации."
-      ].join("\n")
-    });
-    return;
-  }
-
   if (command === "/cardreview" || command === "/cards") {
     if (!isManagerIdentity(user, env)) {
-      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру карточек." });
+      await telegramApi(env, "sendMessage", {
+        chat_id: chat.id,
+        message_thread_id: message.message_thread_id || undefined,
+        text: "Эта команда доступна только менеджеру карточек."
+      });
       return;
     }
 
@@ -649,15 +630,24 @@ async function handleTelegramMessage(message, env) {
       chat_id: chat.id,
       message_thread_id: message.message_thread_id || undefined,
       text: cardReviewChatId
-        ? `Чат согласования карточек: ${cardReviewChatId}\n\nЧтобы переназначить чат, добавь бота в нужную группу и отправь там /cardchat.`
-        : "Чат согласования карточек пока не подключён. Добавь бота в нужную группу и отправь там /cardchat."
+        ? [
+          `Чат согласования карточек: ${cardReviewChatId}`,
+          cardReviewTarget.threadId ? `Тема согласования: ${cardReviewTarget.threadId}` : "Тема согласования: не используется",
+          "",
+          "Чтобы переназначить чат или тему, добавь бота в нужную группу/тему и отправь там /cardchat."
+        ].join("\n")
+        : "Чат согласования карточек пока не подключён. Добавь бота в нужную группу или тему и отправь там /cardchat."
     });
     return;
   }
 
   if (command === "/drafts" || command === "/draft") {
     if (!isManagerIdentity(user, env)) {
-      await telegramApi(env, "sendMessage", { chat_id: chat.id, text: "Эта команда доступна только менеджеру публикаций." });
+      await telegramApi(env, "sendMessage", {
+        chat_id: chat.id,
+        message_thread_id: message.message_thread_id || undefined,
+        text: "Эта команда доступна только менеджеру публикаций."
+      });
       return;
     }
 
@@ -668,6 +658,7 @@ async function handleTelegramMessage(message, env) {
     });
     await telegramApi(env, "sendMessage", {
       chat_id: chat.id,
+      message_thread_id: message.message_thread_id || undefined,
       text: drafts.length ? `Отправил черновики: ${drafts.length}.` : "Пока не нашел подходящие события для черновиков."
     });
     return;
@@ -696,6 +687,8 @@ async function handleChannelPost(post, env) {
 async function handleCallback(callback, env) {
   const user = callback.from;
   const data = callback.data || "";
+  const callbackChatId = callback.message?.chat?.id || user.id;
+  const callbackThreadId = callback.message?.message_thread_id || null;
 
   await track(env, { type: "bot_button", action: data.split(":")[0], label: data, userId: user?.id, source: "telegram" });
   await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
@@ -707,7 +700,7 @@ async function handleCallback(callback, env) {
 
   const [, cardAction, cardDraftId] = data.match(/^card:(approve|reject):(.+)$/) || [];
   if (cardDraftId) {
-    await handleCatalogCardReviewCallback(env, user, callback.message?.chat?.id || user.id, cardAction, cardDraftId, callback.message?.message_thread_id || null);
+    await handleCatalogCardReviewCallback(env, user, callbackChatId, cardAction, cardDraftId, callbackThreadId);
     return;
   }
 
@@ -716,19 +709,31 @@ async function handleCallback(callback, env) {
 
   if (action === "reject") {
     await markDraft(env, draftId, "rejected");
-    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Черновик отклонен." });
+    await telegramApi(env, "sendMessage", {
+      chat_id: callbackChatId,
+      message_thread_id: callbackThreadId || undefined,
+      text: "Черновик отклонен."
+    });
     return;
   }
 
   const draft = await getDraft(env, draftId);
   if (!draft || draft.status !== "pending") {
-    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Черновик уже обработан или не найден." });
+    await telegramApi(env, "sendMessage", {
+      chat_id: callbackChatId,
+      message_thread_id: callbackThreadId || draft?.managerThreadId || undefined,
+      text: "Черновик уже обработан или не найден."
+    });
     return;
   }
 
   const channelId = await resolveChannelId(env);
   if (!channelId) {
-    await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Не найден channel id. Добавьте бота админом и отправьте /channelid в канал." });
+    await telegramApi(env, "sendMessage", {
+      chat_id: callbackChatId,
+      message_thread_id: callbackThreadId || draft.managerThreadId || undefined,
+      text: "Не найден channel id. Добавьте бота админом и отправьте /channelid в канал."
+    });
     return;
   }
 
@@ -739,7 +744,11 @@ async function handleCallback(callback, env) {
     ]]
   });
   await markDraft(env, draftId, "published");
-  await telegramApi(env, "sendMessage", { chat_id: user.id, text: "Пост опубликован в канал." });
+  await telegramApi(env, "sendMessage", {
+    chat_id: callbackChatId,
+    message_thread_id: callbackThreadId || draft.managerThreadId || undefined,
+    text: "Пост опубликован в канал."
+  });
 }
 
 async function prepareDraftBatch(env, limit, options = {}) {
