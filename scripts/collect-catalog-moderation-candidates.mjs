@@ -9,11 +9,13 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "..");
 const MODERATION_ROOT = projectPath("data", "catalog-moderation");
 const PHOTO_CANDIDATES_ROOT = path.join(MODERATION_ROOT, "photo-candidates");
+const PUBLISHED_PHOTOS_ROOT = projectPath("public", "miniapp", "photos");
 const REPORT_JSON = path.join(MODERATION_ROOT, "review-board.json");
 const REPORT_MD = path.join(MODERATION_ROOT, "review-board.md");
 const REPORT_HTML = path.join(MODERATION_ROOT, "review-gallery.html");
 const APPROVALS_TEMPLATE = path.join(MODERATION_ROOT, "approvals.template.json");
 const SECTION_ORDER = ["parks", "sights", "hotels", "excursions", "food", "routes", "active", "masterclasses", "roadtrip"];
+const IMAGE_FILE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const IMAGE_EXTENSIONS_BY_TYPE = {
   "image/jpeg": ".jpg",
   "image/jpg": ".jpg",
@@ -45,13 +47,18 @@ async function main() {
   };
 
   for (const sectionId of SECTION_ORDER) {
+    if (options.sections.length && !options.sections.includes(sectionId)) continue;
+
     const section = CATALOG[sectionId];
     if (!Array.isArray(section?.items)) continue;
 
-    const limit = options.limitPerSection || section.items.length;
+    const sourceItems = options.missingPhotosOnly
+      ? await filterItemsWithoutPublishedPhotos(sectionId, section.items)
+      : section.items;
+    const limit = options.limitPerSection || sourceItems.length;
     const items = [];
 
-    for (const item of section.items.slice(0, limit)) {
+    for (const item of sourceItems.slice(0, limit)) {
       const result = await collectItemCandidates(sectionId, item);
       items.push(result);
       approvals.items.push({
@@ -77,6 +84,13 @@ async function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     mode: "catalog_moderation_candidates",
+    options: {
+      sections: options.sections,
+      missingPhotosOnly: options.missingPhotosOnly,
+      limitPerSection: options.limitPerSection,
+      maxSourcesPerItem: options.maxSourcesPerItem,
+      maxImagesPerItem: options.maxImagesPerItem
+    },
     legalModel: {
       text: "Draft texts are short summaries based on catalog facts and source metadata. Edit them before publication if needed.",
       photos: "Downloaded files are candidates only. They are not published until approved by the project owner.",
@@ -95,6 +109,28 @@ async function main() {
   console.log(`Catalog moderation gallery: ${path.relative(ROOT, REPORT_HTML)}`);
   console.log(`Approvals template: ${path.relative(ROOT, APPROVALS_TEMPLATE)}`);
   console.log(`Photo candidates: ${path.relative(ROOT, PHOTO_CANDIDATES_ROOT)}`);
+}
+
+async function filterItemsWithoutPublishedPhotos(sectionId, items) {
+  const result = [];
+
+  for (const item of items || []) {
+    if (!(await hasPublishedPhotos(sectionId, item.id))) {
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+
+async function hasPublishedPhotos(sectionId, itemId) {
+  try {
+    const folder = path.join(PUBLISHED_PHOTOS_ROOT, sectionId, itemId);
+    const entries = await fs.readdir(folder, { withFileTypes: true });
+    return entries.some((entry) => entry.isFile() && IMAGE_FILE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()));
+  } catch {
+    return false;
+  }
 }
 
 async function collectItemCandidates(sectionId, item) {
@@ -581,8 +617,14 @@ function parseOptions(args) {
     const raw = args.find((arg) => arg.startsWith(`${name}=`));
     return raw ? raw.split("=").slice(1).join("=") : fallback;
   };
+  const sections = valueOf("--section", "")
+    .split(",")
+    .map((section) => section.trim())
+    .filter(Boolean);
 
   return {
+    sections,
+    missingPhotosOnly: args.includes("--missing-photos-only"),
     limitPerSection: Number(valueOf("--limit-per-section", "0")) || 0,
     maxSourcesPerItem: Number(valueOf("--max-sources-per-item", "3")) || 3,
     maxImagesPerItem: Number(valueOf("--max-images-per-item", "3")) || 3,

@@ -48,6 +48,7 @@
     "catalog:refresh:pipeline": "node scripts/refresh-catalog-pipeline.mjs --deploy",
     "catalog:refresh:local": "node scripts/refresh-catalog-pipeline.mjs --no-deploy",
     "catalog:moderation:candidates": "node scripts/collect-catalog-moderation-candidates.mjs",
+    "catalog:moderation:missing-photos": "node scripts/collect-catalog-moderation-candidates.mjs --missing-photos-only --limit-per-section=20",
     "catalog:moderation:open": "node scripts/open-catalog-moderation-gallery.mjs",
     "catalog:moderation:apply": "node scripts/apply-catalog-moderation-approvals.mjs",
     "catalog:moderation:dry-run": "node scripts/apply-catalog-moderation-approvals.mjs --dry-run",
