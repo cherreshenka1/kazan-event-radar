@@ -537,13 +537,14 @@ function bindEvents() {
     }
   });
 
-  contentNode.addEventListener("keydown", async (event) => {
-    const input = event.target.closest("[data-section-search]");
-    if (!input) return;
-    if (event.key !== "Enter") return;
+  contentNode.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-section-search-form]");
+    if (!form) return;
 
     event.preventDefault();
-    await applySectionSearch(input.dataset.sectionSearch, input.value || "");
+    const sectionId = form.dataset.sectionSearchForm;
+    const input = form.querySelector(`[data-section-search="${sectionId}"]`);
+    await applySectionSearch(sectionId, input?.value || "");
   });
 
   contentNode.addEventListener("change", (event) => {
@@ -3255,7 +3256,7 @@ function sectionSearchToolbar(sectionId, placeholder, filteredCount, totalCount)
         <span class="search-count-pill">${escapeHtml(countLabel)}</span>
         ${query ? actionButton("Сбросить", "section-search-clear", { section: sectionId }) : ""}
       </div>
-      <label class="search-field">
+      <form class="search-field" data-section-search-form="${escapeHtml(sectionId)}">
         <span class="search-label">${escapeHtml(placeholder)}</span>
         <div class="search-input-row">
           <input
@@ -3267,7 +3268,7 @@ function sectionSearchToolbar(sectionId, placeholder, filteredCount, totalCount)
           />
           ${actionButton("Поиск", "section-search-apply", { section: sectionId }, "primary")}
         </div>
-      </label>
+      </form>
     </section>
   `;
 }
@@ -3527,7 +3528,7 @@ function chip(label, action, data, active, extraClass = "") {
 
 function actionButton(label, action, data = {}, variant = "") {
   const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
-  return `<button class="button ${variant}" data-action="${action}" ${attrs}>${escapeHtml(label)}</button>`;
+  return `<button type="button" class="button ${variant}" data-action="${action}" ${attrs}>${escapeHtml(label)}</button>`;
 }
 
 function factBlock(title, text) {
