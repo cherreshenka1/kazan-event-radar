@@ -41,7 +41,7 @@ jobs:
         run: node scripts/build-photo-manifest.mjs
 
       - name: Build event previews
-        run: node scripts/build-event-previews.mjs --skip-api
+        run: node scripts/build-event-previews.mjs --skip-api --force
 
       - name: Check catalog photo coverage
         run: npm run photos:audit:check

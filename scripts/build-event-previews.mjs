@@ -292,6 +292,12 @@ function buildPosterHtml(item, backgroundUrl = "") {
   const title = escapeHtml(item.posterTitle || item.title || "Событие в Казани");
   const label = escapeHtml(eventKindLabel(item.kind).toUpperCase());
   const hasPhotoBackground = Boolean(backgroundUrl);
+
+  if (hasPhotoBackground) {
+    return buildCleanPhotoPosterHtml(backgroundUrl);
+  }
+
+  return buildAbstractPreviewHtml(palette);
   const backgroundMarkup = hasPhotoBackground
     ? `
       <img class="poster-photo" src="${escapeHtml(backgroundUrl)}" alt="" aria-hidden="true" />
@@ -484,6 +490,116 @@ function buildPosterHtml(item, backgroundUrl = "") {
             if (image.complete) done();
           })();
         </script>
+      </body>
+    </html>
+  `.trim();
+}
+
+function buildCleanPhotoPosterHtml(backgroundUrl) {
+  return `
+    <!doctype html>
+    <html lang="ru">
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          * { box-sizing: border-box; }
+
+          html, body {
+            margin: 0;
+            width: 1200px;
+            height: 675px;
+            overflow: hidden;
+            background: #101827;
+          }
+
+          img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            filter: saturate(1.03) contrast(1.02);
+          }
+        </style>
+      </head>
+      <body>
+        <img src="${escapeHtml(backgroundUrl)}" alt="" aria-hidden="true" />
+        <script>
+          (() => {
+            const image = document.querySelector('img');
+            const done = () => { window.__posterReady = true; };
+            image.addEventListener('load', done, { once: true });
+            image.addEventListener('error', done, { once: true });
+            if (image.complete) done();
+          })();
+        </script>
+      </body>
+    </html>
+  `.trim();
+}
+
+function buildAbstractPreviewHtml(palette) {
+  return `
+    <!doctype html>
+    <html lang="ru">
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          :root {
+            color-scheme: light only;
+            --start: ${palette.start};
+            --mid: ${palette.mid};
+            --end: ${palette.end};
+            --glow: ${palette.glow};
+          }
+
+          * { box-sizing: border-box; }
+
+          html, body {
+            margin: 0;
+            width: 1200px;
+            height: 675px;
+            overflow: hidden;
+            background: #081224;
+          }
+
+          body {
+            position: relative;
+            background:
+              radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.12), transparent 22%),
+              radial-gradient(circle at 78% 18%, var(--glow), transparent 28%),
+              radial-gradient(circle at 76% 82%, rgba(255, 255, 255, 0.08), transparent 30%),
+              linear-gradient(135deg, var(--start) 0%, var(--mid) 52%, var(--end) 100%);
+          }
+
+          body::before,
+          body::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            pointer-events: none;
+          }
+
+          body::before {
+            width: 620px;
+            height: 620px;
+            left: -180px;
+            bottom: -250px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 62%);
+          }
+
+          body::after {
+            width: 380px;
+            height: 380px;
+            right: -80px;
+            top: -120px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 64%);
+          }
+        </style>
+      </head>
+      <body>
+        <script>window.__posterReady = true;</script>
       </body>
     </html>
   `.trim();
