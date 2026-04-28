@@ -648,10 +648,15 @@ async function prepareDraftBatch(env, limit, options = {}) {
   }
 
   let selected = await selectCandidates();
-  if (selected.length === 0 && options.refresh === false && options.retryRefresh !== false) {
+  const needsRetryRefresh = selected.length < limit && options.refresh === false && options.retryRefresh !== false;
+  if (needsRetryRefresh) {
     try {
+      const beforeRetryCount = selected.length;
       await scanSources(env, { reason: options.reason ? `${options.reason}_retry_refresh` : "draft_batch_retry_refresh" });
-      selected = await selectCandidates();
+      const refreshedSelected = await selectCandidates();
+      if (refreshedSelected.length > beforeRetryCount) {
+        selected = refreshedSelected;
+      }
     } catch (error) {
       console.warn(`Draft retry refresh failed: ${error.message}`);
     }
