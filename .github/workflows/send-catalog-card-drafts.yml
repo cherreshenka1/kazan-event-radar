@@ -15,6 +15,10 @@ on:
         description: Optional section id, for example parks,food,routes
         required: false
         default: ""
+      pause_ms:
+        description: Delay between Telegram drafts in milliseconds
+        required: true
+        default: "750"
       missing_photos_only:
         description: Collect only cards that need better photos
         required: true
@@ -63,13 +67,14 @@ jobs:
           WORKER_AUTOMATION_TOKEN: ${{ secrets.WORKER_AUTOMATION_TOKEN }}
           INPUT_LIMIT: ${{ inputs.limit }}
           INPUT_SECTION: ${{ inputs.section }}
+          INPUT_PAUSE_MS: ${{ inputs.pause_ms }}
         run: |
           if [ -z "$WORKER_AUTOMATION_TOKEN" ]; then
             echo "::error::Missing WORKER_AUTOMATION_TOKEN secret."
             exit 1
           fi
 
-          ARGS="--limit=${INPUT_LIMIT:-10}"
+          ARGS="--limit=${INPUT_LIMIT:-10} --pause-ms=${INPUT_PAUSE_MS:-750}"
           if [ -n "$INPUT_SECTION" ]; then
             ARGS="$ARGS --section=$INPUT_SECTION"
           fi

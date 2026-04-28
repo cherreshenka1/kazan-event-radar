@@ -21,6 +21,7 @@ const apiBaseUrl = String(options.apiBase || process.env.WORKER_API_BASE_URL || 
 const automationToken = String(options.token || process.env.WORKER_AUTOMATION_TOKEN || process.env.AUTOMATION_TOKEN || "").trim();
 const dryRun = Boolean(options.dryRun);
 const limit = Number.isFinite(options.limit) ? options.limit : 10;
+const pauseMs = Number.isFinite(options.pauseMs) ? Math.max(0, options.pauseMs) : 750;
 const sectionFilter = new Set(String(options.section || "")
   .split(",")
   .map((value) => value.trim())
@@ -80,6 +81,7 @@ for (const entry of selected) {
     await writeJson(statePath, state);
     sent += 1;
     console.log(`[sent] ${label}: ${result.draftId || "ok"}`);
+    if (pauseMs > 0) await sleep(pauseMs);
   } catch (error) {
     failed += 1;
     console.warn(`[failed] ${label}: ${error.message || error}`);
@@ -165,6 +167,10 @@ function hashString(value) {
   return (hash >>> 0).toString(36);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function readJson(filePath, fallback) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -206,6 +212,8 @@ function parseArgs(args) {
       parsed.report = value;
     } else if (key === "state") {
       parsed.state = value;
+    } else if (key === "pause-ms") {
+      parsed.pauseMs = Number(value);
     }
   }
 
