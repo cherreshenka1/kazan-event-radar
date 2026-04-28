@@ -4268,6 +4268,22 @@ async function createCatalogCardReviewDraft(env, body, user) {
   const patch = sanitizeCatalogCardPatch(body?.fields || body?.patch || {});
   const previewImageUrl = sanitizeReviewImageUrl(body?.previewImageUrl || firstPatchPhotoUrl(patch));
   const now = new Date().toISOString();
+  const store = await getCatalogCardReviewDrafts(env);
+  const duplicate = findCatalogCardReviewDuplicate(store, sectionId, itemId, previewImageUrl || firstPatchPhotoUrl(patch));
+  if (duplicate) {
+    return {
+      ok: true,
+      draftId: duplicate.id,
+      sectionId,
+      itemId,
+      status: duplicate.status,
+      deduped: true,
+      reviewChatId: duplicate.managerChatId || String(reviewChatId),
+      reviewThreadId: duplicate.managerThreadId || (reviewTarget.threadId ? String(reviewTarget.threadId) : ""),
+      createdAt: duplicate.createdAt || now
+    };
+  }
+
   const draft = {
     id: cryptoRandomId().slice(0, 18),
     status: "pending",
@@ -4286,7 +4302,6 @@ async function createCatalogCardReviewDraft(env, body, user) {
     managerThreadId: reviewTarget.threadId ? String(reviewTarget.threadId) : ""
   };
 
-  const store = await getCatalogCardReviewDrafts(env);
   store.items = store.items && typeof store.items === "object" ? store.items : {};
   store.items[draft.id] = draft;
   store.updatedAt = now;
@@ -4304,6 +4319,19 @@ async function createCatalogCardReviewDraft(env, body, user) {
     reviewThreadId: reviewTarget.threadId ? String(reviewTarget.threadId) : "",
     createdAt: now
   };
+}
+
+function findCatalogCardReviewDuplicate(store, sectionId, itemId, photoUrl) {
+  const normalizedPhotoUrl = normalizeUrlForDedupe(photoUrl);
+  if (!normalizedPhotoUrl) return null;
+
+  const drafts = Object.values(store?.items || {});
+  return drafts.find((draft) => {
+    if (!["pending", "approved"].includes(draft?.status)) return false;
+    if (draft.sectionId !== sectionId || draft.itemId !== itemId) return false;
+    const draftPhotoUrl = normalizeUrlForDedupe(draft.previewImageUrl || firstPatchPhotoUrl(draft.patch));
+    return draftPhotoUrl === normalizedPhotoUrl;
+  }) || null;
 }
 
 async function handleCatalogCardReviewCallback(env, user, chatId, action, draftId, messageThreadId = null) {
@@ -4425,6 +4453,17 @@ function sanitizeReviewImageUrl(value) {
   if (!/^https?:\/\//i.test(url)) return "";
   if (/^(?:javascript|data):/i.test(url)) return "";
   return url;
+}
+
+function normalizeUrlForDedupe(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    url.hash = "";
+    url.searchParams.sort();
+    return url.toString().replace(/\/+$/u, "").toLowerCase();
+  } catch {
+    return trim(value || "", 1000).replace(/\/+$/u, "").toLowerCase();
+  }
 }
 
 function applyCatalogOverrides(baseCatalog, overrides) {
