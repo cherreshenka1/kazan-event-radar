@@ -3165,7 +3165,7 @@ function isCleanChannelPhotoUrl(value) {
   const url = String(value || "").trim();
   if (!/^https?:\/\//i.test(url)) return false;
 
-  const normalized = decodeURIComponent(url).toLowerCase();
+  const normalized = safeDecodeURIComponent(url).toLowerCase();
   const blockedMarkers = [
     "wmark",
     "watermark",
@@ -3181,6 +3181,14 @@ function isCleanChannelPhotoUrl(value) {
   ];
 
   return !blockedMarkers.some((marker) => normalized.includes(marker));
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value || "");
+  }
 }
 
 function firstChannelImageUrl(item) {
