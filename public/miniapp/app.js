@@ -2663,6 +2663,7 @@ async function saveModerationCatalogCard(reset = false) {
     return;
   }
 
+  const item = findCatalogItem(sectionId, itemId);
   const fields = reset ? {} : {
     title: String(formData.get("title") || "").trim(),
     subtitle: String(formData.get("subtitle") || "").trim(),
@@ -2681,12 +2682,22 @@ async function saveModerationCatalogCard(reset = false) {
     mapUrl: String(formData.get("mapUrl") || "").trim(),
     photoLinks: textareaToPhotoLinks(formData.get("photoLinks"))
   };
+  const fallbackImage = SECTION_VISUALS[sectionId] || SECTION_VISUALS.places;
+  const candidatePreviewUrl = fields.photoLinks?.find((link) => link?.url)?.url || "";
+  const previewImageUrl = toAbsoluteMediaUrl(candidatePreviewUrl || (item ? getSectionPrimaryImage(sectionId, item, fallbackImage) : ""));
 
   try {
     const endpoint = reset ? "/api/moderation/catalog-card" : "/api/moderation/catalog-card-draft";
     const result = await api(endpoint, {
       method: "POST",
-      body: JSON.stringify({ sectionId, itemId, fields, reset })
+      body: JSON.stringify({
+        sectionId,
+        itemId,
+        fields,
+        reset,
+        previewImageUrl,
+        previewImageAlt: item?.title || fields.title || itemId
+      })
     });
 
     if (result.item && state.catalog?.[sectionId]?.items) {
@@ -3137,6 +3148,10 @@ function getActivePlaceItems() {
 
 function getSectionItems(sectionId) {
   return state.catalog?.[sectionId]?.items || [];
+}
+
+function findCatalogItem(sectionId, itemId) {
+  return getSectionItems(sectionId).find((item) => item?.id === itemId) || null;
 }
 
 function getEditableCatalogSections() {
@@ -3714,6 +3729,16 @@ function resolveMediaUrl(url) {
   if (!/^https?:\/\//i.test(raw)) return raw;
   if (!apiBaseUrl) return raw;
   return `${apiBaseUrl}/api/image?url=${encodeURIComponent(raw)}`;
+}
+
+function toAbsoluteMediaUrl(url) {
+  const resolved = resolveMediaUrl(url);
+  if (!resolved || resolved.startsWith("data:")) return "";
+  try {
+    return new URL(resolved, window.location.href).toString();
+  } catch {
+    return /^https?:\/\//i.test(resolved) ? resolved : "";
+  }
 }
 
 function richTextBlock(text, extraClass = "") {

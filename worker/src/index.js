@@ -4144,15 +4144,19 @@ async function createCatalogCardReviewDraft(env, body, user) {
   if (!reviewChatId) throw new HttpError("Card review chat is not configured. Send /cardchat in the review chat first.", 503);
 
   const patch = sanitizeCatalogCardPatch(body?.fields || body?.patch || {});
+  const previewImageUrl = sanitizeReviewImageUrl(body?.previewImageUrl || firstPatchPhotoUrl(patch));
   const now = new Date().toISOString();
   const draft = {
     id: cryptoRandomId().slice(0, 18),
     status: "pending",
     sectionId,
+    sectionTitle: section.title || sectionId,
     itemId,
     title: patch.title || baseItem.title || itemId,
     baseTitle: baseItem.title || itemId,
     patch,
+    previewImageUrl,
+    previewImageAlt: trim(body?.previewImageAlt || patch.title || baseItem.title || itemId, 160),
     body: { sectionId, itemId, fields: patch, reset: false },
     createdAt: now,
     createdBy: user?.username || String(user?.id || ""),
@@ -4165,16 +4169,7 @@ async function createCatalogCardReviewDraft(env, body, user) {
   store.updatedAt = now;
   await putJson(env, "catalog:cardReviewDrafts", store);
 
-  await telegramApi(env, "sendMessage", {
-    chat_id: reviewChatId,
-    text: formatCatalogCardReviewDraft(draft),
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "Одобрить карточку", callback_data: `card:approve:${draft.id}` }],
-        [{ text: "Отклонить", callback_data: `card:reject:${draft.id}` }]
-      ]
-    }
-  });
+  await sendCatalogCardReviewDraft(env, reviewChatId, draft);
 
   return {
     ok: true,
@@ -4239,13 +4234,58 @@ function formatCatalogCardReviewDraft(draft) {
     "Черновик карточки на согласование",
     "",
     `${draft.title}`,
-    `Раздел: ${draft.sectionId}`,
+    `Раздел: ${draft.sectionTitle || draft.sectionId}`,
     `Карточка: ${draft.itemId}`,
+    `Фото: ${draft.previewImageUrl ? "есть в превью" : "нет превью"}`,
     "",
     fields.length ? fields.join("\n") : "Изменения без текстовых полей.",
     "",
     "После одобрения карточка применится в Mini App."
   ].join("\n");
+}
+
+async function sendCatalogCardReviewDraft(env, reviewChatId, draft) {
+  const replyMarkup = {
+    inline_keyboard: [
+      [{ text: "Одобрить карточку", callback_data: `card:approve:${draft.id}` }],
+      [{ text: "Отклонить", callback_data: `card:reject:${draft.id}` }]
+    ]
+  };
+  const text = formatCatalogCardReviewDraft(draft);
+
+  if (draft.previewImageUrl) {
+    try {
+      await telegramApi(env, "sendPhoto", {
+        chat_id: reviewChatId,
+        photo: draft.previewImageUrl,
+        caption: trim(text, 980),
+        reply_markup: replyMarkup
+      });
+      return;
+    } catch (error) {
+      console.warn(`Failed to send card draft photo: ${error.message || error}`);
+    }
+  }
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: reviewChatId,
+    text,
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup
+  });
+}
+
+function firstPatchPhotoUrl(patch) {
+  return Array.isArray(patch?.photoLinks)
+    ? patch.photoLinks.find((link) => link?.url)?.url || ""
+    : "";
+}
+
+function sanitizeReviewImageUrl(value) {
+  const url = trim(value || "", 1000);
+  if (!/^https?:\/\//i.test(url)) return "";
+  if (/^(?:javascript|data):/i.test(url)) return "";
+  return url;
 }
 
 function applyCatalogOverrides(baseCatalog, overrides) {
