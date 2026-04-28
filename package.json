@@ -42,6 +42,7 @@
     "catalog:build": "node scripts/build-catalog-import-overrides.mjs",
     "photos:manifest": "node scripts/build-photo-manifest.mjs",
     "photos:audit": "node scripts/audit-catalog-photos.mjs",
+    "photos:audit:check": "node scripts/audit-catalog-photos.mjs --check",
     "photos:audit:fix": "node scripts/audit-catalog-photos.mjs --ensure-folders",
     "security:audit": "node scripts/security-audit.mjs",
     "catalog:refresh": "node scripts/refresh-catalog-imports.mjs",

@@ -28,20 +28,29 @@ await main().catch((error) => {
 });
 
 async function main() {
+  const checkOnly = process.argv.includes("--check");
+
   if (process.argv.includes("--ensure-folders")) {
     await ensureCatalogPhotoFolders();
   }
 
   const report = await buildReport();
 
-  await fs.mkdir(path.dirname(REPORT_JSON), { recursive: true });
-  await fs.mkdir(path.dirname(REPORT_MD), { recursive: true });
-  await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  await fs.writeFile(REPORT_MD, buildMarkdown(report), "utf8");
+  if (!checkOnly) {
+    await fs.mkdir(path.dirname(REPORT_JSON), { recursive: true });
+    await fs.mkdir(path.dirname(REPORT_MD), { recursive: true });
+    await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    await fs.writeFile(REPORT_MD, buildMarkdown(report), "utf8");
+  }
 
   console.log(`Catalog photo coverage: ${report.totals.withPhotos}/${report.totals.itemCount} cards with photos`);
-  console.log(`JSON: ${path.relative(ROOT, REPORT_JSON)}`);
-  console.log(`Docs: ${path.relative(ROOT, REPORT_MD)}`);
+
+  if (checkOnly) {
+    console.log("Check only: report files were not changed.");
+  } else {
+    console.log(`JSON: ${path.relative(ROOT, REPORT_JSON)}`);
+    console.log(`Docs: ${path.relative(ROOT, REPORT_MD)}`);
+  }
 }
 
 async function ensureCatalogPhotoFolders() {

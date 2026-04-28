@@ -43,6 +43,15 @@ jobs:
       - name: Build event previews
         run: node scripts/build-event-previews.mjs --skip-api
 
+      - name: Check catalog photo coverage
+        run: npm run photos:audit:check
+
+      - name: Project syntax check
+        run: npm run check
+
+      - name: Security audit
+        run: npm run security:audit
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
