@@ -2853,9 +2853,10 @@ function isRouteFoodPoint(value) {
 
 function getRouteFoodRecommendations(route) {
   const matched = findRouteFoodMatches(route)
-    .map((item) => {
+    .map(({ item, distanceMeters }) => {
       const detail = item.cuisine || item.subtitle || item.reviewSummary || "";
-      return detail ? `${item.title} — ${trim(detail, 56)}` : item.title;
+      const distance = Number.isFinite(distanceMeters) ? ` · ${formatDistanceMeters(distanceMeters)} от маршрута` : "";
+      return detail ? `${item.title}${distance} — ${trim(detail, 56)}` : `${item.title}${distance}`;
     })
     .filter(Boolean);
 
@@ -2866,6 +2867,21 @@ function getRouteFoodRecommendations(route) {
 function findRouteFoodMatches(route) {
   const foodItems = getSectionItems("food");
   if (!Array.isArray(foodItems) || !foodItems.length) return [];
+  const routeCoordinates = getRouteCoordinates(route);
+  const coordinateMatches = routeCoordinates.length
+    ? foodItems
+      .map((item) => {
+        const coordinate = getFoodCoordinate(item);
+        if (!coordinate) return null;
+        const distanceMeters = distanceToRouteMeters(coordinate, routeCoordinates);
+        return { item, distanceMeters, score: Math.max(0, 2200 - distanceMeters) };
+      })
+      .filter(Boolean)
+      .filter((entry) => entry.distanceMeters <= 1500)
+      .sort((left, right) => left.distanceMeters - right.distanceMeters)
+    : [];
+
+  if (coordinateMatches.length >= 2) return coordinateMatches.slice(0, 3);
 
   const routeText = compactTextFingerprint([
     route?.title,
@@ -2878,7 +2894,7 @@ function findRouteFoodMatches(route) {
   const areaTokens = routeAreaTokens(routeText);
   const intentTokens = routeFoodIntentTokens(routeText);
 
-  return foodItems
+  const textMatches = foodItems
     .map((item) => {
       const foodText = compactTextFingerprint([
         item.title,
@@ -2896,12 +2912,103 @@ function findRouteFoodMatches(route) {
       const intentScore = intentTokens.reduce((score, token) => score + (foodText.includes(token) ? 1 : 0), 0);
       const foodTitle = compactTextFingerprint(item.title || "");
       const titleScore = foodTitle && routeText.includes(foodTitle) ? 5 : 0;
-      return { item, score: areaScore + intentScore + titleScore };
+      const coordinate = getFoodCoordinate(item);
+      const distanceMeters = coordinate && routeCoordinates.length ? distanceToRouteMeters(coordinate, routeCoordinates) : null;
+      const distanceScore = Number.isFinite(distanceMeters) && distanceMeters <= 1500 ? Math.max(1, Math.round((1600 - distanceMeters) / 200)) : 0;
+      return { item, score: areaScore + intentScore + titleScore + distanceScore, distanceMeters };
     })
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .map((entry) => entry.item)
-    .slice(0, 3);
+    .sort((left, right) => right.score - left.score || (left.distanceMeters || Infinity) - (right.distanceMeters || Infinity));
+
+  return mergeRouteFoodMatches(coordinateMatches, textMatches).slice(0, 3);
+}
+
+function mergeRouteFoodMatches(...groups) {
+  const seen = new Set();
+  const merged = [];
+  for (const group of groups) {
+    for (const entry of group) {
+      const id = entry?.item?.id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      merged.push(entry);
+    }
+  }
+  return merged;
+}
+
+function getRouteCoordinates(route) {
+  return (route?.stops || [])
+    .map((stop) => getRouteStopCoordinate(stop))
+    .filter(Boolean);
+}
+
+function getRouteStopCoordinate(stop) {
+  const text = compactTextFingerprint(stop);
+  const exact = ROUTE_POINT_COORDINATES.find((entry) => entry.keys.some((key) => text === compactTextFingerprint(key)));
+  if (exact) return exact.coordinate;
+
+  const partial = ROUTE_POINT_COORDINATES.find((entry) => entry.keys.some((key) => text.includes(compactTextFingerprint(key))));
+  return partial?.coordinate || null;
+}
+
+function getFoodCoordinate(item) {
+  if (isCoordinate(item?.coordinates)) return item.coordinates;
+  if (isCoordinate(item?.coordinate)) return item.coordinate;
+  return FOOD_COORDINATES_BY_ID[item?.id] || null;
+}
+
+function isCoordinate(value) {
+  return Number.isFinite(Number(value?.lat)) && Number.isFinite(Number(value?.lng));
+}
+
+function distanceToRouteMeters(point, routeCoordinates) {
+  if (!routeCoordinates.length) return Infinity;
+  if (routeCoordinates.length === 1) return haversineMeters(point, routeCoordinates[0]);
+
+  let best = Infinity;
+  for (let index = 0; index < routeCoordinates.length - 1; index += 1) {
+    best = Math.min(best, distanceToSegmentMeters(point, routeCoordinates[index], routeCoordinates[index + 1]));
+  }
+  return Math.round(best);
+}
+
+function distanceToSegmentMeters(point, start, end) {
+  const latScale = 111_320;
+  const lngScale = 111_320 * Math.cos(toRadians((Number(start.lat) + Number(end.lat)) / 2));
+  const px = Number(point.lng) * lngScale;
+  const py = Number(point.lat) * latScale;
+  const ax = Number(start.lng) * lngScale;
+  const ay = Number(start.lat) * latScale;
+  const bx = Number(end.lng) * lngScale;
+  const by = Number(end.lat) * latScale;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared)) : 0;
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function haversineMeters(left, right) {
+  const radius = 6371000;
+  const dLat = toRadians(Number(right.lat) - Number(left.lat));
+  const dLng = toRadians(Number(right.lng) - Number(left.lng));
+  const lat1 = toRadians(Number(left.lat));
+  const lat2 = toRadians(Number(right.lat));
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(value) {
+  return Number(value) * Math.PI / 180;
+}
+
+function formatDistanceMeters(value) {
+  if (!Number.isFinite(value)) return "";
+  if (value < 1000) return `~${Math.max(50, Math.round(value / 50) * 50)} м`;
+  return `~${(value / 1000).toFixed(value < 2000 ? 1 : 0).replace(".", ",")} км`;
 }
 
 function routeAreaTokens(routeText) {
@@ -2931,6 +3038,77 @@ function routeFoodIntentTokens(routeText) {
   return ["кофе", "кафе", "обед", "перекус", "десерт", "татарск", "кухн", "завтрак", "ужин"]
     .filter((token) => routeText.includes(token));
 }
+
+const ROUTE_POINT_COORDINATES = [
+  { keys: ["метро кремлевская", "кремлевская"], coordinate: { lat: 55.7958, lng: 49.1082 } },
+  { keys: ["казанский кремль", "кремль"], coordinate: { lat: 55.7983, lng: 49.1059 } },
+  { keys: ["кул шариф"], coordinate: { lat: 55.7986, lng: 49.1051 } },
+  { keys: ["башня сююмбике"], coordinate: { lat: 55.7997, lng: 49.1058 } },
+  { keys: ["дворец земледельцев"], coordinate: { lat: 55.8005, lng: 49.1113 } },
+  { keys: ["улица баумана", "баумана"], coordinate: { lat: 55.7902, lng: 49.1204 } },
+  { keys: ["протока булак", "булак"], coordinate: { lat: 55.7885, lng: 49.1135 } },
+  { keys: ["метро площадь тукая", "площадь тукая"], coordinate: { lat: 55.7869, lng: 49.1230 } },
+  { keys: ["петербургская улица", "петербургская"], coordinate: { lat: 55.7819, lng: 49.1335 } },
+  { keys: ["туган авылым"], coordinate: { lat: 55.7795, lng: 49.1355 } },
+  { keys: ["улица каюма насыри", "каюма насыри", "насыри"], coordinate: { lat: 55.7796, lng: 49.1217 } },
+  { keys: ["мечеть марджани", "марджани"], coordinate: { lat: 55.7781, lng: 49.1207 } },
+  { keys: ["набережная озера кабан", "озеро кабан", "кабан", "новый театр камала"], coordinate: { lat: 55.7799, lng: 49.1266 } },
+  { keys: ["старая татарская слобода"], coordinate: { lat: 55.7785, lng: 49.1196 } },
+  { keys: ["парк черное озеро", "черное озеро", "чёрное озеро"], coordinate: { lat: 55.7931, lng: 49.1228 } },
+  { keys: ["ленинский сад"], coordinate: { lat: 55.7945, lng: 49.1266 } },
+  { keys: ["лядской сад"], coordinate: { lat: 55.7921, lng: 49.1329 } },
+  { keys: ["фуксовский сад"], coordinate: { lat: 55.7953, lng: 49.1397 } },
+  { keys: ["парк горького"], coordinate: { lat: 55.8009, lng: 49.1522 } },
+  { keys: ["русско немецкая швейцария", "русско-немецкая швейцария"], coordinate: { lat: 55.8060, lng: 49.1670 } },
+  { keys: ["кремлевская набережная", "кремлёвская набережная"], coordinate: { lat: 55.8042, lng: 49.1138 } },
+  { keys: ["урам", "экстрим парк урам", "экстрим зона у воды"], coordinate: { lat: 55.8074, lng: 49.1287 } },
+  { keys: ["центр семьи казан", "центр семьи"], coordinate: { lat: 55.8128, lng: 49.1089 } },
+  { keys: ["площадь свободы"], coordinate: { lat: 55.7952, lng: 49.1348 } },
+  { keys: ["музей городская панорама", "городская панорама"], coordinate: { lat: 55.7973, lng: 49.1125 } },
+  { keys: ["улица кремлевская", "кремлёвская улица", "кремлевская улица"], coordinate: { lat: 55.7939, lng: 49.1218 } },
+  { keys: ["национальная библиотека", "национальная библиотека рт"], coordinate: { lat: 55.7978, lng: 49.1389 } },
+  { keys: ["дом ушковой"], coordinate: { lat: 55.7935, lng: 49.1242 } },
+  { keys: ["казанский университет", "казанский федеральный университет"], coordinate: { lat: 55.7907, lng: 49.1219 } },
+  { keys: ["метро суконная слобода", "суконная слобода"], coordinate: { lat: 55.7767, lng: 49.1420 } },
+  { keys: ["театр кукол экият", "экият"], coordinate: { lat: 55.7791, lng: 49.1389 } },
+  { keys: ["метро горки", "горки"], coordinate: { lat: 55.7500, lng: 49.2063 } },
+  { keys: ["горкинско ометьевский лес", "горкинско-ометьевский лес", "ометьевский лес"], coordinate: { lat: 55.7549, lng: 49.2028 } },
+  { keys: ["экомаршруты и настилы", "площадки для отдыха", "кафе urman", "urman"], coordinate: { lat: 55.7557, lng: 49.2045 } },
+  { keys: ["виды на миллениум", "миллениум"], coordinate: { lat: 55.8000, lng: 49.1454 } },
+  { keys: ["улица малая красная", "малая красная"], coordinate: { lat: 55.7963, lng: 49.1309 } },
+  { keys: ["парк победы", "главный вход в парк победы", "аллеи памяти", "мемориальные точки", "музей техники под открытым небом"], coordinate: { lat: 55.8283, lng: 49.1205 } },
+  { keys: ["вид на кремль", "прогулка вдоль казанки", "фото у воды", "короткая остановка на кофе"], coordinate: { lat: 55.8120, lng: 49.1115 } },
+  { keys: ["новый театр камала", "парк у воды"], coordinate: { lat: 55.7779, lng: 49.1288 } }
+];
+
+const FOOD_COORDINATES_BY_ID = {
+  tugan_avylym: { lat: 55.7795, lng: 49.1355 },
+  tatarskaya_usadba: { lat: 55.7784, lng: 49.1196 },
+  chirem: { lat: 55.7970, lng: 49.1076 },
+  gus: { lat: 55.7790, lng: 49.1207 },
+  artel: { lat: 55.7924, lng: 49.1231 },
+  tatar_by_tubatay: { lat: 55.8161, lng: 49.1262 },
+  ichi: { lat: 55.7891, lng: 49.1237 },
+  cheeseria: { lat: 55.7877, lng: 49.1244 },
+  chinayak: { lat: 55.7927, lng: 49.1129 },
+  milli: { lat: 55.7944, lng: 49.1096 },
+  alan_ash: { lat: 55.7986, lng: 49.1057 },
+  urman: { lat: 55.7557, lng: 49.2045 },
+  kystyby: { lat: 55.7895, lng: 49.1230 },
+  tyubetey: { lat: 55.7890, lng: 49.1225 },
+  marusovka: { lat: 55.7950, lng: 49.1294 },
+  kaef: { lat: 55.7936, lng: 49.1285 },
+  itle: { lat: 55.7884, lng: 49.1233 },
+  azu: { lat: 55.7867, lng: 49.1224 },
+  yam_yashel: { lat: 55.7933, lng: 49.1265 },
+  skazka: { lat: 55.7894, lng: 49.1229 },
+  umay: { lat: 55.7938, lng: 49.1310 },
+  eniem: { lat: 55.7791, lng: 49.1212 },
+  pyyala: { lat: 55.7929, lng: 49.1248 },
+  sayyar: { lat: 55.7931, lng: 49.1273 },
+  pir: { lat: 55.7907, lng: 49.1259 },
+  mikhaylovskaya_usadba: { lat: 55.7580, lng: 49.0640 }
+};
 
 function handleHorizontalWheelScroll(event) {
   const scroller = event.target.closest(".tabs, .chips, .stat-row, .date-rail");
