@@ -308,8 +308,10 @@ function bindEvents() {
     }
 
     if (action === "event-item") {
-      state.selectedEventId = button.dataset.id;
-      state.openEventId = button.dataset.id;
+      const eventId = button.dataset.id;
+      const isOpen = state.openEventId === eventId;
+      state.selectedEventId = isOpen ? null : eventId;
+      state.openEventId = isOpen ? null : eventId;
       track("event_item_click", state.selectedEventId);
       syncUrl();
       render();
@@ -894,16 +896,13 @@ function renderHero() {
 }
 
 function renderEvents() {
-  const opened = findEvent(state.openEventId) || null;
-
   contentNode.innerHTML = [
     eventDateRangePicker(),
     compactEventStats(),
     eventCategoryChips(),
     state.events.length
       ? `<div class="list-grid">${state.events.map(safeEventPreviewCard).join("")}</div>`
-      : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты."),
-    opened ? renderEventModal(opened) : ""
+      : empty("Ничего не нашлось в выбранном диапазоне. Попробуйте расширить даты.")
   ].join("");
 }
 
@@ -1804,6 +1803,29 @@ function safeEventDetailCard(item) {
   ], "active");
 }
 
+function safeEventInlineDetail(item) {
+  const dateLabel = formatEventDateOnly(item.eventDate || item.publishedAt);
+  const timeLabel = formatEventTimeOnly(item.eventDate, item.eventHasExplicitTime);
+  const venueLabel = eventVenueText(item);
+  const sourceUrl = item.url || item.sources?.find((source) => source?.url)?.url || "";
+
+  return [
+    `<div class="preview-label">Подробности</div>`,
+    richTextBlock(eventDetailSummary(item), "event-copy"),
+    `<div class="fact-grid">
+      ${dateLabel ? factBlock("Дата", dateLabel) : ""}
+      ${timeLabel ? factBlock("Время", timeLabel) : ""}
+      ${venueLabel ? factBlock("Место", venueLabel) : ""}
+    </div>`,
+    actions([
+      actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : ""),
+      `<button class="button ${item.eventDate ? "" : "ghost"}" data-action="remind" data-id="${escapeHtml(item.id)}" ${item.eventDate ? "" : "disabled"}>Напомнить</button>`,
+      ...(item.ticketLinks || []).slice(0, 4).map((link) => actionButton(link.name, "open", { url: link.url }))
+    ]),
+    sourceUrl ? sourceNote(sourceUrl) : ""
+  ].join("");
+}
+
 function safeEventPreviewCard(item) {
   const meta = [
     formatEventDateOnly(item.eventDate || item.publishedAt),
@@ -1821,9 +1843,10 @@ function safeEventPreviewCard(item) {
     meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "",
     `<p class="summary-short">${escapeHtml(eventPreviewSummary(item))}</p>`,
     actions([
-      actionButton(isOpened ? "Открыто" : "Открыть", "event-item", { id: item.id }, isOpened ? "primary" : ""),
+      actionButton(isOpened ? "Скрыть" : "Открыть", "event-item", { id: item.id }, isOpened ? "primary" : ""),
       actionButton(favoriteToggleLabel(item.id), "favorite-event", { id: item.id }, isFavorite(item.id) ? "primary" : "")
-    ])
+    ]),
+    isOpened ? expandableCardDetail(safeEventInlineDetail(item)) : ""
   ], isOpened ? "active" : "");
 }
 
@@ -3923,12 +3946,15 @@ function safeDecodeURIComponent(value) {
 }
 
 function eventFallbackVisualUrl(item, variant = "detail") {
-  const cacheKey = `${variant}:${item.id || item.title || "event"}`;
-  if (!eventVisualCache.has(cacheKey)) {
-    eventVisualCache.set(cacheKey, `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(buildEventPosterSvg(item, variant))}`);
-  }
+  return eventCategoryFallbackVisualUrl(item) || SECTION_VISUALS.events;
+}
 
-  return eventVisualCache.get(cacheKey);
+function eventCategoryFallbackVisualUrl(item) {
+  const type = normalizeEventPreviewEntity(item?.kind || item?.section || item?.category || "");
+  if (type.includes("экскур")) return SECTION_VISUALS.routes;
+  if (type.includes("мастер")) return SECTION_VISUALS.masterclasses;
+  if (type.includes("спорт") || type.includes("актив")) return SECTION_VISUALS.active;
+  return SECTION_VISUALS.events;
 }
 
 function eventGeneratedPreviewUrl(item) {
