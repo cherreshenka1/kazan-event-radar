@@ -1,0 +1,29 @@
+{
+  "timezone": "Europe/Moscow",
+  "events": {
+    "label": "Афиша",
+    "cadence": "every_3_days",
+    "workflow": "refresh-content-every-3-days.yml",
+    "notes": "Обновляет события, превью, аудит и публикацию Mini App."
+  },
+  "catalog": {
+    "label": "Каталоги",
+    "cadence": "weekly_monday",
+    "workflow": "refresh-catalog.yml",
+    "sections": [
+      "places",
+      "food",
+      "routes",
+      "active",
+      "masterclasses",
+      "roadtrip"
+    ],
+    "notes": "Каталожные разделы обновляются мягче, чтобы не перегружать источники и не плодить шумные изменения."
+  },
+  "drafts": {
+    "label": "Черновики канала",
+    "cadence": "daily_09_00_msk_with_safety_retries",
+    "workflow": "send-daily-drafts.yml",
+    "notes": "Готовит 10 черновиков утром; повтор события допустим после cooldown, если новых материалов мало."
+  }
+}
