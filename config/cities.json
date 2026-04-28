@@ -1,0 +1,29 @@
+{
+  "defaultCityId": "kazan",
+  "cities": [
+    {
+      "id": "kazan",
+      "name": "Казань",
+      "country": "Россия",
+      "locale": "ru-RU",
+      "timezone": "Europe/Moscow",
+      "slug": "kazan",
+      "brandName": "Kazan Event Radar",
+      "telegramBotUsername": "kazanEventRadarBot",
+      "coordinates": {
+        "lat": 55.796127,
+        "lon": 49.106405
+      },
+      "aliases": [
+        "Kazan",
+        "Казань",
+        "kazan"
+      ],
+      "sourceHints": {
+        "yandexAfishaPath": "/kazan",
+        "mtsLivePath": "/kazan",
+        "kassirCitySlug": "kazan"
+      }
+    }
+  ]
+}

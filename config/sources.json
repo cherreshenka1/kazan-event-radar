@@ -1,5 +1,6 @@
 {
-  "city": "Kazan",
+  "cityId": "kazan",
+  "city": "Казань",
   "timezone": "Europe/Moscow",
   "sources": [
     {

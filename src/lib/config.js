@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { loadCityConfig } from "./cityConfig.js";
 
 export async function loadSourceConfig(configPath = process.env.SOURCE_CONFIG_PATH || "config/sources.json") {
   const absolutePath = path.resolve(process.cwd(), configPath);
   const raw = await fs.readFile(absolutePath, "utf8");
   const config = JSON.parse(raw);
+  const cityConfig = await loadCityConfig(config.cityId || config.citySlug || config.city);
   const directorySources = await loadSourceDirectory();
   const sources = [
     ...(Array.isArray(config.sources) ? config.sources : []),
@@ -12,8 +14,15 @@ export async function loadSourceConfig(configPath = process.env.SOURCE_CONFIG_PA
   ];
 
   return {
-    city: config.city || "Казань",
-    timezone: config.timezone || "Europe/Moscow",
+    cityId: cityConfig.id,
+    city: config.city || cityConfig.name,
+    citySlug: cityConfig.slug,
+    country: cityConfig.country,
+    locale: config.locale || cityConfig.locale,
+    timezone: config.timezone || cityConfig.timezone,
+    brandName: cityConfig.brandName,
+    coordinates: cityConfig.coordinates,
+    sourceHints: cityConfig.sourceHints,
     sources: dedupeSources(sources).filter((source) => source.enabled !== false)
   };
 }
