@@ -74,7 +74,7 @@ async function main() {
         title: item.posterTitle || item.title || "",
         updatedAt: new Date().toISOString(),
         customBackground: Boolean(customBackground),
-        sourceBackground: !customBackground && Boolean(item.imageUrl)
+        sourceBackground: !customBackground && Boolean(backgroundUrl)
       };
     }
   } finally {
@@ -185,7 +185,8 @@ function normalizeEventItem(rawItem) {
     eventDate: normalizeDateValue(rawItem?.eventDate),
     eventHasExplicitTime: Boolean(rawItem?.eventHasExplicitTime),
     kind: resolvePreviewKind(rawItem),
-    imageUrl: normalizeText(rawItem?.imageUrl || "")
+    imageUrl: normalizeText(rawItem?.imageUrl || ""),
+    externalPreviewUrl: normalizeText(rawItem?.externalPreviewUrl || "")
   };
 }
 
@@ -250,8 +251,39 @@ async function resolveOverrideImage(previewKey) {
 
 function resolvePreviewBackgroundUrl(item, overrideUrl = "") {
   if (overrideUrl) return overrideUrl;
-  const imageUrl = normalizeText(item?.imageUrl || "");
-  return /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+  return [item?.externalPreviewUrl, item?.imageUrl]
+    .map((value) => normalizeText(value))
+    .find((value) => isCleanExternalImageUrl(value)) || "";
+}
+
+function isCleanExternalImageUrl(value) {
+  const url = normalizeText(value);
+  if (!/^https?:\/\//i.test(url)) return false;
+
+  const normalized = safeDecodeURIComponent(url).toLowerCase();
+  const blockedMarkers = [
+    "wmark",
+    "watermark",
+    "tickets",
+    "ticket",
+    "logo",
+    "banner",
+    "poster",
+    "announce",
+    "1200x628_wmark",
+    "generated/events",
+    "/brand/"
+  ];
+
+  return !blockedMarkers.some((marker) => normalized.includes(marker));
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value || "");
+  }
 }
 
 function buildPosterHtml(item, backgroundUrl = "") {

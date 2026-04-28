@@ -74,6 +74,9 @@ async function main() {
       rawDuplicateGroups: rawDuplicateGroups.length,
       duplicateGroups: duplicateGroups.length,
       missingPreviews: previewIssues.missing.length,
+      brandedSourceImages: previewIssues.brandedSourceImages.length,
+      noCleanSourceImages: previewIssues.noCleanSourceImages.length,
+      generatedFallbackPreviews: previewIssues.generatedFallbackPreviews.length,
       weakTextItems: textIssues.weakText.length,
       blockedKeywordItems: textIssues.blockedKeyword.length,
       likelyMojibakeItems: textIssues.likelyMojibake.length
@@ -85,7 +88,10 @@ async function main() {
     duplicateGroups: duplicateGroups.slice(0, cliOptions.maxDetails),
     previewIssues: {
       ...previewIssues,
-      missing: previewIssues.missing.slice(0, cliOptions.maxDetails)
+      missing: previewIssues.missing.slice(0, cliOptions.maxDetails),
+      brandedSourceImages: previewIssues.brandedSourceImages.slice(0, cliOptions.maxDetails),
+      noCleanSourceImages: previewIssues.noCleanSourceImages.slice(0, cliOptions.maxDetails),
+      generatedFallbackPreviews: previewIssues.generatedFallbackPreviews.slice(0, cliOptions.maxDetails)
     },
     textIssues: {
       weakText: textIssues.weakText.slice(0, cliOptions.maxDetails),
@@ -179,6 +185,7 @@ function normalizeEventItem(raw) {
     kind,
     url: normalizeText(raw?.url || ""),
     imageUrl: normalizeText(raw?.imageUrl || ""),
+    externalPreviewUrl: normalizeText(raw?.externalPreviewUrl || ""),
     eventDate,
     eventHasExplicitTime: Boolean(raw?.eventHasExplicitTime)
   };
@@ -316,10 +323,14 @@ function pickAuditText(preferred, fallback, options = {}) {
 function buildPreviewIssues(items, manifest, generatedFiles) {
   const manifestTitleIndex = buildManifestTitleIndex(manifest);
   const missing = [];
+  const brandedSourceImages = [];
+  const noCleanSourceImages = [];
+  const generatedFallbackPreviews = [];
   let manifestHits = 0;
   let manifestTitleHits = 0;
   let fileHits = 0;
   let customBackgrounds = 0;
+  let sourceBackgrounds = 0;
 
   for (const item of items) {
     if (!item.previewKey) continue;
@@ -337,6 +348,33 @@ function buildPreviewIssues(items, manifest, generatedFiles) {
     }
     if (hasFile || hasFallbackFile) fileHits += 1;
     if ((manifestEntry || fallbackEntry)?.customBackground) customBackgrounds += 1;
+    if ((manifestEntry || fallbackEntry)?.sourceBackground) sourceBackgrounds += 1;
+
+    const imageCandidates = getImageCandidates(item);
+    const brandedCandidates = imageCandidates.filter((url) => isBrandedImageUrl(url));
+    const hasCleanSourceImage = imageCandidates.some((url) => isCleanExternalImageUrl(url));
+    const resolvedEntry = manifestEntry || fallbackEntry;
+
+    if (brandedCandidates.length) {
+      brandedSourceImages.push(toIssue(item, {
+        imageUrl: brandedCandidates[0],
+        previewKey: item.previewKey
+      }));
+    }
+
+    if (!hasCleanSourceImage) {
+      noCleanSourceImages.push(toIssue(item, {
+        previewKey: item.previewKey
+      }));
+    }
+
+    if (resolvedEntry && !resolvedEntry.customBackground && !resolvedEntry.sourceBackground) {
+      generatedFallbackPreviews.push(toIssue(item, {
+        previewKey: item.previewKey,
+        previewUrl: resolvedEntry.url || ""
+      }));
+    }
+
     if (!manifestEntry && !hasFile && !fallbackEntry && !hasFallbackFile) {
       missing.push(toIssue(item, { previewKey: item.previewKey }));
     }
@@ -349,8 +387,54 @@ function buildPreviewIssues(items, manifest, generatedFiles) {
     manifestTitleHits,
     fileHits,
     customBackgrounds,
+    sourceBackgrounds,
+    brandedSourceImages,
+    noCleanSourceImages,
+    generatedFallbackPreviews,
     missing
   };
+}
+
+function getImageCandidates(item) {
+  return [...new Set([
+    item?.externalPreviewUrl,
+    item?.imageUrl
+  ]
+    .map((value) => normalizeText(value))
+    .filter((value) => /^https?:\/\//i.test(value)))];
+}
+
+function isCleanExternalImageUrl(value) {
+  const url = normalizeText(value);
+  if (!/^https?:\/\//i.test(url)) return false;
+  return !isBrandedImageUrl(url);
+}
+
+function isBrandedImageUrl(value) {
+  const normalized = safeDecodeURIComponent(value).toLowerCase();
+  const blockedMarkers = [
+    "wmark",
+    "watermark",
+    "tickets",
+    "ticket",
+    "logo",
+    "banner",
+    "poster",
+    "announce",
+    "1200x628_wmark",
+    "generated/events",
+    "/brand/"
+  ];
+
+  return blockedMarkers.some((marker) => normalized.includes(marker));
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value || "");
+  }
 }
 
 function buildManifestTitleIndex(manifest) {
@@ -755,6 +839,9 @@ function printSummary(report) {
   console.log(`Eligible events: ${report.totals.eligibleItems}`);
   console.log(`Duplicate groups: ${report.totals.duplicateGroups}`);
   console.log(`Missing previews: ${report.totals.missingPreviews}`);
+  console.log(`Branded source images: ${report.totals.brandedSourceImages}`);
+  console.log(`No clean source images: ${report.totals.noCleanSourceImages}`);
+  console.log(`Generated fallback previews: ${report.totals.generatedFallbackPreviews}`);
   console.log(`Weak text items: ${report.totals.weakTextItems}`);
   console.log(`Blocked keyword items: ${report.totals.blockedKeywordItems}`);
   console.log(`Likely mojibake items: ${report.totals.likelyMojibakeItems}`);
