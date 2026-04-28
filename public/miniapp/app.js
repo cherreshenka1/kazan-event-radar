@@ -1179,6 +1179,8 @@ function moderationDraftsCard(summary) {
       ${factBlock("План в день", `${drafts.targetPerDay || 10} черновиков`)}
       ${factBlock("Доставлено менеджеру", `${drafts.deliveredToday ?? drafts.preparedToday ?? 0} черновиков`)}
       ${drafts.failedToday ? factBlock("Ошибки доставки", `${drafts.failedToday} за сегодня`) : ""}
+      ${factBlock("Чат постов", drafts.reviewChatConnected ? "подключён" : "отправь /draftchat")}
+      ${drafts.reviewThreadId ? factBlock("Тема постов", String(drafts.reviewThreadId)) : ""}
       ${factBlock("Готовых кандидатов", `${readiness.readyCount || 0} из ${readiness.target || drafts.targetPerDay || 10}`)}
       ${factBlock("Уникальные превью", `${readiness.uniquePhotoCount || 0}`)}
     </div>`,
@@ -1198,6 +1200,7 @@ function moderationCardPipelineCard(summary) {
     ].join("\n\n")),
     `<div class="fact-grid">
       ${factBlock("Чат согласования", moderation.reviewChatConnected ? "подключён" : "отправь /cardchat в нужном чате")}
+      ${moderation.reviewThreadId ? factBlock("Тема карточек", String(moderation.reviewThreadId)) : ""}
       ${factBlock("На проверке", `${moderation.pendingDrafts || 0} карточек`)}
       ${factBlock("Доска", moderation.boardPath || "data/catalog-moderation/review-board.md")}
       ${factBlock("Галерея", moderation.galleryPath || "data/catalog-moderation/review-gallery.html")}
