@@ -5306,9 +5306,12 @@ function finalizeTrimmedText(value) {
 }
 
 function ensureSentence(value) {
-  const normalized = normalizeText(value);
+  const normalized = normalizeText(value)
+    .replace(/(?:\.{3,}|…)\s*$/u, ".")
+    .replace(/[,:;–—-]\s*$/u, ".")
+    .trim();
   if (!normalized) return "";
-  return /[.!?…]$/u.test(normalized) ? normalized : `${normalized}.`;
+  return /[.!?]$/u.test(normalized) ? normalized : `${normalized}.`;
 }
 
 function cryptoRandomId() {
