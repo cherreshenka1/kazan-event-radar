@@ -472,6 +472,22 @@ async function handleRequest(request, env) {
     return json({ ok: true, ...result }, 200, env);
   }
 
+  if (url.pathname === "/internal/catalog-card-draft" && request.method === "POST") {
+    await requireAutomationToken(request, env);
+    const body = await readJsonBody(request, DEFAULT_JSON_BODY_LIMIT, {});
+    const result = await createCatalogCardReviewDraft(env, body, {
+      id: "automation",
+      username: "catalog-photo-bot"
+    });
+    await track(env, {
+      type: "automation",
+      action: "catalog_card_draft",
+      label: `${result.sectionId}:${result.itemId}`,
+      userId: "automation"
+    });
+    return json(result, 200, env);
+  }
+
   if (url.pathname === "/admin/import-events" && request.method === "POST") {
     await requireAdmin(request, env);
     await enforceRateLimit(

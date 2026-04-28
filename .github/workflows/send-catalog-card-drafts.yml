@@ -1,0 +1,89 @@
+name: Send Catalog Card Drafts
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Number of card drafts to send
+        required: true
+        default: "10"
+      limit_per_section:
+        description: Max candidates to collect per section
+        required: true
+        default: "20"
+      section:
+        description: Optional section id, for example parks,food,routes
+        required: false
+        default: ""
+      missing_photos_only:
+        description: Collect only cards that need better photos
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  send-card-drafts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect photo candidates
+        shell: bash
+        env:
+          INPUT_LIMIT_PER_SECTION: ${{ inputs.limit_per_section }}
+          INPUT_SECTION: ${{ inputs.section }}
+          INPUT_MISSING_ONLY: ${{ inputs.missing_photos_only }}
+        run: |
+          ARGS="--limit-per-section=${INPUT_LIMIT_PER_SECTION:-20} --max-images-per-item=1"
+          if [ -n "$INPUT_SECTION" ]; then
+            ARGS="$ARGS --section=$INPUT_SECTION"
+          fi
+          if [ "$INPUT_MISSING_ONLY" = "true" ]; then
+            ARGS="$ARGS --missing-photos-only"
+          fi
+          node scripts/collect-catalog-moderation-candidates.mjs $ARGS
+
+      - name: Send card drafts to Telegram review thread
+        shell: bash
+        env:
+          WORKER_API_BASE_URL: https://kazan-event-radar-api.4ereshny333.workers.dev
+          WORKER_AUTOMATION_TOKEN: ${{ secrets.WORKER_AUTOMATION_TOKEN }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_SECTION: ${{ inputs.section }}
+        run: |
+          if [ -z "$WORKER_AUTOMATION_TOKEN" ]; then
+            echo "::error::Missing WORKER_AUTOMATION_TOKEN secret."
+            exit 1
+          fi
+
+          ARGS="--limit=${INPUT_LIMIT:-10}"
+          if [ -n "$INPUT_SECTION" ]; then
+            ARGS="$ARGS --section=$INPUT_SECTION"
+          fi
+
+          node scripts/send-catalog-card-drafts.mjs $ARGS
+
+      - name: Upload moderation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-card-draft-report
+          path: |
+            data/catalog-moderation/review-board.json
+            data/catalog-moderation/review-board.md
+            data/catalog-moderation/review-gallery.html
+            data/catalog-moderation/telegram-draft-state.json
+          if-no-files-found: warn
