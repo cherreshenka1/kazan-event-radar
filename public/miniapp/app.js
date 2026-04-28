@@ -785,7 +785,7 @@ function render() {
   if (topbarPlanLabelNode) {
     topbarPlanLabelNode.textContent = state.favorites.length ? `Мой план · ${state.favorites.length}` : "Мой план";
   }
-  document.body.classList.toggle("modal-open", state.activeTab === "events" && Boolean(state.openEventId));
+  document.body.classList.remove("modal-open");
   document.body.classList.toggle("is-support-tab", state.activeTab === "support");
   renderHero();
   syncUrl();
