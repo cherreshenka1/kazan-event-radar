@@ -12,6 +12,11 @@ on:
         required: true
         default: false
         type: boolean
+      refresh:
+        description: Refresh event data before selecting drafts
+        required: true
+        default: true
+        type: boolean
   schedule:
     - cron: "5 6 * * *"
     - cron: "35 6 * * *"
@@ -31,6 +36,7 @@ jobs:
           AUTOMATION_TOKEN: ${{ secrets.WORKER_AUTOMATION_TOKEN }}
           INPUT_LIMIT: ${{ inputs.limit }}
           INPUT_FORCE: ${{ inputs.force }}
+          INPUT_REFRESH: ${{ inputs.refresh }}
         run: |
           if [ -z "$AUTOMATION_TOKEN" ]; then
             echo "::error::Missing WORKER_AUTOMATION_TOKEN secret."
@@ -39,10 +45,14 @@ jobs:
 
           LIMIT="${INPUT_LIMIT:-10}"
           FORCE="${INPUT_FORCE:-false}"
+          REFRESH="${INPUT_REFRESH:-true}"
 
           URL="$WORKER_URL/internal/run-drafts?limit=$LIMIT"
           if [ "$FORCE" = "true" ]; then
             URL="$URL&force=1"
+          fi
+          if [ "$REFRESH" = "true" ]; then
+            URL="$URL&refresh=1"
           fi
 
           curl --fail --show-error --silent \
