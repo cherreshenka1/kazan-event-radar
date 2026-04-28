@@ -4302,12 +4302,13 @@ async function createCatalogCardReviewDraft(env, body, user) {
     managerThreadId: reviewTarget.threadId ? String(reviewTarget.threadId) : ""
   };
 
+  await sendCatalogCardReviewDraft(env, reviewChatId, draft, { messageThreadId: reviewTarget.threadId });
+
+  draft.deliveredAt = new Date().toISOString();
   store.items = store.items && typeof store.items === "object" ? store.items : {};
   store.items[draft.id] = draft;
-  store.updatedAt = now;
+  store.updatedAt = draft.deliveredAt;
   await putJson(env, "catalog:cardReviewDrafts", store);
-
-  await sendCatalogCardReviewDraft(env, reviewChatId, draft, { messageThreadId: reviewTarget.threadId });
 
   return {
     ok: true,

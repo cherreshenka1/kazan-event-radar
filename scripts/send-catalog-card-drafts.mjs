@@ -73,7 +73,7 @@ for (const entry of candidates) {
   }
 
   try {
-    const result = await sendDraft(payload);
+    const result = await sendDraftWithRetry(payload);
     const stateKey = buildStateKey(entry);
     state.sent[stateKey] = {
       draftId: result.draftId || "",
@@ -165,6 +165,32 @@ async function sendDraft(payload) {
   }
 
   return body || { ok: true };
+}
+
+async function sendDraftWithRetry(payload) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await sendDraft(payload);
+    } catch (error) {
+      lastError = error;
+      const retryAfterSeconds = extractRetryAfterSeconds(error.message || "");
+      if (!retryAfterSeconds || attempt === 3) break;
+      const waitMs = Math.min(60_000, (retryAfterSeconds + 2) * 1000);
+      console.warn(`[retry] Telegram rate limit, waiting ${Math.round(waitMs / 1000)}s before attempt ${attempt + 1}.`);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
+function extractRetryAfterSeconds(message) {
+  const jsonMatch = String(message || "").match(/"retry_after"\s*:\s*(\d+)/i);
+  if (jsonMatch) return Number(jsonMatch[1]);
+  const textMatch = String(message || "").match(/retry after\s+(\d+)/i);
+  return textMatch ? Number(textMatch[1]) : 0;
 }
 
 function buildStateKey(entry) {
