@@ -2688,6 +2688,9 @@ function isAlreadySelectedDraftPhoto(selectedPhotoKeys, item) {
 function buildDraftPhotoIdentity(item) {
   if (!item || typeof item !== "object") return "";
 
+  const cleanDirectImage = firstCleanChannelImageUrl(item);
+  if (cleanDirectImage) return `source-image:${cleanDirectImage}`;
+
   const recurringVisualKey = [
     normalizeComparableEntity(item.title || item.summary || ""),
     normalizeComparableVenue(item.venueTitle || ""),
@@ -3186,6 +3189,7 @@ function firstChannelImageUrl(item) {
 
 function channelImageCandidates(item) {
   const candidates = [
+    item?.externalPreviewUrl,
     item?.imageUrl,
     item?.photoUrl,
     ...(Array.isArray(item?.photoLinks) ? item.photoLinks.map((link) => link?.url) : [])
