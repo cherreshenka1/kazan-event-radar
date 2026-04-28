@@ -1,6 +1,7 @@
 {
   "version": 1,
-  "city": "Kazan",
+  "cityId": "kazan",
+  "city": "Казань",
   "timezone": "Europe/Moscow",
   "notes": [
     "Этот файл описывает источники для разделов каталога, кроме афиши мероприятий.",
