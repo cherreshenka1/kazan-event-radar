@@ -261,7 +261,11 @@ async function handleRequest(request, env) {
   }
 
   if (url.pathname === "/telegram/webhook" && request.method === "POST") {
-    await handleTelegramUpdate(await request.json(), env);
+    try {
+      await handleTelegramUpdate(await request.json(), env);
+    } catch (error) {
+      console.warn(`Telegram webhook update failed: ${error.message}`);
+    }
     return json({ ok: true }, 200, env);
   }
 
@@ -492,7 +496,7 @@ async function handleTelegramUpdate(update, env) {
 
 async function handleTelegramMessage(message, env) {
   const text = message.text || "";
-  const command = text.split(/\s+/)[0].toLowerCase();
+  const command = normalizeTelegramCommand(text.split(/\s+/)[0], env);
   const user = message.from;
   const chat = message.chat;
 
@@ -667,6 +671,15 @@ async function handleTelegramMessage(message, env) {
   if (chat?.type === "private") {
     await sendMiniAppEntry(chat.id, env, "Откройте Mini App, чтобы посмотреть афишу, маршруты, места и избранное.");
   }
+}
+
+function normalizeTelegramCommand(rawCommand, env) {
+  const command = String(rawCommand || "").trim().toLowerCase();
+  const [baseCommand, mention] = command.split("@");
+  if (!mention) return baseCommand;
+
+  const botUsername = String(env.BOT_USERNAME || "kazanEventRadarBot").replace(/^@/, "").toLowerCase();
+  return mention === botUsername ? baseCommand : command;
 }
 
 async function handleChannelPost(post, env) {
@@ -4992,7 +5005,10 @@ async function telegramApi(env, method, payload) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
-  if (!response.ok) throw new Error(`Telegram ${method} failed: ${response.status}`);
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(`Telegram ${method} failed: ${response.status}${details ? ` ${details.slice(0, 300)}` : ""}`);
+  }
   return response.json();
 }
 
