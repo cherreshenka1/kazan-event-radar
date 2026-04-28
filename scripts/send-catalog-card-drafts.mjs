@@ -49,20 +49,26 @@ const eligibleCandidates = flattenReport(report)
 const candidates = eligibleCandidates
   .filter((entry) => !state.sent[buildStateKey(entry)]);
 
-const selected = limit > 0 ? candidates.slice(0, limit) : candidates;
+const targetCount = limit > 0 ? limit : candidates.length;
 let sent = 0;
+let deduped = 0;
 let failed = 0;
+let reviewed = 0;
 
-console.log(`Catalog photo drafts: ${selected.length}/${candidates.length} selected`);
+console.log(`Catalog photo drafts: up to ${targetCount}/${candidates.length} selected`);
 console.log(`API: ${apiBaseUrl}`);
 if (dryRun) console.log("Dry run: nothing will be sent.");
 
-for (const entry of selected) {
+for (const entry of candidates) {
+  if (sent >= targetCount) break;
+  reviewed += 1;
+
   const payload = buildPayload(entry);
   const label = `${entry.sectionTitle} / ${entry.item.title}`;
 
   if (dryRun) {
     console.log(`[dry-run] ${label} -> ${entry.photoCandidate.sourceUrl}`);
+    sent += 1;
     continue;
   }
 
@@ -75,12 +81,18 @@ for (const entry of selected) {
       itemId: entry.item.id,
       title: entry.item.title,
       photoUrl: entry.photoCandidate.sourceUrl,
-      sentAt: new Date().toISOString()
+      sentAt: new Date().toISOString(),
+      deduped: Boolean(result.deduped)
     };
     state.updatedAt = new Date().toISOString();
     await writeJson(statePath, state);
-    sent += 1;
-    console.log(`[sent] ${label}: ${result.draftId || "ok"}`);
+    if (result.deduped) {
+      deduped += 1;
+      console.log(`[skip-duplicate] ${label}: ${result.draftId || "existing"}`);
+    } else {
+      sent += 1;
+      console.log(`[sent] ${label}: ${result.draftId || "ok"}`);
+    }
     if (pauseMs > 0) await sleep(pauseMs);
   } catch (error) {
     failed += 1;
@@ -92,7 +104,11 @@ if (!dryRun) {
   await writeJson(statePath, state);
 }
 
-console.log(`Done. Sent: ${sent}. Failed: ${failed}. Skipped already sent: ${eligibleCandidates.length - candidates.length}.`);
+if (dryRun) {
+  console.log(`Done. Reviewed: ${reviewed}. Selected for dry run: ${sent}.`);
+} else {
+  console.log(`Done. Reviewed: ${reviewed}. Sent: ${sent}. Duplicates skipped: ${deduped}. Failed: ${failed}. Locally skipped already sent: ${eligibleCandidates.length - candidates.length}.`);
+}
 
 function flattenReport(report) {
   return report.sections.flatMap((section) => {
