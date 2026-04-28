@@ -42,10 +42,12 @@ async function main() {
     .filter(Boolean);
   const futureRawItems = normalizedItems.filter((item) => item.eventDate >= from && item.eventDate <= to);
   const rawDuplicateGroups = buildDuplicateGroups(futureRawItems);
+  const rawDescriptionDuplicateGroups = buildDuplicateGroups(futureRawItems, "descriptionDuplicateKey");
   const rejectedRawItems = futureRawItems.filter((item) => item.quality.blockedKeyword || item.quality.likelyMojibake || item.quality.blockedLanguage);
   const futureItems = dedupeAuditEventItems(futureRawItems.filter((item) => !rejectedRawItems.includes(item)));
   const eligibleItems = futureItems.filter((item) => !item.quality.blockedKeyword && !item.quality.likelyMojibake && !item.quality.blockedLanguage);
   const duplicateGroups = buildDuplicateGroups(futureItems);
+  const descriptionDuplicateGroups = buildDuplicateGroups(futureItems, "descriptionDuplicateKey");
   const previewIssues = buildPreviewIssues(futureItems, manifest, generatedPreviewFiles);
   const textIssues = buildTextIssues(futureItems);
   const channelReadiness = buildChannelReadiness(eligibleItems);
@@ -53,6 +55,7 @@ async function main() {
   const bySource = countBy(futureItems, (item) => item.sourceFile || item.sourceId || "unknown");
   const report = {
     ok: duplicateGroups.length === 0
+      && descriptionDuplicateGroups.length === 0
       && previewIssues.missing.length === 0
       && textIssues.blockedKeyword.length === 0
       && textIssues.likelyMojibake.length === 0
@@ -72,7 +75,9 @@ async function main() {
       eligibleItems: eligibleItems.length,
       rejectedRawItems: rejectedRawItems.length,
       rawDuplicateGroups: rawDuplicateGroups.length,
+      rawDescriptionDuplicateGroups: rawDescriptionDuplicateGroups.length,
       duplicateGroups: duplicateGroups.length,
+      descriptionDuplicateGroups: descriptionDuplicateGroups.length,
       missingPreviews: previewIssues.missing.length,
       brandedSourceImages: previewIssues.brandedSourceImages.length,
       noCleanSourceImages: previewIssues.noCleanSourceImages.length,
@@ -85,7 +90,9 @@ async function main() {
     byKind,
     bySource,
     rawDuplicateGroups: rawDuplicateGroups.slice(0, cliOptions.maxDetails),
+    rawDescriptionDuplicateGroups: rawDescriptionDuplicateGroups.slice(0, cliOptions.maxDetails),
     duplicateGroups: duplicateGroups.slice(0, cliOptions.maxDetails),
+    descriptionDuplicateGroups: descriptionDuplicateGroups.slice(0, cliOptions.maxDetails),
     previewIssues: {
       ...previewIssues,
       missing: previewIssues.missing.slice(0, cliOptions.maxDetails),
@@ -192,6 +199,7 @@ function normalizeEventItem(raw) {
 
   item.previewKey = buildEventPreviewKey(item);
   item.duplicateKey = buildDuplicateKey(item);
+  item.descriptionDuplicateKey = buildDescriptionDuplicateKey(item);
   item.quality = buildQualityFlags(item);
   return item;
 }
@@ -234,11 +242,11 @@ function buildReadableAuditSummary(item) {
   return `${kindLabel} «${title}» пройдёт${date}${place}. Подойдёт как понятный вариант выхода в Казани, а детали лучше проверить у источника.`;
 }
 
-function buildDuplicateGroups(items) {
+function buildDuplicateGroups(items, keyProperty = "duplicateKey") {
   const groups = new Map();
 
   for (const item of items) {
-    const key = item.duplicateKey;
+    const key = item[keyProperty];
     if (!key) continue;
     const current = groups.get(key) || [];
     current.push(item);
@@ -248,7 +256,8 @@ function buildDuplicateGroups(items) {
   return [...groups.values()]
     .filter((group) => group.length > 1)
     .map((group) => ({
-      key: group[0].duplicateKey,
+      key: group[0][keyProperty],
+      keyProperty,
       count: group.length,
       title: group[0].title,
       venueTitle: group[0].venueTitle,
@@ -261,19 +270,35 @@ function buildDuplicateGroups(items) {
 
 function dedupeAuditEventItems(items) {
   const grouped = new Map();
+  const keyAliases = new Map();
 
   for (const item of items || []) {
-    const key = item.duplicateKey || buildDisplayDuplicateKey(item);
-    if (!key) {
+    const keys = buildAuditDuplicateKeys(item);
+    if (!keys.length) {
       grouped.set(`id:${item?.id || grouped.size}`, item);
       continue;
     }
 
-    const current = grouped.get(key);
-    grouped.set(key, current ? mergeAuditEventItem(current, item) : item);
+    const matchedKey = keys
+      .map((key) => keyAliases.get(key) || key)
+      .find((key) => grouped.has(key));
+    const canonicalKey = matchedKey || keys[0];
+    const current = grouped.get(canonicalKey);
+    grouped.set(canonicalKey, current ? mergeAuditEventItem(current, item) : item);
+
+    for (const key of keys) {
+      keyAliases.set(key, canonicalKey);
+    }
   }
 
   return [...grouped.values()].sort((left, right) => left.eventDate - right.eventDate);
+}
+
+function buildAuditDuplicateKeys(item) {
+  return [
+    item.duplicateKey || buildDisplayDuplicateKey(item),
+    item.descriptionDuplicateKey
+  ].filter(Boolean);
 }
 
 function buildDisplayDuplicateKey(item) {
@@ -593,6 +618,18 @@ function buildDuplicateKey(item) {
   ].join("|");
 }
 
+function buildDescriptionDuplicateKey(item) {
+  const summaryKey = buildSummaryKey(`${item.rawSummary || ""} ${item.summary || ""}`);
+  if (!summaryKey) return "";
+
+  return [
+    formatMinuteKey(item.eventDate),
+    normalizeEntity(item.title),
+    normalizeEntity(item.venueTitle),
+    summaryKey
+  ].join("|");
+}
+
 function buildEventPreviewKey(item) {
   const dateKey = formatDateKey(item.eventDate);
   const titleKey = normalizePreviewEntity(item.title || item.summary || "");
@@ -838,6 +875,7 @@ function printSummary(report) {
   console.log(`Future events: ${report.totals.futureItems}`);
   console.log(`Eligible events: ${report.totals.eligibleItems}`);
   console.log(`Duplicate groups: ${report.totals.duplicateGroups}`);
+  console.log(`Description duplicate groups: ${report.totals.descriptionDuplicateGroups}`);
   console.log(`Missing previews: ${report.totals.missingPreviews}`);
   console.log(`Branded source images: ${report.totals.brandedSourceImages}`);
   console.log(`No clean source images: ${report.totals.noCleanSourceImages}`);

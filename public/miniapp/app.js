@@ -611,16 +611,25 @@ function applyEventsPayload(events, previousSelectedId = null) {
 
 function dedupeEventItemsForDisplay(items) {
   const grouped = new Map();
+  const keyAliases = new Map();
 
   for (const item of items || []) {
-    const key = buildDisplayEventDuplicateKey(item);
-    if (!key) {
+    const keys = buildDisplayEventDuplicateKeys(item);
+    if (!keys.length) {
       grouped.set(`id:${item?.id || grouped.size}`, item);
       continue;
     }
 
-    const current = grouped.get(key);
-    grouped.set(key, current ? mergeDisplayEventItem(current, item) : item);
+    const matchedKey = keys
+      .map((key) => keyAliases.get(key) || key)
+      .find((key) => grouped.has(key));
+    const canonicalKey = matchedKey || keys[0];
+    const current = grouped.get(canonicalKey);
+    grouped.set(canonicalKey, current ? mergeDisplayEventItem(current, item) : item);
+
+    for (const key of keys) {
+      keyAliases.set(key, canonicalKey);
+    }
   }
 
   return [...grouped.values()];
@@ -635,16 +644,36 @@ function isAllowedDisplayEventItem(item) {
 }
 
 function buildDisplayEventDuplicateKey(item) {
+  return buildDisplayEventDuplicateKeys(item)[0] || "";
+}
+
+function buildDisplayEventDuplicateKeys(item) {
   const dateKey = formatEventPreviewDateKey(item?.eventDate || item?.publishedAt);
   const timeKey = formatEventTimeOnly(item?.eventDate, item?.eventHasExplicitTime) || "no-time";
   const titleKey = normalizeEventPreviewEntity(item?.title || item?.summary || item?.shortSummary || "");
   const venueKey = normalizeEventPreviewVenue(item?.venueTitle || eventVenueText(item) || "");
-  const summaryKey = normalizeEventPreviewEntity(item?.rawSummary || item?.summary || item?.shortSummary || "").slice(0, 90);
+  const summaryKey = buildDisplayEventSummaryDuplicateKey(item);
 
-  if (!dateKey || dateKey === "undated" || !titleKey) return "";
-  if (venueKey) return `${dateKey}|${timeKey}|${titleKey}|${venueKey}`;
-  if (summaryKey) return `${dateKey}|${timeKey}|${titleKey}|${summaryKey}`;
-  return `${dateKey}|${timeKey}|${titleKey}`;
+  if (!dateKey || dateKey === "undated" || !titleKey) return [];
+
+  if (venueKey) {
+    return [
+      `${dateKey}|${timeKey}|${titleKey}|${venueKey}`,
+      summaryKey ? `${dateKey}|${timeKey}|${titleKey}|${venueKey}|${summaryKey}` : ""
+    ].filter(Boolean);
+  }
+
+  if (summaryKey) return [`${dateKey}|${timeKey}|${titleKey}|${summaryKey}`];
+  return [`${dateKey}|${timeKey}|${titleKey}`];
+}
+
+function buildDisplayEventSummaryDuplicateKey(item) {
+  return compactTextFingerprint(item?.rawSummary || item?.summary || item?.shortSummary || "")
+    .split(/\s+/u)
+    .filter((token) => token.length >= 4)
+    .slice(0, 14)
+    .sort()
+    .join("-");
 }
 
 function mergeDisplayEventItem(current, candidate) {
