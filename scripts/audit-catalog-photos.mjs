@@ -152,7 +152,7 @@ async function exists(targetPath) {
 
 function buildMarkdown(report) {
   const lines = [
-    "# Покрытие фотографиями каталога",
+    "# Покрытие каталога фотографиями",
     "",
     `Обновлено: ${report.generatedAt}`,
     "",
