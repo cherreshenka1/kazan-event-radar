@@ -919,7 +919,7 @@ function renderPlaces() {
           cardsHtml: items.map((item) => {
             const isActive = item.id === state.selectedPlaceId;
             return [
-              catalogPreviewCard(state.placeSection, item, isActive, "place-item", { id: item.id }, placeDetailCard(state.placeSection, item))
+              catalogPreviewCard(state.placeSection, item, isActive, "place-item", { id: item.id }, renderCatalogInlineDetail(state.placeSection, item))
             ].join("");
           }).join("")
         })
@@ -939,7 +939,7 @@ function renderFood() {
           cardsHtml: items.map((item) => {
             const isActive = item.id === state.selectedFoodId;
             return [
-              catalogPreviewCard("food", item, isActive, "section-item", { section: "food", id: item.id }, foodDetailCard(item))
+              catalogPreviewCard("food", item, isActive, "section-item", { section: "food", id: item.id }, renderCatalogInlineDetail("food", item))
             ].join("");
           }).join("")
         })
@@ -1264,7 +1264,7 @@ function renderSectionExplorer(sectionId, emptyText) {
           cardsHtml: items.map((item) => {
             const isActive = item.id === selectedId;
             return [
-              catalogPreviewCard(sectionId, item, isActive, "section-item", { section: sectionId, id: item.id }, renderCatalogDetailCard(sectionId, item))
+              catalogPreviewCard(sectionId, item, isActive, "section-item", { section: sectionId, id: item.id }, renderCatalogInlineDetail(sectionId, item))
             ].join("");
           }).join("")
         })
@@ -1285,7 +1285,7 @@ function renderRoutes() {
           cardsHtml: items.map((route) => {
             const isActive = route.id === state.selectedRouteId;
             return [
-              routePreviewCard(route, isActive, routeDetailCard(route))
+              routePreviewCard(route, isActive, routeInlineDetail(route))
             ].join("");
           }).join("")
         })
@@ -1308,10 +1308,7 @@ function renderFavorites() {
         panelBadges: buildFavoriteCollectionBadges(state.favorites, selected),
         cardsHtml: state.favorites.map((item) => {
           const isActive = item.id === state.selectedFavoriteId;
-          return [
-            favoritePreviewCard(item, isActive),
-            isActive ? inlineCardDetail(favoriteDetailCard(item)) : ""
-          ].join("");
+          return favoriteInlineCard(item, isActive);
         }).join("")
       })
       : empty("Пока пусто. Добавьте в избранное хотя бы одно событие или место.")
@@ -2083,6 +2080,127 @@ function masterclassDetailCard(item) {
   ], "active");
 }
 
+function renderCatalogInlineDetail(sectionId, item) {
+  if (sectionId === "food") return foodInlineDetail(item);
+  if (sectionId === "active") return activeInlineDetail(item);
+  if (sectionId === "masterclasses") return masterclassInlineDetail(item);
+  if (sectionId === "roadtrip") return roadtripInlineDetail(item);
+  return placeInlineDetail(sectionId, item);
+}
+
+function catalogInlineIntro(sectionId, item, quickFacts) {
+  const detailBadges = buildCatalogDetailBadges(sectionId, item);
+  return [
+    detailBadges.length ? `<div class="meta-badges selector-detail-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(item.description)
+  ];
+}
+
+function placeInlineDetail(sectionId, item) {
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const highlightsTitle = sectionId === "active" ? "Что внутри" : "Что посмотреть";
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+
+  return [
+    ...catalogInlineIntro(sectionId, item, quickFacts),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock(highlightsTitle, item.highlights) : ""}
+      ${item.bestFor ? factBlock(sectionId === "roadtrip" ? "Зачем ехать" : "Кому подойдет", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше", item.timing) : ""}
+      ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
+      ${item.reviewRating ? factBlock("Рейтинг", `${item.reviewRating} / 5 · ${item.reviewCount || "без числа отзывов"}`) : ""}
+      ${item.foodNearby ? factBlock("Где перекусить", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Маршрут на карте" })
+  ].filter(Boolean).join("");
+}
+
+function foodInlineDetail(item) {
+  const sectionId = "food";
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const quickFacts = buildFoodQuickFacts(item);
+
+  return [
+    ...catalogInlineIntro(sectionId, item, quickFacts),
+    `<div class="fact-grid">
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+      ${item.cuisine ? factBlock("Кухня", item.cuisine) : ""}
+      ${item.signatureDishes?.length ? factListBlock("Ключевые блюда", item.signatureDishes) : ""}
+      ${item.interior ? factBlock("Интерьер", item.interior) : ""}
+      ${item.reviewSummary ? factBlock("По отзывам", item.reviewSummary) : ""}
+      ${item.features?.length ? factListBlock("Главные фишки", item.features) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Открыть карту" })
+  ].filter(Boolean).join("");
+}
+
+function activeInlineDetail(item) {
+  const sectionId = "active";
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+
+  return [
+    ...catalogInlineIntro(sectionId, item, quickFacts),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Что внутри", item.highlights) : ""}
+      ${item.features?.length ? factListBlock("Почему это удобно", item.features) : ""}
+      ${item.bestFor ? factBlock("Кому подойдёт", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше идти", item.timing) : ""}
+      ${item.foodNearby ? factBlock("Где сделать паузу", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Открыть карту" })
+  ].filter(Boolean).join("");
+}
+
+function masterclassInlineDetail(item) {
+  const sectionId = "masterclasses";
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+
+  return [
+    ...catalogInlineIntro(sectionId, item, quickFacts),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Что получится", item.highlights) : ""}
+      ${item.features?.length ? factListBlock("Формат", item.features) : ""}
+      ${item.bestFor ? factBlock("Кому подойдёт", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше записываться", item.timing) : ""}
+      ${item.foodNearby ? factBlock("Где сделать паузу", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Как добраться", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Открыть карту", sourceLabel: "Запись / источник" })
+  ].filter(Boolean).join("");
+}
+
+function roadtripInlineDetail(item) {
+  const sectionId = "roadtrip";
+  const photoLinks = getSectionPhotoLinks(sectionId, item);
+  const quickFacts = buildPlaceQuickFacts(sectionId, item);
+  const byCarNote = buildRoadtripDriveNote(item);
+  const withoutCarNote = buildRoadtripNoCarNote(item);
+
+  return [
+    ...catalogInlineIntro(sectionId, item, quickFacts),
+    `<div class="fact-grid">
+      ${item.highlights?.length ? factListBlock("Почему стоит ехать", item.highlights) : ""}
+      ${item.bestFor ? factBlock("Для какого выезда подходит", item.bestFor) : ""}
+      ${item.timing ? factBlock("Когда лучше планировать", item.timing) : ""}
+      ${byCarNote ? factBlock("Если едете на машине", byCarNote) : ""}
+      ${withoutCarNote ? factBlock("Если машины нет", withoutCarNote) : ""}
+      ${item.foodNearby ? factBlock("Где сделать остановку", item.foodNearby) : ""}
+      ${item.howToGet ? factBlock("Логистика", item.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    catalogDetailActions(sectionId, item, { mapLabel: "Маршрут на карте" })
+  ].filter(Boolean).join("");
+}
+
 function catalogDetailActions(sectionId, item, options = {}) {
   const favoriteId = catalogFavoriteId(sectionId, item.id);
   const mapLabel = options.mapLabel || "Открыть карту";
@@ -2451,6 +2569,30 @@ function routePreviewCard(route, isActive, detailHtml = "") {
       ${isActive ? expandableCardDetail(detailHtml) : ""}
     </article>
   `;
+}
+
+function routeInlineDetail(route) {
+  const detailBadges = buildRouteDetailBadges(route);
+  const quickFacts = buildRouteQuickFacts(route);
+  const photoLinks = getSectionPhotoLinks("routes", route);
+
+  return [
+    detailBadges.length ? `<div class="meta-badges selector-detail-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    routeMapScheme(route),
+    richTextBlock(route.description),
+    `<div class="fact-grid">
+      ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
+      ${route.foodNearby ? factBlock("Где сделать остановку на еду", route.foodNearby) : ""}
+      ${route.howToGet ? factBlock("Старт и логистика", route.howToGet) : ""}
+      ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
+    </div>`,
+    actions([
+      actionButton(favoriteToggleLabel(routeFavoriteId(route.id)), "favorite-route", { id: route.id }, isFavorite(routeFavoriteId(route.id)) ? "primary" : ""),
+      route.mapUrl ? actionButton("Открыть карту", "open", { url: route.mapUrl }, "primary") : "",
+      route.sourceUrl ? actionButton("Источник", "open", { url: route.sourceUrl }) : ""
+    ])
+  ].filter(Boolean).join("");
 }
 
 function routeDetailCard(route) {
@@ -2850,6 +2992,66 @@ function favoritePreviewCard(item, isActive) {
       ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
     </button>
   `;
+}
+
+function favoriteInlineCard(item, isActive) {
+  const snapshot = getFavoriteSnapshot(item);
+  const badges = buildFavoritePreviewBadges(snapshot).slice(0, 3);
+  const imageUrl = snapshot.imageUrl || snapshot.fallbackImage;
+
+  return `
+    <article class="selector-card ${isActive ? "is-active" : ""}">
+      <button type="button" class="selector-card-trigger" data-action="favorite-focus" data-id="${escapeHtml(item.id)}">
+        ${imageUrl ? mediaImage(imageUrl, snapshot.title, "compact", snapshot.fallbackImage) : ""}
+        <div class="selector-card-head">
+          <span class="preview-label">${escapeHtml(snapshot.typeLabel)}</span>
+          <span class="selector-state">${isActive ? "Скрыть" : "Смотреть"}</span>
+        </div>
+        <div class="selector-card-title">${escapeHtml(snapshot.title)}</div>
+        ${snapshot.metaLine ? `<div class="meta">${escapeHtml(snapshot.metaLine)}</div>` : ""}
+        ${snapshot.summary ? `<p class="summary-short">${escapeHtml(snapshot.summary)}</p>` : ""}
+        ${badges.length ? `<div class="meta-badges selector-badges">${badges.map((value) => badge(value)).join("")}</div>` : ""}
+      </button>
+      ${isActive ? expandableCardDetail(favoriteInlineDetail(item)) : ""}
+    </article>
+  `;
+}
+
+function favoriteInlineDetail(item) {
+  const snapshot = getFavoriteSnapshot(item);
+  const detailBadges = buildFavoriteDetailBadges(snapshot);
+  const quickFacts = buildFavoriteQuickFacts(snapshot);
+  const highlightTitle = snapshot.type === "route"
+    ? "Точки маршрута"
+    : snapshot.type === "catalog" && snapshot.sectionId === "food"
+      ? "Ключевые блюда"
+      : "Что важно";
+
+  return [
+    detailBadges.length ? `<div class="meta-badges selector-detail-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : "",
+    quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    richTextBlock(snapshot.description || snapshot.summary || "Карточка сохранена в вашем плане."),
+    `<div class="fact-grid">
+      ${snapshot.dateLabel ? factBlock("Дата", snapshot.dateLabel) : ""}
+      ${snapshot.timeLabel ? factBlock("Время", snapshot.timeLabel) : ""}
+      ${snapshot.venue ? factBlock("Место", snapshot.venue) : ""}
+      ${snapshot.reviewSummary ? factBlock("По отзывам", snapshot.reviewSummary) : ""}
+      ${snapshot.howToGet ? factBlock("Как добраться", snapshot.howToGet) : ""}
+      ${snapshot.interior ? factBlock("Интерьер", snapshot.interior) : ""}
+      ${snapshot.highlights?.length ? factListBlock(highlightTitle, snapshot.highlights) : ""}
+      ${snapshot.photoLinks?.length ? factButtonsBlock("Подборка фото", snapshot.photoLinks) : ""}
+    </div>`,
+    actions([
+      actionButton("Открыть карточку", "favorite-open", { id: item.id }, "primary"),
+      snapshot.type === "event" && snapshot.eventId && snapshot.eventDate
+        ? `<button class="button" data-action="remind" data-id="${escapeHtml(snapshot.eventId)}">Напомнить</button>`
+        : "",
+      actionButton("Убрать из плана", "favorite-remove", { id: item.id }),
+      snapshot.mapUrl ? actionButton("Открыть карту", "open", { url: snapshot.mapUrl }) : "",
+      snapshot.reviewUrl ? actionButton(snapshot.reviewSource ? `Отзывы: ${snapshot.reviewSource}` : "Отзывы", "open", { url: snapshot.reviewUrl }) : "",
+      snapshot.sourceUrl ? actionButton("Источник", "open", { url: snapshot.sourceUrl }) : ""
+    ])
+  ].filter(Boolean).join("");
 }
 
 function favoriteDetailCard(item) {
