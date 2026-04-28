@@ -100,6 +100,10 @@ const heroTextNode = document.querySelector("#heroText");
 const heroBadgesNode = document.querySelector("#heroBadges");
 const PHOTO_MANIFEST = window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST || {};
 const EVENT_PREVIEWS = window.KAZAN_EVENT_RADAR_EVENT_PREVIEWS || {};
+const EVENT_PHOTO_OVERRIDES = {
+  "2026-06-20-l2wc7g": "./photos/events/2026-06-20-l2wc7g/cover.jpg",
+  "2026-06-20-kkg1kj": "./photos/events/2026-06-20-l2wc7g/cover.jpg"
+};
 const SECTION_VISUALS = {
   events: "./brand/section-events.png",
   places: "./brand/section-parks.png",
@@ -3778,9 +3782,17 @@ function quoteEventTitle(value) {
 }
 
 function eventVisualUrl(item, variant = "detail") {
+  const overrideImage = eventPhotoOverrideUrl(item);
+  if (overrideImage) return overrideImage;
+
   const directImage = eventDirectVisualUrl(item);
   if (directImage) return directImage;
   return eventFallbackVisualUrl(item, variant);
+}
+
+function eventPhotoOverrideUrl(item) {
+  const previewKey = buildEventPreviewKey(item);
+  return previewKey ? EVENT_PHOTO_OVERRIDES[previewKey] || "" : "";
 }
 
 function eventDirectVisualUrl(item) {
