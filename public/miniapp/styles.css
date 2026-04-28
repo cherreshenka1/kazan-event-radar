@@ -425,7 +425,7 @@ body.is-moderator .moderation-only {
 }
 
 .topbar-button.is-active {
-  background: linear-gradient(135deg, #2268ff, #20d486);
+  background: var(--accent);
   color: #ffffff;
   border-color: transparent;
   font-weight: 650;
@@ -448,27 +448,34 @@ body.is-moderator .moderation-only {
 .topbar-button-moderation {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.34), transparent 34%),
-    linear-gradient(135deg, #261446, #6f4dff 48%, #20d486);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.topbar-button-moderation small {
+.topbar-button-moderation.is-active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.topbar-button-moderation.is-active small {
   color: rgba(255, 255, 255, 0.78);
 }
 
 .topbar-button-plan {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.5), transparent 34%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(210, 232, 255, 0.54));
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.topbar-button-plan.is-active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 :root[data-theme="dark"] .topbar-button-plan {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.14), transparent 34%),
-    linear-gradient(135deg, rgba(231, 237, 246, 0.1), rgba(79, 140, 255, 0.12));
+  background: rgba(231, 237, 246, 0.08);
+}
+
+:root[data-theme="dark"] .topbar-button-plan.is-active {
+  background: var(--accent);
 }
 
 @media (min-width: 620px) {
