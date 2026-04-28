@@ -3778,7 +3778,8 @@ async function buildModerationSummary(env, user) {
     },
     cardModeration: {
       mode: "local_approval_pipeline",
-      candidatesCommand: "npm run catalog:moderation:candidates",
+      candidatesCommand: "npm run catalog:moderation:missing-photos",
+      fullCandidatesCommand: "npm run catalog:moderation:candidates",
       dryRunCommand: "npm run catalog:moderation:dry-run",
       applyCommand: "npm run catalog:moderation:apply",
       boardPath: "data/catalog-moderation/review-board.md",
