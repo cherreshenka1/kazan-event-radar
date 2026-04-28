@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:28:14.900Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Озеро комсомольское(Дербышки).JPG",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B7%D0%B5%D1%80%D0%BE_%D0%BA%D0%BE%D0%BC%D1%81%D0%BE%D0%BC%D0%BE%D0%BB%D1%8C%D1%81%D0%BA%D0%BE%D0%B5(%D0%94%D0%B5%D1%80%D0%B1%D1%8B%D1%88%D0%BA%D0%B8).JPG",
+      "artist": "Дёма Андрей",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0"
+    }
+  ]
+}

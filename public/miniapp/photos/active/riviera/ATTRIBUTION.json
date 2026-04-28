@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:25:06.623Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan Riviera Aquapark.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan_Riviera_Aquapark.jpg",
+      "artist": "Mikh Luna",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

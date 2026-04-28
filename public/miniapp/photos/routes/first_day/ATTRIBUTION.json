@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:23:08.024Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan crop.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan_crop.jpg",
+      "artist": "No machine-readable author provided. Dr. Blofeld~commonswiki assumed (based on copyright claims).",
+      "license": "Public domain",
+      "licenseUrl": ""
+    }
+  ]
+}

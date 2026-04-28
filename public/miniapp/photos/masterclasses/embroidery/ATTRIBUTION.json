@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:26:34.093Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Hans Holbein the Younger (workshop of) - Jane Seymour (Mauritshuis) - detail hemdsmouwen.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hans_Holbein_the_Younger_(workshop_of)_-_Jane_Seymour_(Mauritshuis)_-_detail_hemdsmouwen.jpg",
+      "artist": "Hans Holbein",
+      "license": "Public domain",
+      "licenseUrl": ""
+    }
+  ]
+}

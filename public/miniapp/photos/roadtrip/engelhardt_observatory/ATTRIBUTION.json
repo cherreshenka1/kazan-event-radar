@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:28:00.282Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Engelgardt observatory.JPG",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Engelgardt_observatory.JPG",
+      "artist": "http://ru.wikipedia.org/wiki/Участник:Winer",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    }
+  ]
+}

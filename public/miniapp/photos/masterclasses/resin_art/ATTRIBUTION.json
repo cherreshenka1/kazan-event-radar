@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:26:52.415Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Gusli, Makarov (2023-04-12) 03.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gusli,_Makarov_(2023-04-12)_03.jpg",
+      "artist": "Vyacheslav Kirillin",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

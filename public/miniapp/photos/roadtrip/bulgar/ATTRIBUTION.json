@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:27:20.734Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan Metro ProspektPobedy 08-2016.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan_Metro_ProspektPobedy_08-2016.jpg",
+      "artist": "A.Savin",
+      "license": "FAL",
+      "licenseUrl": "http://artlibre.org/licence/lal/en"
+    }
+  ]
+}

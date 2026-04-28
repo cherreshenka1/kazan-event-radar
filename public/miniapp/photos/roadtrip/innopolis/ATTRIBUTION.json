@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:27:10.989Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Medvedev, Nikiforov, Minnihanov in Kazan Innopolis (groundbreaking ceremony).jpeg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Medvedev,_Nikiforov,_Minnihanov_in_Kazan_Innopolis_(groundbreaking_ceremony).jpeg",
+      "artist": "Dmitry Astakhov / Government.ru",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+    }
+  ]
+}

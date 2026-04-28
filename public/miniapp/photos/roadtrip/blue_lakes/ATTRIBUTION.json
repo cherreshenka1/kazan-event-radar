@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:27:01.628Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Kazan-Goluboe-lk-winter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kazan-Goluboe-lk-winter.jpg",
+      "artist": "ru:User:Kazaneer",
+      "license": "CC0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    }
+  ]
+}

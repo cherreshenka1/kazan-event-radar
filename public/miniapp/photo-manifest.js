@@ -1,4 +1,60 @@
 window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST = {
+  "active": {
+    "bulat": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/bulat/01.jpg"
+      }
+    ],
+    "hippodrome": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/hippodrome/01.jpg"
+      }
+    ],
+    "mazapark": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/mazapark/01.jpg"
+      }
+    ],
+    "riviera": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/riviera/01.jpg"
+      }
+    ],
+    "rope_park": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/rope_park/01.jpg"
+      }
+    ],
+    "tennis_academy": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/tennis_academy/01.jpg"
+      }
+    ],
+    "thermal_beach": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/thermal_beach/01.jpg"
+      }
+    ],
+    "uram": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/uram/01.jpg"
+      }
+    ],
+    "water_sports_palace": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/active/water_sports_palace/01.jpg"
+      }
+    ]
+  },
   "events": {
     "2026-06-20-l2wc7g": [
       {
@@ -51,6 +107,44 @@ window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST = {
       }
     ]
   },
+  "food": {
+    "marusovka": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/marusovka/01.jpg"
+      }
+    ],
+    "milli": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/milli/01.jpg"
+      }
+    ],
+    "sayyar": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/sayyar/01.jpg"
+      }
+    ],
+    "skazka": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/skazka/01.jpg"
+      }
+    ],
+    "tatarskaya_usadba": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/tatarskaya_usadba/01.jpg"
+      }
+    ],
+    "tugan_avylym": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/food/tugan_avylym/01.jpg"
+      }
+    ]
+  },
   "hotels": {
     "grand_hotel": [
       {
@@ -92,6 +186,38 @@ window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST = {
       {
         "label": "Фото 1",
         "url": "./photos/hotels/suleiman_palace/01.jpg"
+      }
+    ]
+  },
+  "masterclasses": {
+    "candles": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/masterclasses/candles/01.jpg"
+      }
+    ],
+    "embroidery": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/masterclasses/embroidery/01.jpg"
+      }
+    ],
+    "painting": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/masterclasses/painting/01.jpg"
+      }
+    ],
+    "pottery": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/masterclasses/pottery/01.jpg"
+      }
+    ],
+    "resin_art": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/masterclasses/resin_art/01.jpg"
       }
     ]
   },
@@ -214,6 +340,118 @@ window.KAZAN_EVENT_RADAR_PHOTO_MANIFEST = {
       {
         "label": "Фото 1",
         "url": "./photos/parks/wings_soviets/01.jpg"
+      }
+    ]
+  },
+  "roadtrip": {
+    "blue_lakes": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/blue_lakes/01.jpg"
+      }
+    ],
+    "bulgar": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/bulgar/01.jpg"
+      }
+    ],
+    "chistopol": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/chistopol/01.png"
+      }
+    ],
+    "elabuga": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/elabuga/01.jpg"
+      }
+    ],
+    "engelhardt_observatory": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/engelhardt_observatory/01.jpg"
+      }
+    ],
+    "innopolis": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/innopolis/01.jpg"
+      }
+    ],
+    "iske_kazan": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/iske_kazan/01.jpg"
+      }
+    ],
+    "kama_sea": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/kama_sea/01.jpg"
+      }
+    ],
+    "kamskoye_ustye": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/kamskoye_ustye/01.jpg"
+      }
+    ],
+    "komsomolskoe_lake": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/komsomolskoe_lake/01.jpg"
+      }
+    ],
+    "raifa": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/raifa/01.jpg"
+      }
+    ],
+    "sviyazhsk": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/sviyazhsk/01.jpg"
+      }
+    ],
+    "tetyushi": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/roadtrip/tetyushi/01.png"
+      }
+    ]
+  },
+  "routes": {
+    "bauman_gorky": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/routes/bauman_gorky/01.jpg"
+      }
+    ],
+    "first_day": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/routes/first_day/01.jpg"
+      }
+    ],
+    "green_city": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/routes/green_city/01.jpg"
+      }
+    ],
+    "kazanka_uram": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/routes/kazanka_uram/01.jpg"
+      }
+    ],
+    "old_tatar_kaban": [
+      {
+        "label": "Фото 1",
+        "url": "./photos/routes/old_tatar_kaban/01.jpg"
       }
     ]
   },

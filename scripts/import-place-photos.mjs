@@ -10,6 +10,12 @@ const PHOTOS_ROOT = path.join(ROOT, "public", "miniapp", "photos");
 const REPORT_PATH = path.join(ROOT, "data", "catalog-imports", "place-photo-import-report.json");
 const MANIFEST_PATH = path.join(ROOT, "public", "miniapp", "photo-manifest.js");
 const PLACE_SECTIONS = ["parks", "sights", "hotels", "excursions"];
+const CATALOG_SECTIONS = Object.keys(BASE_CATALOG);
+const SECTION_GROUPS = {
+  places: PLACE_SECTIONS,
+  other: CATALOG_SECTIONS.filter((sectionId) => !PLACE_SECTIONS.includes(sectionId)),
+  all: CATALOG_SECTIONS
+};
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const IMAGE_EXTENSIONS_BY_MIME = {
   "image/jpeg": ".jpg",
@@ -27,7 +33,7 @@ await main().catch((error) => {
 });
 
 async function main() {
-  const sections = options.sections.length ? options.sections : PLACE_SECTIONS;
+  const sections = resolveSections();
   const report = {
     generatedAt: new Date().toISOString(),
     mode: options.dryRun ? "dry_run" : "import",
@@ -70,7 +76,7 @@ async function main() {
     await writePhotoManifest();
   }
 
-  console.log(`Place photo import: ${report.totals.importedPhotos} photos imported for ${report.totals.items} cards.`);
+  console.log(`Catalog photo import: ${report.totals.importedPhotos} photos imported for ${report.totals.items} cards.`);
   console.log(`Skipped with photos: ${report.totals.skippedWithPhotos}`);
   console.log(`Missing candidates: ${report.totals.missingCandidates}`);
   console.log(`Report: ${path.relative(ROOT, REPORT_PATH)}`);
@@ -343,6 +349,41 @@ function buildSearchQueries(sectionId, item) {
       food_walk: ["Tatar cuisine Kazan", "Bauman Street Kazan"],
       museum_day: ["National Museum of Tatarstan Kazan", "Kazan museum"],
       viewpoints: ["Kazan panorama", "Kazan Kremlin panorama"]
+    },
+    food: {
+      tugan_avylym: ["Tugan Avylym Kazan", "Tatar cuisine Kazan"],
+      tatarskaya_usadba: ["Old Tatar Settlement Kazan restaurant", "Tatar cuisine Kazan"],
+      chirem: ["Kazan restaurant Tatar cuisine"],
+      gus: ["Old Tatar Settlement Kazan restaurant"],
+      artel: ["Kazan bistro restaurant"]
+    },
+    routes: {
+      first_day: ["Kazan Kremlin Bauman Street", "Kazan city center"],
+      old_tatar_kaban: ["Old Tatar Settlement Kazan", "Lake Kaban Kazan"],
+      green_city: ["Gorky Park Kazan", "Kazan panorama"],
+      kazanka_uram: ["Kazan embankment Uram", "Kazan riverfront"],
+      bauman_gorky: ["Bauman Street Kazan", "Gorky Park Kazan"]
+    },
+    active: {
+      riviera: ["Riviera Kazan water park", "Kazan aquapark"],
+      mazapark: ["arcade entertainment center"],
+      thermal_beach: ["thermal spa pool"],
+      rope_park: ["rope park adventure"],
+      uram: ["Uram Kazan skatepark", "Kazan Uram park"]
+    },
+    masterclasses: {
+      pottery: ["pottery workshop"],
+      cooking: ["Tatar cuisine cooking class"],
+      painting: ["painting workshop"],
+      embroidery: ["embroidery workshop"],
+      candles: ["candle making workshop"]
+    },
+    roadtrip: {
+      blue_lakes: ["Blue Lakes Kazan", "Blue Lakes Tatarstan"],
+      sviyazhsk: ["Sviyazhsk island", "Sviyazhsk Tatarstan"],
+      innopolis: ["Innopolis Russia", "Innopolis Tatarstan"],
+      bulgar: ["Bolgar Tatarstan", "Bolgar historical site"],
+      raifa: ["Raifa monastery", "Raifa Tatarstan"]
     }
   };
 
@@ -384,6 +425,7 @@ function parseOptions(args) {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
+    group: valueOf("--group", args.includes("--all") ? "all" : "places"),
     limitPerSection: Number(valueOf("--limit-per-section", "0")) || 0,
     maxImagesPerItem: Number(valueOf("--max-images-per-item", "2")) || 2,
     searchLimit: Number(valueOf("--search-limit", "10")) || 10,
@@ -392,6 +434,14 @@ function parseOptions(args) {
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force")
   };
+}
+
+function resolveSections() {
+  if (options.sections.length) {
+    return options.sections.filter((sectionId) => CATALOG_SECTIONS.includes(sectionId));
+  }
+
+  return SECTION_GROUPS[options.group] || PLACE_SECTIONS;
 }
 
 function cleanSearchText(value) {
@@ -417,6 +467,11 @@ function sectionLabel(sectionId) {
     parks: "park",
     sights: "landmark",
     hotels: "hotel",
-    excursions: "tour route"
+    excursions: "tour route",
+    food: "restaurant",
+    routes: "walking route",
+    active: "activity",
+    masterclasses: "workshop",
+    roadtrip: "day trip"
   }[sectionId] || sectionId;
 }

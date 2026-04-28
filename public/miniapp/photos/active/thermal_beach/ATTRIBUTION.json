@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:25:12.346Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Lido- Békéscsaba- Hungay.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lido-_B%C3%A9k%C3%A9scsaba-_Hungay.jpg",
+      "artist": "Unknown author Unknown author",
+      "license": "CC BY-SA 2.5",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5"
+    }
+  ]
+}

@@ -571,6 +571,8 @@ function bindEvents() {
       render();
     }
   });
+
+  document.addEventListener("wheel", handleHorizontalWheelScroll, { passive: false });
 }
 
 async function refreshEvents() {
@@ -918,8 +920,7 @@ function renderPlaces() {
           cardsHtml: items.map((item) => {
             const isActive = item.id === state.selectedPlaceId;
             return [
-              catalogPreviewCard(state.placeSection, item, isActive, "place-item", { id: item.id }),
-              isActive ? inlineCardDetail(placeDetailCard(state.placeSection, item)) : ""
+              catalogPreviewCard(state.placeSection, item, isActive, "place-item", { id: item.id }, placeDetailCard(state.placeSection, item))
             ].join("");
           }).join("")
         })
@@ -939,8 +940,7 @@ function renderFood() {
           cardsHtml: items.map((item) => {
             const isActive = item.id === state.selectedFoodId;
             return [
-              catalogPreviewCard("food", item, isActive, "section-item", { section: "food", id: item.id }),
-              isActive ? inlineCardDetail(foodDetailCard(item)) : ""
+              catalogPreviewCard("food", item, isActive, "section-item", { section: "food", id: item.id }, foodDetailCard(item))
             ].join("");
           }).join("")
         })
@@ -1265,8 +1265,7 @@ function renderSectionExplorer(sectionId, emptyText) {
           cardsHtml: items.map((item) => {
             const isActive = item.id === selectedId;
             return [
-              catalogPreviewCard(sectionId, item, isActive, "section-item", { section: sectionId, id: item.id }),
-              isActive ? inlineCardDetail(renderCatalogDetailCard(sectionId, item)) : ""
+              catalogPreviewCard(sectionId, item, isActive, "section-item", { section: sectionId, id: item.id }, renderCatalogDetailCard(sectionId, item))
             ].join("");
           }).join("")
         })
@@ -1287,8 +1286,7 @@ function renderRoutes() {
           cardsHtml: items.map((route) => {
             const isActive = route.id === state.selectedRouteId;
             return [
-              routePreviewCard(route, isActive),
-              isActive ? inlineCardDetail(routeDetailCard(route)) : ""
+              routePreviewCard(route, isActive, routeDetailCard(route))
             ].join("");
           }).join("")
         })
@@ -1871,7 +1869,18 @@ function inlineCardDetail(detailHtml) {
   return detailHtml ? `<div class="inline-card-detail">${detailHtml}</div>` : "";
 }
 
-function catalogPreviewCard(sectionId, item, isActive, action, data) {
+function expandableCardDetail(detailHtml) {
+  const inner = stripOuterCardShell(detailHtml);
+  return inner ? `<div class="selector-card-detail">${inner}</div>` : "";
+}
+
+function stripOuterCardShell(detailHtml) {
+  const trimmed = String(detailHtml || "").trim();
+  const match = trimmed.match(/^<article class="card[^"]*">([\s\S]*)<\/article>$/);
+  return match ? match[1] : trimmed;
+}
+
+function catalogPreviewCard(sectionId, item, isActive, action, data, detailHtml = "") {
     const attrs = Object.entries(data).map(([key, value]) => `data-${key}="${escapeHtml(value)}"`).join(" ");
     const summary = catalogPreviewSummary(sectionId, item);
     const meta = catalogPreviewMeta(sectionId, item);
@@ -1879,16 +1888,19 @@ function catalogPreviewCard(sectionId, item, isActive, action, data) {
     const previewImage = getSectionPrimaryImage(sectionId, item, fallbackImage);
   
     return `
-      <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="${action}" ${attrs}>
-        ${previewImage ? mediaImage(previewImage, item.title, "compact", fallbackImage) : ""}
-        <div class="selector-card-head">
-          <span class="preview-label">${escapeHtml(catalogPreviewLabel(sectionId))}</span>
-          <span class="selector-state">${isActive ? "Открыто" : catalogPreviewState(sectionId)}</span>
-        </div>
-        <div class="selector-card-title">${escapeHtml(item.title)}</div>
-        ${meta ? `<div class="selector-meta-line">${escapeHtml(meta)}</div>` : ""}
-        ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
-    </button>
+      <article class="selector-card ${isActive ? "is-active" : ""}">
+        <button type="button" class="selector-card-trigger" data-action="${action}" ${attrs}>
+          ${previewImage ? mediaImage(previewImage, item.title, "compact", fallbackImage) : ""}
+          <div class="selector-card-head">
+            <span class="preview-label">${escapeHtml(catalogPreviewLabel(sectionId))}</span>
+            <span class="selector-state">${isActive ? "Скрыть" : catalogPreviewState(sectionId)}</span>
+          </div>
+          <div class="selector-card-title">${escapeHtml(item.title)}</div>
+          ${meta ? `<div class="selector-meta-line">${escapeHtml(meta)}</div>` : ""}
+          ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
+        </button>
+        ${isActive ? expandableCardDetail(detailHtml) : ""}
+      </article>
   `;
 }
 
@@ -2397,21 +2409,24 @@ function buildFoodQuickFacts(item) {
   ].filter((item) => item.value);
 }
 
-function routePreviewCard(route, isActive) {
+function routePreviewCard(route, isActive, detailHtml = "") {
   const summary = trim(route.description || route.foodNearby || route.howToGet || route.subtitle || route.title, 150);
   const previewImage = getSectionPrimaryImage("routes", route, SECTION_VISUALS.routes);
 
   return `
-    <button type="button" class="selector-card ${isActive ? "is-active" : ""}" data-action="route-item" data-id="${escapeHtml(route.id)}">
-      ${previewImage ? mediaImage(previewImage, route.title, "compact", SECTION_VISUALS.routes) : ""}
-      <div class="selector-card-head">
-        <span class="preview-label">Пеший маршрут</span>
-        <span class="selector-state">${isActive ? "Открыто" : "Смотреть"}</span>
-      </div>
-      <div class="selector-card-title">${escapeHtml(route.title)}</div>
-      ${route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : ""}
-      ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
-    </button>
+    <article class="selector-card ${isActive ? "is-active" : ""}">
+      <button type="button" class="selector-card-trigger" data-action="route-item" data-id="${escapeHtml(route.id)}">
+        ${previewImage ? mediaImage(previewImage, route.title, "compact", SECTION_VISUALS.routes) : ""}
+        <div class="selector-card-head">
+          <span class="preview-label">Пеший маршрут</span>
+          <span class="selector-state">${isActive ? "Скрыть" : "Смотреть"}</span>
+        </div>
+        <div class="selector-card-title">${escapeHtml(route.title)}</div>
+        ${route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : ""}
+        ${summary ? `<p class="summary-short">${escapeHtml(summary)}</p>` : ""}
+      </button>
+      ${isActive ? expandableCardDetail(detailHtml) : ""}
+    </article>
   `;
 }
 
@@ -2430,6 +2445,7 @@ function routeDetailCard(route) {
     `<h2>${escapeHtml(route.title)}</h2>`,
     route.subtitle ? `<div class="meta">${escapeHtml(route.subtitle)}</div>` : "",
     quickFacts.length ? detailQuickGrid(quickFacts) : "",
+    routeMapScheme(route),
     richTextBlock(route.description),
     `<div class="fact-grid">
       ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
@@ -2513,6 +2529,74 @@ function buildRouteQuickFacts(route) {
       value: trim(route.howToGet || route.foodNearby || "", 88)
     }
   ].filter((item) => item.value);
+}
+
+function routeMapScheme(route) {
+  const stops = Array.isArray(route?.stops) ? route.stops.filter(Boolean) : [];
+  if (!stops.length) return "";
+
+  const start = stops[0];
+  const finish = stops.length > 1 ? stops[stops.length - 1] : "";
+  const middle = stops.slice(1, -1);
+  const viewPoints = middle.filter((stop) => isRouteViewPoint(stop));
+  const foodHint = route.foodNearby || "";
+
+  return `
+    <section class="route-map-card" aria-label="Схема маршрута">
+      <div class="route-map-head">
+        <div>
+          <p class="subtle-title">Схема маршрута</p>
+          <h3>${escapeHtml(route.title)}</h3>
+        </div>
+        ${route.subtitle || route.duration ? `<span>${escapeHtml([route.subtitle, route.duration].filter(Boolean).join(" · "))}</span>` : ""}
+      </div>
+      <ol class="route-timeline">
+        ${stops.map((stop, index) => routeTimelinePoint(stop, index, stops.length)).join("")}
+      </ol>
+      <div class="route-map-notes">
+        ${start ? routeMapNote("Старт", start) : ""}
+        ${finish ? routeMapNote("Финиш", finish) : ""}
+        ${viewPoints.length ? routeMapNote("Виды", viewPoints.slice(0, 2).join(", ")) : ""}
+        ${foodHint ? routeMapNote("Еда / кофе", foodHint) : ""}
+      </div>
+    </section>
+  `;
+}
+
+function routeTimelinePoint(stop, index, total) {
+  const type = index === 0 ? "start" : index === total - 1 ? "finish" : isRouteViewPoint(stop) ? "view" : "point";
+  const label = index === 0 ? "Старт" : index === total - 1 ? "Финиш" : isRouteViewPoint(stop) ? "Видовая точка" : `Точка ${index + 1}`;
+  return `
+    <li class="route-point route-point-${type}">
+      <span class="route-point-marker">${index + 1}</span>
+      <span>
+        <small>${escapeHtml(label)}</small>
+        <b>${escapeHtml(stop)}</b>
+      </span>
+    </li>
+  `;
+}
+
+function routeMapNote(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><p>${escapeHtml(trim(value, 120))}</p></div>`;
+}
+
+function isRouteViewPoint(value) {
+  const text = compactTextFingerprint(value);
+  return ["кремл", "башн", "дворец", "набережн", "озер", "кабан", "казанк", "панорам", "центр семьи", "мост", "холм"].some((token) => text.includes(token));
+}
+
+function handleHorizontalWheelScroll(event) {
+  const scroller = event.target.closest(".tabs, .chips, .stat-row, .date-rail");
+  if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 2) return;
+
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+    ? event.deltaX
+    : event.deltaY;
+  if (!delta) return;
+
+  event.preventDefault();
+  scroller.scrollLeft += delta;
 }
 
 async function toggleFavorite(payload) {

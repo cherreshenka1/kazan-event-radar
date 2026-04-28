@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:26:07.088Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:RIAN archive 485000 Russian President Dmitry Medvedev visits Kazan Tennis Academy.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:RIAN_archive_485000_Russian_President_Dmitry_Medvedev_visits_Kazan_Tennis_Academy.jpg",
+      "artist": "Dmitry Astakhov / Дмитрий Астахов",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    }
+  ]
+}

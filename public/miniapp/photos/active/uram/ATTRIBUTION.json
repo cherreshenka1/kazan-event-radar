@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:25:20.826Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Uram Extreme Park 03.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Uram_Extreme_Park_03.jpg",
+      "artist": "MBH",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ]
+}

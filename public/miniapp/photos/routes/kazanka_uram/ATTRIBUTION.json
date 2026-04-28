@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-28T16:23:17.825Z",
+  "source": "Wikimedia Commons",
+  "note": "Open-license image metadata. Keep attribution when reusing outside the Mini App.",
+  "items": [
+    {
+      "fileName": "01.jpg",
+      "sourceTitle": "File:Young Woman - Kazan - Russia.JPG",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Young_Woman_-_Kazan_-_Russia.JPG",
+      "artist": "Adam Jones Adam63",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    }
+  ]
+}
