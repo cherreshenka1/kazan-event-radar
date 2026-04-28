@@ -160,6 +160,11 @@ a {
   cursor: pointer;
 }
 
+.topbar-brand > span:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .topbar-brand strong,
 .topbar-brand small {
   display: block;
@@ -170,7 +175,7 @@ a {
 
 .topbar-brand strong {
   line-height: 1.15;
-  max-width: clamp(104px, 32vw, 190px);
+  max-width: 100%;
 }
 
 .topbar-brand small {
@@ -1872,7 +1877,7 @@ h1 {
   }
 
   .topbar-brand strong {
-    max-width: clamp(72px, 23vw, 132px);
+    max-width: 100%;
     font-size: 0.95rem;
   }
 
