@@ -2552,12 +2552,11 @@ function buildFoodQuickFacts(item) {
 
 function routePreviewCard(route, isActive, detailHtml = "") {
   const summary = trim(route.description || route.foodNearby || route.howToGet || route.subtitle || route.title, 150);
-  const previewImage = getSectionPrimaryImage("routes", route, SECTION_VISUALS.routes);
 
   return `
     <article class="selector-card ${isActive ? "is-active" : ""}">
       <button type="button" class="selector-card-trigger" data-action="route-item" data-id="${escapeHtml(route.id)}">
-        ${previewImage ? mediaImage(previewImage, route.title, "compact", SECTION_VISUALS.routes) : ""}
+        ${routePreviewMap(route)}
         <div class="selector-card-head">
           <span class="preview-label">Пеший маршрут</span>
           <span class="selector-state">${isActive ? "Скрыть" : "Смотреть"}</span>
@@ -2575,6 +2574,7 @@ function routeInlineDetail(route) {
   const detailBadges = buildRouteDetailBadges(route);
   const quickFacts = buildRouteQuickFacts(route);
   const photoLinks = getSectionPhotoLinks("routes", route);
+  const foodRecommendations = getRouteFoodRecommendations(route);
 
   return [
     detailBadges.length ? `<div class="meta-badges selector-detail-badges">${detailBadges.map((value) => badge(value)).join("")}</div>` : "",
@@ -2583,7 +2583,7 @@ function routeInlineDetail(route) {
     richTextBlock(route.description),
     `<div class="fact-grid">
       ${route.stops?.length ? factListBlock("Точки маршрута", route.stops) : ""}
-      ${route.foodNearby ? factBlock("Где сделать остановку на еду", route.foodNearby) : ""}
+      ${foodRecommendations.length ? factListBlock("Кофе и еда по пути", foodRecommendations) : ""}
       ${route.howToGet ? factBlock("Старт и логистика", route.howToGet) : ""}
       ${photoLinks.length ? factButtonsBlock("Подборка фото", photoLinks) : ""}
     </div>`,
@@ -2704,7 +2704,8 @@ function routeMapScheme(route) {
   const finish = stops.length > 1 ? stops[stops.length - 1] : "";
   const middle = stops.slice(1, -1);
   const viewPoints = middle.filter((stop) => isRouteViewPoint(stop));
-  const foodHint = route.foodNearby || "";
+  const foodRecommendations = getRouteFoodRecommendations(route);
+  const foodHint = foodRecommendations.join("; ") || route.foodNearby || "";
 
   return `
     <section class="route-map-card" aria-label="Схема маршрута">
@@ -2729,8 +2730,8 @@ function routeMapScheme(route) {
 }
 
 function routeTimelinePoint(stop, index, total) {
-  const type = index === 0 ? "start" : index === total - 1 ? "finish" : isRouteViewPoint(stop) ? "view" : "point";
-  const label = index === 0 ? "Старт" : index === total - 1 ? "Финиш" : isRouteViewPoint(stop) ? "Видовая точка" : `Точка ${index + 1}`;
+  const type = routePointType(stop, index, total);
+  const label = routePointLabel(type, index);
   return `
     <li class="route-point route-point-${type}">
       <span class="route-point-marker">${index + 1}</span>
@@ -2742,6 +2743,100 @@ function routeTimelinePoint(stop, index, total) {
   `;
 }
 
+function routePreviewMap(route) {
+  const stops = Array.isArray(route?.stops) ? route.stops.filter(Boolean) : [];
+  if (!stops.length) return "";
+
+  const mapPoints = buildRoutePreviewPoints(route);
+  const polyline = mapPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const start = stops[0];
+  const finish = stops.length > 1 ? stops[stops.length - 1] : "";
+  const viewCount = stops.filter((stop, index) => isRouteViewPoint(stop) && index > 0 && index < stops.length - 1).length;
+  const foodRecommendations = getRouteFoodRecommendations(route).slice(0, 1);
+
+  return `
+    <div class="route-preview-map" aria-label="Схема пешего маршрута">
+      <div class="route-preview-map-head">
+        <span>Маршрут</span>
+        ${route.duration || route.subtitle ? `<strong>${escapeHtml([route.subtitle, route.duration].filter(Boolean).join(" · "))}</strong>` : ""}
+      </div>
+      <svg viewBox="0 0 360 168" role="img" aria-label="${escapeHtml(route.title)}">
+        <defs>
+          <linearGradient id="routeLine-${escapeHtml(route.id)}" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#22c55e" />
+            <stop offset="56%" stop-color="#2563eb" />
+            <stop offset="100%" stop-color="#2ec4b6" />
+          </linearGradient>
+        </defs>
+        <polyline class="route-preview-line-shadow" points="${escapeHtml(polyline)}" />
+        <polyline class="route-preview-line" points="${escapeHtml(polyline)}" stroke="url(#routeLine-${escapeHtml(route.id)})" />
+        ${mapPoints.map((point, index) => `
+          <g class="route-preview-pin route-preview-pin-${point.type}">
+            <circle cx="${point.x}" cy="${point.y}" r="${point.radius}" />
+            <text x="${point.x}" y="${point.y + 4}" text-anchor="middle">${index + 1}</text>
+          </g>
+        `).join("")}
+      </svg>
+      <div class="route-preview-caption">
+        <span><b>Старт:</b> ${escapeHtml(trim(start, 34))}</span>
+        ${finish ? `<span><b>Финиш:</b> ${escapeHtml(trim(finish, 34))}</span>` : ""}
+      </div>
+      <div class="route-preview-legend">
+        ${viewCount ? `<span class="legend-view">${viewCount} видовых</span>` : ""}
+        ${foodRecommendations.length ? `<span class="legend-food">${escapeHtml(trim(foodRecommendations[0], 42))}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function buildRoutePreviewPoints(route) {
+  const stops = Array.isArray(route?.stops) ? route.stops.filter(Boolean) : [];
+  const visibleStops = compactRoutePreviewStops(stops);
+  const total = visibleStops.length || 1;
+
+  return visibleStops.map((stop, index) => {
+    const progress = total === 1 ? 0.5 : index / (total - 1);
+    const wave = Math.sin(progress * Math.PI);
+    const offset = index % 2 ? 12 : -10;
+    return {
+      x: Math.round(32 + progress * 296),
+      y: Math.round(116 - wave * 58 + offset),
+      radius: index === 0 || index === total - 1 ? 13 : 10,
+      type: routePointType(stop, index, total)
+    };
+  });
+}
+
+function compactRoutePreviewStops(stops) {
+  if (stops.length <= 7) return stops;
+
+  const important = stops
+    .map((stop, index) => ({ stop, index }))
+    .filter(({ stop, index }) => index > 0 && index < stops.length - 1 && (isRouteViewPoint(stop) || isRouteFoodPoint(stop)))
+    .slice(0, 3);
+  const indexes = [0, ...important.map((item) => item.index), stops.length - 1]
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .sort((left, right) => left - right);
+
+  return indexes.map((index) => stops[index]);
+}
+
+function routePointType(stop, index, total) {
+  if (index === 0) return "start";
+  if (index === total - 1) return "finish";
+  if (isRouteFoodPoint(stop)) return "food";
+  if (isRouteViewPoint(stop)) return "view";
+  return "point";
+}
+
+function routePointLabel(type, index) {
+  if (type === "start") return "Старт";
+  if (type === "finish") return "Финиш";
+  if (type === "food") return "Кофе / еда";
+  if (type === "view") return "Видовая точка";
+  return `Точка ${index + 1}`;
+}
+
 function routeMapNote(label, value) {
   return `<div><span>${escapeHtml(label)}</span><p>${escapeHtml(trim(value, 120))}</p></div>`;
 }
@@ -2749,6 +2844,92 @@ function routeMapNote(label, value) {
 function isRouteViewPoint(value) {
   const text = compactTextFingerprint(value);
   return ["кремл", "башн", "дворец", "набережн", "озер", "кабан", "казанк", "панорам", "центр семьи", "мост", "холм"].some((token) => text.includes(token));
+}
+
+function isRouteFoodPoint(value) {
+  const text = compactTextFingerprint(value);
+  return ["кафе", "кофе", "ресторан", "бистро", "бар", "кухн", "обед", "перекус", "десерт", "urman", "татарск"].some((token) => text.includes(token));
+}
+
+function getRouteFoodRecommendations(route) {
+  const matched = findRouteFoodMatches(route)
+    .map((item) => {
+      const detail = item.cuisine || item.subtitle || item.reviewSummary || "";
+      return detail ? `${item.title} — ${trim(detail, 56)}` : item.title;
+    })
+    .filter(Boolean);
+
+  if (matched.length) return matched.slice(0, 3);
+  return route?.foodNearby ? [route.foodNearby] : [];
+}
+
+function findRouteFoodMatches(route) {
+  const foodItems = getSectionItems("food");
+  if (!Array.isArray(foodItems) || !foodItems.length) return [];
+
+  const routeText = compactTextFingerprint([
+    route?.title,
+    route?.subtitle,
+    route?.description,
+    route?.foodNearby,
+    route?.howToGet,
+    ...(route?.stops || [])
+  ].filter(Boolean).join(" "));
+  const areaTokens = routeAreaTokens(routeText);
+  const intentTokens = routeFoodIntentTokens(routeText);
+
+  return foodItems
+    .map((item) => {
+      const foodText = compactTextFingerprint([
+        item.title,
+        item.subtitle,
+        item.cuisine,
+        item.description,
+        item.interior,
+        item.bestFor,
+        item.howToGet,
+        item.reviewSummary,
+        ...(item.features || []),
+        ...(item.signatureDishes || [])
+      ].filter(Boolean).join(" "));
+      const areaScore = areaTokens.reduce((score, token) => score + (foodText.includes(token) ? 3 : 0), 0);
+      const intentScore = intentTokens.reduce((score, token) => score + (foodText.includes(token) ? 1 : 0), 0);
+      const foodTitle = compactTextFingerprint(item.title || "");
+      const titleScore = foodTitle && routeText.includes(foodTitle) ? 5 : 0;
+      return { item, score: areaScore + intentScore + titleScore };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .map((entry) => entry.item)
+    .slice(0, 3);
+}
+
+function routeAreaTokens(routeText) {
+  return [
+    "бауман",
+    "кремл",
+    "кремлевск",
+    "кабан",
+    "марджани",
+    "насыри",
+    "тукая",
+    "горьк",
+    "карла маркса",
+    "свободы",
+    "библиотек",
+    "черное озеро",
+    "петербург",
+    "туган",
+    "горкинск",
+    "ометьев",
+    "казанк",
+    "набережн"
+  ].filter((token) => routeText.includes(token));
+}
+
+function routeFoodIntentTokens(routeText) {
+  return ["кофе", "кафе", "обед", "перекус", "десерт", "татарск", "кухн", "завтрак", "ужин"]
+    .filter((token) => routeText.includes(token));
 }
 
 function handleHorizontalWheelScroll(event) {

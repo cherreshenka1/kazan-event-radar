@@ -1595,6 +1595,171 @@ h1 {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
+.route-preview-map {
+  position: relative;
+  overflow: hidden;
+  margin: -4px -4px 14px;
+  padding: 14px;
+  min-height: 214px;
+  border-radius: 20px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(46, 196, 182, 0.28), transparent 28%),
+    radial-gradient(circle at 78% 20%, rgba(37, 99, 235, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(236, 248, 255, 0.96), rgba(222, 235, 250, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.route-preview-map::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.06) 1px, transparent 1px);
+  background-size: 34px 34px;
+  pointer-events: none;
+}
+
+.route-preview-map > * {
+  position: relative;
+  z-index: 1;
+}
+
+.route-preview-map-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.route-preview-map-head span {
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.route-preview-map-head strong {
+  max-width: 58%;
+  color: #28405e;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.route-preview-map svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+  margin: 0;
+}
+
+.route-preview-line,
+.route-preview-line-shadow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.route-preview-line-shadow {
+  stroke: rgba(15, 23, 42, 0.16);
+  stroke-width: 10;
+}
+
+.route-preview-line {
+  stroke-width: 5;
+  stroke-dasharray: 8 8;
+  animation: routeDash 12s linear infinite;
+}
+
+.route-preview-pin circle {
+  fill: #ffffff;
+  stroke: rgba(37, 99, 235, 0.22);
+  stroke-width: 2;
+  filter: drop-shadow(0 5px 10px rgba(15, 23, 42, 0.18));
+}
+
+.route-preview-pin text {
+  fill: #1d4ed8;
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.route-preview-pin-start circle {
+  fill: #22c55e;
+}
+
+.route-preview-pin-finish circle {
+  fill: #111827;
+}
+
+.route-preview-pin-view circle {
+  fill: #2563eb;
+}
+
+.route-preview-pin-food circle {
+  fill: #f59e0b;
+}
+
+.route-preview-pin-start text,
+.route-preview-pin-finish text,
+.route-preview-pin-view text,
+.route-preview-pin-food text {
+  fill: #ffffff;
+}
+
+.route-preview-caption {
+  display: grid;
+  gap: 4px;
+  margin-top: -4px;
+  color: #243b58;
+  font-size: 0.82rem;
+  line-height: 1.28;
+}
+
+.route-preview-caption b {
+  color: #0f223a;
+}
+
+.route-preview-legend {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.route-preview-legend span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #28405e;
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.route-preview-legend .legend-view {
+  color: #1d4ed8;
+}
+
+.route-preview-legend .legend-food {
+  color: #92400e;
+}
+
+@keyframes routeDash {
+  to {
+    stroke-dashoffset: -160;
+  }
+}
+
 .route-map-head {
   display: flex;
   align-items: flex-start;
@@ -1676,6 +1841,11 @@ h1 {
   color: #ffffff;
 }
 
+.route-point-food .route-point-marker {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
 .route-point small {
   display: block;
   margin-bottom: 2px;
@@ -1727,6 +1897,36 @@ h1 {
     radial-gradient(circle at 12% 18%, rgba(46, 196, 182, 0.16), transparent 28%),
     radial-gradient(circle at 92% 8%, rgba(79, 140, 255, 0.18), transparent 32%),
     rgba(15, 23, 42, 0.46);
+}
+
+:root[data-theme="dark"] .route-preview-map {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(46, 196, 182, 0.18), transparent 28%),
+    radial-gradient(circle at 78% 20%, rgba(79, 140, 255, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(11, 18, 32, 0.96), rgba(24, 38, 58, 0.92));
+}
+
+:root[data-theme="dark"] .route-preview-map::before {
+  border-color: rgba(231, 237, 246, 0.08);
+  background-image:
+    linear-gradient(rgba(231, 237, 246, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(231, 237, 246, 0.045) 1px, transparent 1px);
+}
+
+:root[data-theme="dark"] .route-preview-map-head span {
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] .route-preview-map-head strong,
+:root[data-theme="dark"] .route-preview-caption,
+:root[data-theme="dark"] .route-preview-caption b,
+:root[data-theme="dark"] .route-preview-legend span {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .route-preview-legend span {
+  background: rgba(231, 237, 246, 0.1);
 }
 
 :root[data-theme="dark"] .route-map-head > span,
