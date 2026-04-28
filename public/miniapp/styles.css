@@ -263,10 +263,11 @@ body.topbar-menu-open .topbar-dropdown {
   border: 1px solid rgba(16, 32, 51, 0.08);
   border-radius: 16px;
   padding: 12px 13px;
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  box-shadow: 0 8px 20px rgba(16, 32, 51, 0.06);
 }
 
 .topbar-menu-item span,
@@ -287,7 +288,7 @@ body.topbar-menu-open .topbar-dropdown {
 
 .topbar-menu-item.is-active {
   border-color: transparent;
-  background: linear-gradient(135deg, #2268ff, #20d486);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -318,6 +319,14 @@ body.is-moderator .moderation-only {
 :root[data-theme="dark"] .topbar-menu-item {
   border-color: rgba(231, 237, 246, 0.1);
   background: rgba(231, 237, 246, 0.08);
+}
+
+.topbar-menu-item.topbar-button-pro,
+.topbar-menu-item.topbar-button-pro.is-active {
+  background: linear-gradient(135deg, #172a46, #245dff 54%, #25d98b);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 28px rgba(34, 104, 255, 0.22);
 }
 
 .topbar-button {
@@ -424,7 +433,7 @@ body.is-moderator .moderation-only {
 }
 
 .topbar-button.is-active small,
-.topbar-button-pro small {
+.topbar-menu-item.topbar-button-pro small {
   color: rgba(255, 255, 255, 0.78);
 }
 
@@ -492,8 +501,8 @@ body.is-moderator .moderation-only {
   animation: soft-pulse 4.8s ease-in-out infinite;
 }
 
-.topbar-button-pro span,
-.topbar-button-pro small {
+.topbar-menu-item.topbar-button-pro span,
+.topbar-menu-item.topbar-button-pro small {
   position: relative;
   z-index: 1;
 }
