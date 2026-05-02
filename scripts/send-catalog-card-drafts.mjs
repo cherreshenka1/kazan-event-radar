@@ -137,6 +137,7 @@ function buildPayload(entry) {
     sectionId: entry.sectionId,
     itemId: entry.item.id,
     fields,
+    photoCandidates: entry.item.photoCandidates || [],
     previewImageUrl: entry.photoCandidate.sourceUrl,
     previewImageAlt: entry.item.title
   };

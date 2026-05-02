@@ -530,6 +530,11 @@ async function handleTelegramMessage(message, env) {
     await putJson(env, "runtime", runtime);
   }
 
+  if (!text.startsWith("/") && isManagerIdentity(user, env)) {
+    const handledPendingEdit = await handlePendingManagerEdit(message, env);
+    if (handledPendingEdit) return;
+  }
+
   if (command === "/start" || command === "/app" || command === "/menu") {
     await sendMiniAppEntry(chat.id, env, [
       "Я Kazan Event Radar: афиша, маршруты, места, избранное и напоминания по Казани.",
@@ -727,13 +732,13 @@ async function handleCallback(callback, env) {
     return;
   }
 
-  const [, cardAction, cardDraftId] = data.match(/^card:(approve|reject):(.+)$/) || [];
+  const [, cardAction, cardDraftId] = data.match(/^card:(approve|reject|preview|edit):(.+)$/) || [];
   if (cardDraftId) {
     await handleCatalogCardReviewCallback(env, user, callbackChatId, cardAction, cardDraftId, callbackThreadId);
     return;
   }
 
-  const [, action, draftId] = data.match(/^pub:(approve|reject):(.+)$/) || [];
+  const [, action, draftId] = data.match(/^pub:(approve|reject|preview|edit):(.+)$/) || [];
   if (!draftId) return;
 
   if (action === "reject") {
@@ -753,6 +758,16 @@ async function handleCallback(callback, env) {
       message_thread_id: callbackThreadId || draft?.managerThreadId || undefined,
       text: "Черновик уже обработан или не найден."
     });
+    return;
+  }
+
+  if (action === "preview") {
+    await resendChannelDraftWithNextPreview(env, user, callbackChatId, callbackThreadId, draft);
+    return;
+  }
+
+  if (action === "edit") {
+    await requestChannelDraftTextEdit(env, user, callbackChatId, callbackThreadId, draft);
     return;
   }
 
@@ -839,12 +854,7 @@ async function prepareDraftBatch(env, limit, options = {}) {
       await sendDraftPost(env, managerId, {
         ...draft,
         text: [`Черновик ${index + 1}/${selected.length} для канала`, "", draft.text].join("\n")
-      }, {
-        inline_keyboard: [
-          [{ text: "Опубликовать", callback_data: `pub:approve:${draft.id}` }],
-          [{ text: "Отклонить", callback_data: `pub:reject:${draft.id}` }]
-        ]
-      }, {
+      }, buildChannelDraftReviewMarkup(draft.id), {
         messageThreadId: draftTarget.threadId
       });
       const deliveredDraft = await markDraftManagerDelivered(env, draft.id, managerId, draftTarget.threadId);
@@ -928,6 +938,79 @@ async function ensureDailyDraftBatch(env, limit, options = {}) {
     preparedToday: refreshedPublishing.lastDraftBatchCount,
     target
   };
+}
+
+function buildChannelDraftReviewMarkup(draftId) {
+  return {
+    inline_keyboard: [
+      [{ text: "Опубликовать", callback_data: `pub:approve:${draftId}` }],
+      [
+        { text: "Поменять превью", callback_data: `pub:preview:${draftId}` },
+        { text: "Редактировать описание", callback_data: `pub:edit:${draftId}` }
+      ],
+      [{ text: "Отклонить", callback_data: `pub:reject:${draftId}` }]
+    ]
+  };
+}
+
+async function resendChannelDraftWithNextPreview(env, user, chatId, threadId, draft) {
+  const resolvedDraft = await hydrateDraftForSend(env, draft);
+  const candidates = await resolveChannelPhotoCandidates(resolvedDraft, env);
+  const rejected = new Set((draft.rejectedPhotoUrls || []).map(normalizeUrlForDedupe).filter(Boolean));
+  const currentPhotoUrl = resolvedDraft.manualPhotoUrl || resolvedDraft.photoUrl || "";
+  const currentPhotoKey = normalizeUrlForDedupe(currentPhotoUrl);
+  if (currentPhotoKey) rejected.add(currentPhotoKey);
+
+  const nextPhotoUrl = candidates.find((url) => {
+    const key = normalizeUrlForDedupe(url);
+    return key && !rejected.has(key);
+  });
+
+  if (!nextPhotoUrl) {
+    await telegramApi(env, "sendMessage", {
+      chat_id: chatId,
+      message_thread_id: threadId || draft.managerThreadId || undefined,
+      text: "Пока не нашел другое подходящее превью для этого черновика. Можно нажать «Редактировать описание» или отклонить черновик."
+    });
+    return;
+  }
+
+  const updatedDraft = await updateDraftFields(env, draft.id, {
+    manualPhotoUrl: nextPhotoUrl,
+    photoUrl: nextPhotoUrl,
+    photoKey: `manual-preview:${normalizeUrlForDedupe(nextPhotoUrl)}`,
+    rejectedPhotoUrls: [...new Set([...(draft.rejectedPhotoUrls || []), currentPhotoUrl].filter(Boolean))],
+    previewRevision: Math.max(0, Number(draft.previewRevision || 0)) + 1,
+    previewChangedAt: new Date().toISOString(),
+    previewChangedBy: user?.username || String(user?.id || "")
+  });
+
+  await sendDraftPost(env, chatId, {
+    ...updatedDraft,
+    text: ["Обновленное превью", "", updatedDraft.text].join("\n")
+  }, buildChannelDraftReviewMarkup(updatedDraft.id), {
+    messageThreadId: threadId || updatedDraft.managerThreadId || undefined
+  });
+}
+
+async function requestChannelDraftTextEdit(env, user, chatId, threadId, draft) {
+  await setPendingManagerEdit(env, user, {
+    kind: "channel_draft_text",
+    draftId: draft.id,
+    chatId: String(chatId),
+    threadId: threadId ? String(threadId) : "",
+    createdAt: new Date().toISOString()
+  });
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    message_thread_id: threadId || draft.managerThreadId || undefined,
+    text: [
+      `Готов редактировать описание для черновика: ${draft.title || draft.id}.`,
+      "",
+      "Отправьте следующим сообщением полный новый текст поста. Я сохраню его и пришлю черновик заново."
+    ].join("\n")
+  });
 }
 
 async function scanSources(env, options = {}) {
@@ -2539,12 +2622,12 @@ async function hydrateDraftForSend(env, draft) {
   return {
     ...draft,
     title: item.title || draft.title,
-    text: formatChannelPost(item),
+    text: draft.manualText || draft.text || formatChannelPost(item),
     url: item.url || draft.url,
     imageUrl: item.imageUrl || draft.imageUrl || "",
     externalPreviewUrl: item.externalPreviewUrl || draft.externalPreviewUrl || "",
     photoLinks: Array.isArray(item.photoLinks) ? item.photoLinks : draft.photoLinks,
-    photoUrl: buildChannelPhotoUrl(item, env) || draft.photoUrl,
+    photoUrl: draft.manualPhotoUrl || draft.photoUrl || buildChannelPhotoUrl(item, env),
     photoKey: buildDraftPhotoIdentity(item) || draft.photoKey || ""
   };
 }
@@ -2610,6 +2693,19 @@ async function markDraftManagerDeliveryFailed(env, draftId, error) {
   draft.managerDeliveryFailedAt = now;
   draft.managerDeliveryError = trim(error?.message || String(error || "unknown_error"), 240);
   draft.updatedAt = now;
+
+  await putJson(env, "publishing", publishing);
+  return draft;
+}
+
+async function updateDraftFields(env, draftId, fields) {
+  const publishing = await getPublishing(env);
+  const draft = publishing.drafts.find((item) => item.id === draftId);
+  if (!draft) return null;
+
+  Object.assign(draft, fields, {
+    updatedAt: new Date().toISOString()
+  });
 
   await putJson(env, "publishing", publishing);
   return draft;
@@ -4198,6 +4294,128 @@ async function getRuntime(env) {
   return await getJson(env, "runtime", { managerChatId: null, managerUsername: null, channelId: null, channelTitle: null });
 }
 
+async function setPendingManagerEdit(env, user, payload) {
+  const runtime = await getRuntime(env);
+  const key = pendingManagerEditKey(user);
+  if (!key) return;
+
+  runtime.pendingManagerEdits = runtime.pendingManagerEdits && typeof runtime.pendingManagerEdits === "object"
+    ? runtime.pendingManagerEdits
+    : {};
+  runtime.pendingManagerEdits[key] = payload;
+  await putJson(env, "runtime", runtime);
+}
+
+async function handlePendingManagerEdit(message, env) {
+  const user = message.from;
+  const key = pendingManagerEditKey(user);
+  if (!key) return false;
+
+  const runtime = await getRuntime(env);
+  const pending = runtime.pendingManagerEdits?.[key];
+  if (!pending) return false;
+
+  const chatId = String(message.chat?.id || "");
+  const threadId = message.message_thread_id ? String(message.message_thread_id) : "";
+  if (pending.chatId && pending.chatId !== chatId) return false;
+  if (pending.threadId && pending.threadId !== threadId) return false;
+
+  if (pending.createdAt && (Date.now() - new Date(pending.createdAt).getTime()) > 2 * 60 * 60 * 1000) {
+    delete runtime.pendingManagerEdits[key];
+    await putJson(env, "runtime", runtime);
+    return false;
+  }
+
+  const editText = trim(message.text || "", 3000);
+  if (!editText) return false;
+
+  delete runtime.pendingManagerEdits[key];
+  await putJson(env, "runtime", runtime);
+
+  if (pending.kind === "channel_draft_text") {
+    await applyChannelDraftTextEdit(env, message, pending, editText);
+    return true;
+  }
+
+  if (pending.kind === "catalog_card_description") {
+    await applyCatalogCardDescriptionEdit(env, message, pending, editText);
+    return true;
+  }
+
+  return false;
+}
+
+async function applyChannelDraftTextEdit(env, message, pending, editText) {
+  const draft = await getDraft(env, pending.draftId);
+  const threadId = message.message_thread_id || draft?.managerThreadId || undefined;
+  if (!draft || draft.status !== "pending") {
+    await telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      message_thread_id: threadId,
+      text: "Черновик уже обработан или не найден."
+    });
+    return;
+  }
+
+  const htmlText = formatManagerPlainTextForTelegramHtml(editText);
+  const updatedDraft = await updateDraftFields(env, draft.id, {
+    manualText: htmlText,
+    text: htmlText,
+    descriptionEditedAt: new Date().toISOString(),
+    descriptionEditedBy: message.from?.username || String(message.from?.id || "")
+  });
+
+  await sendDraftPost(env, message.chat.id, {
+    ...updatedDraft,
+    text: ["Обновленное описание", "", updatedDraft.text].join("\n")
+  }, buildChannelDraftReviewMarkup(updatedDraft.id), {
+    messageThreadId: threadId
+  });
+}
+
+async function applyCatalogCardDescriptionEdit(env, message, pending, editText) {
+  const store = await getCatalogCardReviewDrafts(env);
+  const draft = store.items?.[pending.draftId];
+  const threadId = message.message_thread_id || draft?.managerThreadId || undefined;
+  if (!draft || draft.status !== "pending") {
+    await telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      message_thread_id: threadId,
+      text: "Черновик карточки уже обработан или не найден."
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const description = trim(editText, 1400);
+  draft.patch = {
+    ...(draft.patch || {}),
+    description
+  };
+  draft.body = {
+    ...(draft.body || {}),
+    fields: draft.patch
+  };
+  draft.descriptionEditedAt = now;
+  draft.descriptionEditedBy = message.from?.username || String(message.from?.id || "");
+  draft.updatedAt = now;
+  store.items[draft.id] = draft;
+  store.updatedAt = now;
+  await putJson(env, "catalog:cardReviewDrafts", store);
+  await sendCatalogCardReviewDraft(env, message.chat.id, draft, { messageThreadId: threadId });
+}
+
+function pendingManagerEditKey(user) {
+  return user?.id ? String(user.id) : "";
+}
+
+function formatManagerPlainTextForTelegramHtml(value) {
+  return trim(value || "", 950)
+    .split(/\r?\n/)
+    .map((line) => escapeHtml(line))
+    .join("\n");
+}
+
 async function getCatalogWithOverrides(env) {
   const overrides = await getCatalogOverrides(env);
   return applyCatalogOverrides(CATALOG, overrides);
@@ -4267,6 +4485,7 @@ async function createCatalogCardReviewDraft(env, body, user) {
 
   const patch = sanitizeCatalogCardPatch(body?.fields || body?.patch || {});
   const previewImageUrl = sanitizeReviewImageUrl(body?.previewImageUrl || firstPatchPhotoUrl(patch));
+  const photoCandidates = normalizeReviewPhotoCandidates(body?.photoCandidates, previewImageUrl || firstPatchPhotoUrl(patch));
   const now = new Date().toISOString();
   const store = await getCatalogCardReviewDrafts(env);
   const duplicate = findCatalogCardReviewDuplicate(store, sectionId, itemId, previewImageUrl || firstPatchPhotoUrl(patch));
@@ -4293,6 +4512,7 @@ async function createCatalogCardReviewDraft(env, body, user) {
     title: patch.title || baseItem.title || itemId,
     baseTitle: baseItem.title || itemId,
     patch,
+    photoCandidates,
     previewImageUrl,
     previewImageAlt: trim(body?.previewImageAlt || patch.title || baseItem.title || itemId, 160),
     body: { sectionId, itemId, fields: patch, reset: false },
@@ -4349,6 +4569,16 @@ async function handleCatalogCardReviewCallback(env, user, chatId, action, draftI
   }
 
   const now = new Date().toISOString();
+  if (action === "preview") {
+    await resendCatalogCardDraftWithNextPreview(env, user, chatId, replyThreadId, draft, store);
+    return;
+  }
+
+  if (action === "edit") {
+    await requestCatalogCardDescriptionEdit(env, user, chatId, replyThreadId, draft);
+    return;
+  }
+
   if (action === "reject") {
     draft.status = "rejected";
     draft.reviewedAt = now;
@@ -4387,6 +4617,69 @@ async function getCatalogCardReviewDrafts(env) {
   };
 }
 
+async function resendCatalogCardDraftWithNextPreview(env, user, chatId, threadId, draft, store) {
+  const candidates = normalizeReviewPhotoCandidates(draft.photoCandidates, draft.previewImageUrl || firstPatchPhotoUrl(draft.patch));
+  const rejected = new Set((draft.rejectedPhotoUrls || []).map(normalizeUrlForDedupe).filter(Boolean));
+  const currentPhotoKey = normalizeUrlForDedupe(draft.previewImageUrl || firstPatchPhotoUrl(draft.patch));
+  if (currentPhotoKey) rejected.add(currentPhotoKey);
+
+  const nextPhotoUrl = candidates.find((url) => {
+    const key = normalizeUrlForDedupe(url);
+    return key && !rejected.has(key);
+  });
+
+  if (!nextPhotoUrl) {
+    await telegramApi(env, "sendMessage", {
+      chat_id: chatId,
+      message_thread_id: threadId || undefined,
+      text: "Пока нет другого фото-кандидата для этой карточки. Следующий запуск подбора попробует найти новые варианты."
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const previousPhotoUrl = draft.previewImageUrl || firstPatchPhotoUrl(draft.patch);
+  draft.previewImageUrl = nextPhotoUrl;
+  draft.patch = {
+    ...(draft.patch || {}),
+    photoLinks: [{ label: "Фото 1", url: nextPhotoUrl }]
+  };
+  draft.body = {
+    ...(draft.body || {}),
+    fields: draft.patch
+  };
+  draft.rejectedPhotoUrls = [...new Set([...(draft.rejectedPhotoUrls || []), previousPhotoUrl].filter(Boolean))];
+  draft.previewRevision = Math.max(0, Number(draft.previewRevision || 0)) + 1;
+  draft.previewChangedAt = now;
+  draft.previewChangedBy = user?.username || String(user?.id || "");
+  draft.updatedAt = now;
+
+  store.items[draft.id] = draft;
+  store.updatedAt = now;
+  await putJson(env, "catalog:cardReviewDrafts", store);
+  await sendCatalogCardReviewDraft(env, chatId, draft, { messageThreadId: threadId });
+}
+
+async function requestCatalogCardDescriptionEdit(env, user, chatId, threadId, draft) {
+  await setPendingManagerEdit(env, user, {
+    kind: "catalog_card_description",
+    draftId: draft.id,
+    chatId: String(chatId),
+    threadId: threadId ? String(threadId) : "",
+    createdAt: new Date().toISOString()
+  });
+
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    message_thread_id: threadId || undefined,
+    text: [
+      `Готов редактировать описание карточки: ${draft.title || draft.id}.`,
+      "",
+      "Отправьте следующим сообщением новое описание. Я сохраню его и пришлю карточку заново."
+    ].join("\n")
+  });
+}
+
 function formatCatalogCardReviewDraft(draft) {
   const fields = Object.entries(draft.patch || {})
     .filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value))
@@ -4414,6 +4707,10 @@ async function sendCatalogCardReviewDraft(env, reviewChatId, draft, options = {}
   const replyMarkup = {
     inline_keyboard: [
       [{ text: "Одобрить карточку", callback_data: `card:approve:${draft.id}` }],
+      [
+        { text: "Поменять превью", callback_data: `card:preview:${draft.id}` },
+        { text: "Редактировать описание", callback_data: `card:edit:${draft.id}` }
+      ],
       [{ text: "Отклонить", callback_data: `card:reject:${draft.id}` }]
     ]
   };
@@ -4454,6 +4751,17 @@ function sanitizeReviewImageUrl(value) {
   if (!/^https?:\/\//i.test(url)) return "";
   if (/^(?:javascript|data):/i.test(url)) return "";
   return url;
+}
+
+function normalizeReviewPhotoCandidates(value, fallbackUrl = "") {
+  const entries = Array.isArray(value) ? value : [];
+  const urls = entries
+    .map((entry) => typeof entry === "string" ? entry : (entry?.sourceUrl || entry?.url || entry?.finalUrl || ""))
+    .concat(fallbackUrl || "")
+    .map(sanitizeReviewImageUrl)
+    .filter(Boolean);
+
+  return [...new Set(urls)];
 }
 
 function normalizeUrlForDedupe(value) {

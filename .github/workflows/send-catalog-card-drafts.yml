@@ -51,7 +51,7 @@ jobs:
           INPUT_SECTION: ${{ inputs.section }}
           INPUT_MISSING_ONLY: ${{ inputs.missing_photos_only }}
         run: |
-          ARGS="--limit-per-section=${INPUT_LIMIT_PER_SECTION:-20} --max-images-per-item=1"
+          ARGS="--limit-per-section=${INPUT_LIMIT_PER_SECTION:-20} --max-images-per-item=3"
           if [ -n "$INPUT_SECTION" ]; then
             ARGS="$ARGS --section=$INPUT_SECTION"
           fi
