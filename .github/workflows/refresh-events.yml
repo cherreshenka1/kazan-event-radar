@@ -16,8 +16,6 @@ on:
         required: true
         default: true
         type: boolean
-  schedule:
-    - cron: "15 3 * * *"
 
 permissions:
   contents: read

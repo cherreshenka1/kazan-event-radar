@@ -151,7 +151,7 @@
     },
     "food": {
       "label": "Еда",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/food",
       "normalizedFile": "data/catalog-imports/normalized/food.json",
       "photosDir": "public/miniapp/photos/food",
@@ -333,7 +333,7 @@
     },
     "excursions": {
       "label": "Экскурсии",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/excursions",
       "normalizedFile": "data/catalog-imports/normalized/excursions.json",
       "photosDir": "public/miniapp/photos/excursions",
@@ -406,7 +406,7 @@
     },
     "routes": {
       "label": "Пешие маршруты",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/routes",
       "normalizedFile": "data/catalog-imports/normalized/routes.json",
       "photosDir": "public/miniapp/photos/routes",
@@ -473,7 +473,7 @@
     },
     "active": {
       "label": "Активный отдых",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/active",
       "normalizedFile": "data/catalog-imports/normalized/active.json",
       "photosDir": "public/miniapp/photos/active",
@@ -573,7 +573,7 @@
     },
     "masterclasses": {
       "label": "Мастер-классы",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/masterclasses",
       "normalizedFile": "data/catalog-imports/normalized/masterclasses.json",
       "photosDir": "public/miniapp/photos/masterclasses",
@@ -645,7 +645,7 @@
     },
     "roadtrip": {
       "label": "На машине",
-      "refreshDays": 7,
+      "refreshDays": 3,
       "rawDir": "data/catalog-imports/raw/roadtrip",
       "normalizedFile": "data/catalog-imports/normalized/roadtrip.json",
       "photosDir": "public/miniapp/photos/roadtrip",
