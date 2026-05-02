@@ -6018,7 +6018,7 @@ function trim(value, maxLength) {
 
   const wordBoundary = slice.lastIndexOf(" ");
   const compact = finalizeTrimmedText(wordBoundary >= Math.floor(maxLength * 0.45) ? slice.slice(0, wordBoundary) : slice);
-  return /[.!?]$/u.test(compact) ? compact : `${compact}.`;
+  return ensureSentence(compact);
 }
 
 function findSafeSentenceEnd(value) {
@@ -6040,6 +6040,8 @@ function finalizeTrimmedText(value) {
     .replace(/\s*\([^)]*$/u, "")
     .replace(/\s+[–—-]\s*[^–—-]*$/u, "")
     .replace(/\s+\/\s*[^/]*$/u, "")
+    .replace(/\s+(?:и|а|но|или|что|чтобы|как|где|когда|если|который|которая|которое|которые|каком-то|какой-то|какая-то|какие-то)\s*$/iu, "")
+    .replace(/\s+[А-Яа-яЁё]{1,10}\s*$/u, "")
     .replace(/\b(?:г|им|ул|д|стр|пр|респ|пос|с)\.$/iu, "")
     .trim();
 }
