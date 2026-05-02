@@ -45,17 +45,22 @@ jobs:
 
           LIMIT="${INPUT_LIMIT:-10}"
           FORCE="${INPUT_FORCE:-false}"
-          REFRESH="${INPUT_REFRESH:-true}"
+          REFRESH="${INPUT_REFRESH:-false}"
 
           URL="$WORKER_URL/internal/run-drafts?limit=$LIMIT"
           if [ "$FORCE" = "true" ]; then
             URL="$URL&force=1"
           fi
           if [ "$REFRESH" = "true" ]; then
-            URL="$URL&refresh=1"
+            URL="$URL&refresh=1&retryRefresh=1"
+          else
+            URL="$URL&refresh=0&retryRefresh=0"
           fi
 
-          curl --fail --show-error --silent \
+          curl --fail-with-body --show-error --silent \
+            --retry 2 \
+            --retry-delay 10 \
+            --retry-all-errors \
             --request POST \
             --header "x-automation-token: $AUTOMATION_TOKEN" \
             "$URL"

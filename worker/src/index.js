@@ -464,9 +464,11 @@ async function handleRequest(request, env) {
     const limit = Number(url.searchParams.get("limit") || body.limit || env.DRAFTS_PER_DAY || 10);
     const refresh = parseBooleanFlag(url.searchParams.get("refresh"), body.refresh, false);
     const force = parseBooleanFlag(url.searchParams.get("force"), body.force, false);
+    const retryRefresh = parseBooleanFlag(url.searchParams.get("retryRefresh"), body.retryRefresh, true);
     const result = await ensureDailyDraftBatch(env, limit, {
       refresh,
       force,
+      retryRefresh,
       reason: force ? "internal_drafts_force" : "internal_drafts"
     });
     return json({ ok: true, ...result }, 200, env);
