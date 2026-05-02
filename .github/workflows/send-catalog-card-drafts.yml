@@ -1,6 +1,8 @@
 name: Send Catalog Card Drafts
 
 on:
+  schedule:
+    - cron: "45 6 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -18,7 +20,7 @@ on:
       pause_ms:
         description: Delay between Telegram drafts in milliseconds
         required: true
-        default: "750"
+        default: "25000"
       missing_photos_only:
         description: Collect only cards that need better photos
         required: true
@@ -52,10 +54,11 @@ jobs:
           INPUT_MISSING_ONLY: ${{ inputs.missing_photos_only }}
         run: |
           ARGS="--limit-per-section=${INPUT_LIMIT_PER_SECTION:-20} --max-images-per-item=3"
+          MISSING_ONLY="${INPUT_MISSING_ONLY:-true}"
           if [ -n "$INPUT_SECTION" ]; then
             ARGS="$ARGS --section=$INPUT_SECTION"
           fi
-          if [ "$INPUT_MISSING_ONLY" = "true" ]; then
+          if [ "$MISSING_ONLY" = "true" ]; then
             ARGS="$ARGS --missing-photos-only"
           fi
           node scripts/collect-catalog-moderation-candidates.mjs $ARGS
@@ -74,7 +77,7 @@ jobs:
             exit 1
           fi
 
-          ARGS="--limit=${INPUT_LIMIT:-10} --pause-ms=${INPUT_PAUSE_MS:-750}"
+          ARGS="--limit=${INPUT_LIMIT:-10} --pause-ms=${INPUT_PAUSE_MS:-25000}"
           if [ -n "$INPUT_SECTION" ]; then
             ARGS="$ARGS --section=$INPUT_SECTION"
           fi
