@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CATALOG } from "../src/data/catalog.js";
 import { cleanText, fetchPageSnapshot, projectPath } from "./lib/catalog-import-utils.mjs";
+import { readRemoteJson } from "./lib/remote-kv-json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,7 @@ const REPORT_JSON = path.join(MODERATION_ROOT, "review-board.json");
 const REPORT_MD = path.join(MODERATION_ROOT, "review-board.md");
 const REPORT_HTML = path.join(MODERATION_ROOT, "review-gallery.html");
 const APPROVALS_TEMPLATE = path.join(MODERATION_ROOT, "approvals.template.json");
+const PHOTO_LEARNING_PATH = projectPath("config", "photo-learning.json");
 const SECTION_ORDER = ["parks", "sights", "hotels", "excursions", "food", "routes", "active", "masterclasses", "roadtrip"];
 const IMAGE_FILE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const IMAGE_EXTENSIONS_BY_TYPE = {
@@ -25,6 +27,7 @@ const IMAGE_EXTENSIONS_BY_TYPE = {
 };
 
 const options = parseOptions(process.argv.slice(2));
+let photoLearning = null;
 
 await main().catch((error) => {
   console.error(error.message || error);
@@ -33,6 +36,7 @@ await main().catch((error) => {
 
 async function main() {
   await fs.mkdir(PHOTO_CANDIDATES_ROOT, { recursive: true });
+  photoLearning = await loadPhotoLearning();
 
   const sections = [];
   const approvals = {
@@ -90,6 +94,13 @@ async function main() {
       limitPerSection: options.limitPerSection,
       maxSourcesPerItem: options.maxSourcesPerItem,
       maxImagesPerItem: options.maxImagesPerItem
+    },
+    photoLearning: {
+      localConfig: path.relative(ROOT, PHOTO_LEARNING_PATH).replaceAll("\\", "/"),
+      remoteFeedbackItems: countPhotoLearningEntries(photoLearning?.remote),
+      localApprovedItems: countPhotoLearningEntries(photoLearning?.local?.approved),
+      localRejectedItems: countPhotoLearningEntries(photoLearning?.local?.rejected),
+      scoring: "Candidates are sorted by source trust, prior manager feedback, URL risk markers, byte size, image dimensions, and local style rules."
     },
     legalModel: {
       text: "Draft texts are short summaries based on catalog facts and source metadata. Edit them before publication if needed.",
@@ -164,28 +175,40 @@ async function collectItemCandidates(sectionId, item) {
   }
 
   const photoCandidates = [];
+  const seenPhotoKeys = new Set();
   let index = 1;
 
-  for (const url of imageUrls.slice(0, options.maxImagesPerItem)) {
-    const downloaded = await downloadImageCandidate(sectionId, item.id, url, index);
+  for (const url of imageUrls.slice(0, Math.max(options.maxImagesPerItem * 4, options.maxImagesPerItem))) {
+    const downloaded = await downloadImageCandidate(sectionId, item.id, url, index, { sectionId, item });
     if (downloaded) {
+      const key = normalizePhotoUrlKey(downloaded.sourceUrl || url);
+      if (seenPhotoKeys.has(key)) continue;
+      seenPhotoKeys.add(key);
       photoCandidates.push(downloaded);
       index += 1;
     }
+    if (photoCandidates.length >= options.maxImagesPerItem) break;
   }
 
-  if (!photoCandidates.length) {
+  if (photoCandidates.length < options.maxImagesPerItem) {
     const fallbackUrls = (await fetchCommonsImageUrls(photoSearchQueries))
-      .filter((url) => !imageUrls.includes(url));
+      .filter((url) => !imageUrls.includes(url))
+      .filter((url) => !seenPhotoKeys.has(normalizePhotoUrlKey(url)));
 
-    for (const url of fallbackUrls.slice(0, options.maxImagesPerItem)) {
-      const downloaded = await downloadImageCandidate(sectionId, item.id, url, index);
+    for (const url of fallbackUrls.slice(0, Math.max(options.maxImagesPerItem * 3, options.maxImagesPerItem))) {
+      const downloaded = await downloadImageCandidate(sectionId, item.id, url, index, { sectionId, item });
       if (downloaded) {
+        const key = normalizePhotoUrlKey(downloaded.sourceUrl || url);
+        if (seenPhotoKeys.has(key)) continue;
+        seenPhotoKeys.add(key);
         photoCandidates.push(downloaded);
         index += 1;
       }
+      if (photoCandidates.length >= options.maxImagesPerItem) break;
     }
   }
+
+  photoCandidates.sort((left, right) => Number(right.score || 0) - Number(left.score || 0));
 
   return {
     section: sectionId,
@@ -219,7 +242,7 @@ function collectSourceUrls(item) {
     .filter((entry) => !entry.url.includes("yandex.ru/maps/?mode=search")));
 }
 
-async function downloadImageCandidate(sectionId, itemId, url, index) {
+async function downloadImageCandidate(sectionId, itemId, url, index, context = {}) {
   try {
     const response = await fetch(url, {
       redirect: "follow",
@@ -238,6 +261,16 @@ async function downloadImageCandidate(sectionId, itemId, url, index) {
 
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength < 6000 || bytes.byteLength > options.maxImageBytes) return null;
+    const dimensions = readImageDimensions(bytes, contentType);
+    const quality = scorePhotoCandidate({
+      url,
+      finalUrl: response.url,
+      contentType,
+      bytes: bytes.byteLength,
+      dimensions,
+      sectionId: context.sectionId || sectionId,
+      item: context.item || { id: itemId }
+    });
 
     const folder = path.join(PHOTO_CANDIDATES_ROOT, sectionId, itemId);
     await fs.mkdir(folder, { recursive: true });
@@ -251,6 +284,10 @@ async function downloadImageCandidate(sectionId, itemId, url, index) {
       finalUrl: response.url,
       contentType,
       bytes: bytes.byteLength,
+      dimensions,
+      score: quality.score,
+      scoreReasons: quality.reasons,
+      riskReasons: quality.risks,
       downloadedAt: new Date().toISOString(),
       moderation: "Approve only if there is no watermark, no foreign service branding, and the image is relevant."
     }, null, 2)}\n`, "utf8");
@@ -259,7 +296,11 @@ async function downloadImageCandidate(sectionId, itemId, url, index) {
       file: path.relative(ROOT, filePath).replaceAll("\\", "/"),
       sourceUrl: url,
       bytes: bytes.byteLength,
-      contentType
+      contentType,
+      dimensions,
+      score: quality.score,
+      scoreReasons: quality.reasons,
+      riskReasons: quality.risks
     };
   } catch {
     return null;
@@ -348,6 +389,8 @@ function buildSafeHighlights(sectionId, item) {
 function buildModerationNotes(sectionId, item, photoCandidates, snapshots) {
   const notes = [];
   if (!photoCandidates.length) notes.push("Needs a manual photo pick or more image sources.");
+  if (photoCandidates[0]?.riskReasons?.length) notes.push(`Best photo has risks: ${photoCandidates[0].riskReasons.join(", ")}.`);
+  if (photoCandidates[0] && Number(photoCandidates[0].score || 0) < 45) notes.push("Best photo score is low; review carefully or request another preview.");
   if (!item.sourceUrl && !snapshots.some((snapshot) => snapshot.ok)) notes.push("No reliable source attached.");
   if (sectionId === "food" && !item.reviewSummary) notes.push("Restaurant card should include a short review-based summary.");
   if (sectionId === "roadtrip" && !item.howToGet) notes.push("Roadtrip card needs clearer logistics.");
@@ -457,7 +500,8 @@ function buildMarkdown(report) {
 
     for (const item of section.items) {
       const searchHint = item.photoSearchQueries?.[0] || "";
-      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length} | ${item.sourceCount} | ${escapeMarkdown(searchHint)} | ${escapeMarkdown(item.moderationNotes.join("; ") || "ready for review")} |`);
+      const topScore = item.photoCandidates[0]?.score ?? "";
+      lines.push(`| ${escapeMarkdown(item.title)} | ${item.photoCandidates.length}${topScore !== "" ? ` / score ${topScore}` : ""} | ${item.sourceCount} | ${escapeMarkdown(searchHint)} | ${escapeMarkdown(item.moderationNotes.join("; ") || "ready for review")} |`);
     }
   }
 
@@ -582,7 +626,9 @@ function htmlGalleryCard(section, item) {
       <div class="section">${escapeHtml(section.title || section.sectionId)}</div>
       <h2>${escapeHtml(item.title)}</h2>
       ${item.subtitle ? `<p>${escapeHtml(item.subtitle)}</p>` : ""}
-      <p>Candidates: ${item.photoCandidates.length}. Sources: ${item.sourceCount}. ${item.moderationNotes.length ? escapeHtml(item.moderationNotes.join(" ")) : "Ready for review."}</p>
+      <p>Candidates: ${item.photoCandidates.length}. Sources: ${item.sourceCount}. Top score: ${candidate?.score ?? "n/a"}. ${item.moderationNotes.length ? escapeHtml(item.moderationNotes.join(" ")) : "Ready for review."}</p>
+      ${candidate?.scoreReasons?.length ? `<p><b>Why:</b> ${escapeHtml(candidate.scoreReasons.join("; "))}</p>` : ""}
+      ${candidate?.riskReasons?.length ? `<p><b>Risks:</b> ${escapeHtml(candidate.riskReasons.join("; "))}</p>` : ""}
       ${item.sourceUrl ? `<p><a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener">Source</a></p>` : ""}
       <label class="approve-row"><input type="checkbox" data-approval-check ${candidate ? "" : "disabled"} /> Approve this photo</label>
       <label class="field-label">Selected file</label>
@@ -601,6 +647,267 @@ function isAllowedCandidateImageUrl(url) {
   if (normalized.includes("watermark")) return false;
   if (normalized.endsWith(".svg")) return false;
   return true;
+}
+
+async function loadPhotoLearning() {
+  const local = await readJson(PHOTO_LEARNING_PATH, {});
+  const remote = await readRemoteJson("photo:learning", {});
+  return {
+    local: local && typeof local === "object" ? local : {},
+    remote: remote && typeof remote === "object" ? remote : {}
+  };
+}
+
+async function readJson(filePath, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function countPhotoLearningEntries(value) {
+  if (!value || typeof value !== "object") return 0;
+  if (Array.isArray(value)) return value.length;
+  if (value.approved || value.rejected) {
+    return countPhotoLearningEntries(value.approved) + countPhotoLearningEntries(value.rejected);
+  }
+  return Object.values(value).reduce((sum, entry) => {
+    if (Array.isArray(entry)) return sum + entry.length;
+    if (entry && typeof entry === "object") return sum + 1;
+    return sum;
+  }, 0);
+}
+
+function scorePhotoCandidate(candidate) {
+  const learning = photoLearning || {};
+  const url = String(candidate.url || "");
+  const finalUrl = String(candidate.finalUrl || "");
+  const urlKey = normalizePhotoUrlKey(finalUrl || url);
+  const itemKey = buildLearningItemKey(candidate.sectionId, candidate.item);
+  const host = safeHostName(finalUrl || url);
+  const lower = safeDecode(`${url} ${finalUrl}`).toLowerCase();
+  const dimensions = candidate.dimensions || {};
+  const width = Number(dimensions.width || 0);
+  const height = Number(dimensions.height || 0);
+  const ratio = width && height ? width / height : 0;
+  const reasons = [];
+  const risks = [];
+  let score = 50;
+
+  if (isLearningApproved(learning, itemKey, urlKey)) {
+    score += 45;
+    reasons.push("manager previously approved this photo");
+  }
+  if (isLearningRejected(learning, itemKey, urlKey)) {
+    score -= 90;
+    risks.push("manager previously rejected this photo");
+  }
+  if (isTrustedPhotoDomain(host, learning)) {
+    score += 14;
+    reasons.push(`trusted domain: ${host}`);
+  }
+  if (isBlockedPhotoDomain(finalUrl || url, learning)) {
+    score -= 30;
+    risks.push(`blocked or risky domain: ${host}`);
+  }
+  if (candidate.bytes >= 80_000) {
+    score += 8;
+    reasons.push("good file size");
+  }
+  if (candidate.bytes < 25_000) {
+    score -= 18;
+    risks.push("very small file");
+  }
+  if (width >= 900 && height >= 500) {
+    score += 14;
+    reasons.push(`${width}x${height}`);
+  } else if (width && height) {
+    score -= 10;
+    risks.push(`small dimensions ${width}x${height}`);
+  }
+  if (ratio >= 1.35 && ratio <= 2.2) {
+    score += 12;
+    reasons.push("card-friendly landscape crop");
+  } else if (ratio && ratio < 0.85) {
+    score -= 15;
+    risks.push("vertical image may crop badly");
+  }
+  if (/(?:watermark|wmark|logo|ticket|tickets|poster|banner|afisha|announce|price|badge|sale|скидк|билет)/iu.test(lower)) {
+    score -= 35;
+    risks.push("url looks like poster, ticket, logo, or watermark");
+  }
+  if (/(?:\.svg|favicon|sprite|placeholder|default)/iu.test(lower)) {
+    score -= 45;
+    risks.push("technical image marker");
+  }
+  if (/(?:upload|media|photo|image|jpg|jpeg|png|webp)/iu.test(lower)) {
+    score += 4;
+  }
+
+  const note = learning?.local?.notes?.[itemKey] || learning?.remote?.notes?.[itemKey] || "";
+  if (note) reasons.push(`manager note: ${cleanText(note, 80)}`);
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(score))),
+    reasons: reasons.slice(0, 6),
+    risks: risks.slice(0, 6)
+  };
+}
+
+function isLearningApproved(learning, itemKey, urlKey) {
+  return hasLearningUrl(learning?.local?.approved, itemKey, urlKey)
+    || hasLearningUrl(learning?.remote?.approved, itemKey, urlKey);
+}
+
+function isLearningRejected(learning, itemKey, urlKey) {
+  return hasLearningUrl(learning?.local?.rejected, itemKey, urlKey)
+    || hasLearningUrl(learning?.remote?.rejected, itemKey, urlKey);
+}
+
+function hasLearningUrl(bucket, itemKey, urlKey) {
+  if (!bucket || !urlKey) return false;
+  const globalEntries = normalizeLearningEntries(bucket.global || bucket._global || []);
+  const itemEntries = normalizeLearningEntries(bucket[itemKey] || []);
+  return [...globalEntries, ...itemEntries].some((entry) => normalizePhotoUrlKey(entry.url || entry.sourceUrl || entry) === urlKey);
+}
+
+function normalizeLearningEntries(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : Object.values(value);
+}
+
+function isTrustedPhotoDomain(host, learning) {
+  const trusted = [
+    ...(learning?.local?.trustedDomains || []),
+    ...(learning?.remote?.trustedDomains || [])
+  ].map((value) => String(value || "").toLowerCase()).filter(Boolean);
+  return trusted.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+function isBlockedPhotoDomain(url, learning) {
+  const normalized = String(url || "").toLowerCase();
+  const blocked = [
+    ...(learning?.local?.blockedDomains || []),
+    ...(learning?.remote?.blockedDomains || [])
+  ].map((value) => String(value || "").toLowerCase()).filter(Boolean);
+  return blocked.some((marker) => normalized.includes(marker));
+}
+
+function readImageDimensions(bytes, contentType = "") {
+  const type = String(contentType || "").toLowerCase();
+  if (type.includes("png")) return readPngDimensions(bytes);
+  if (type.includes("jpeg") || type.includes("jpg")) return readJpegDimensions(bytes);
+  if (type.includes("webp")) return readWebpDimensions(bytes);
+  return {};
+}
+
+function readPngDimensions(bytes) {
+  if (bytes.length < 24 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) return {};
+  return {
+    width: readUInt32BE(bytes, 16),
+    height: readUInt32BE(bytes, 20)
+  };
+}
+
+function readJpegDimensions(bytes) {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return {};
+  let offset = 2;
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1];
+    const length = readUInt16BE(bytes, offset + 2);
+    if (length < 2) return {};
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+      return {
+        height: readUInt16BE(bytes, offset + 5),
+        width: readUInt16BE(bytes, offset + 7)
+      };
+    }
+    offset += 2 + length;
+  }
+  return {};
+}
+
+function readWebpDimensions(bytes) {
+  const riff = String.fromCharCode(...bytes.slice(0, 4));
+  const webp = String.fromCharCode(...bytes.slice(8, 12));
+  if (bytes.length < 30 || riff !== "RIFF" || webp !== "WEBP") return {};
+  const chunk = String.fromCharCode(...bytes.slice(12, 16));
+  if (chunk === "VP8X" && bytes.length >= 30) {
+    return {
+      width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+      height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16)
+    };
+  }
+  if (chunk === "VP8 " && bytes.length >= 30) {
+    return {
+      width: readUInt16LE(bytes, 26) & 0x3fff,
+      height: readUInt16LE(bytes, 28) & 0x3fff
+    };
+  }
+  if (chunk === "VP8L" && bytes.length >= 25) {
+    const b0 = bytes[21];
+    const b1 = bytes[22];
+    const b2 = bytes[23];
+    const b3 = bytes[24];
+    return {
+      width: 1 + (((b1 & 0x3f) << 8) | b0),
+      height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6))
+    };
+  }
+  return {};
+}
+
+function readUInt16BE(bytes, offset) {
+  return ((bytes[offset] || 0) << 8) + (bytes[offset + 1] || 0);
+}
+
+function readUInt16LE(bytes, offset) {
+  return (bytes[offset] || 0) + ((bytes[offset + 1] || 0) << 8);
+}
+
+function readUInt32BE(bytes, offset) {
+  return ((bytes[offset] || 0) * 0x1000000)
+    + ((bytes[offset + 1] || 0) << 16)
+    + ((bytes[offset + 2] || 0) << 8)
+    + (bytes[offset + 3] || 0);
+}
+
+function buildLearningItemKey(sectionId, item) {
+  return `${sectionId}:${item?.id || normalizePhotoUrlKey(item?.title || "")}`;
+}
+
+function normalizePhotoUrlKey(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    const proxied = url.searchParams.get("url");
+    if (proxied && /\/api\/image\/?$/iu.test(url.pathname)) return normalizePhotoUrlKey(proxied);
+    url.hash = "";
+    url.searchParams.sort();
+    return url.toString().replace(/\/+$/u, "").toLowerCase();
+  } catch {
+    return cleanText(value || "", 1000).replace(/\/+$/u, "").toLowerCase();
+  }
+}
+
+function safeHostName(value) {
+  try {
+    return new URL(String(value || "")).hostname.toLowerCase().replace(/^www\./u, "");
+  } catch {
+    return "";
+  }
+}
+
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch {
+    return String(value || "");
+  }
 }
 
 function extensionFromUrl(url) {

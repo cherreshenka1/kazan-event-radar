@@ -744,6 +744,19 @@ async function handleCallback(callback, env) {
   if (!draftId) return;
 
   if (action === "reject") {
+    const draft = await getDraft(env, draftId);
+    if (draft) {
+      await recordPhotoFeedback(env, {
+        kind: "channel",
+        action: "rejected",
+        sectionId: draft.kind || "event",
+        itemId: draft.itemId || draft.id,
+        title: draft.title || "",
+        draftId,
+        photoUrl: draft.manualPhotoUrl || draft.photoUrl || "",
+        user
+      });
+    }
     await markDraft(env, draftId, "rejected");
     await telegramApi(env, "sendMessage", {
       chat_id: callbackChatId,
@@ -782,6 +795,17 @@ async function handleCallback(callback, env) {
     });
     return;
   }
+
+  await recordPhotoFeedback(env, {
+    kind: "channel",
+    action: "approved",
+    sectionId: draft.kind || "event",
+    itemId: draft.itemId || draft.id,
+    title: draft.title || "",
+    draftId,
+    photoUrl: draft.manualPhotoUrl || draft.photoUrl || "",
+    user
+  });
 
   await sendDraftPost(env, channelId, draft, {
     inline_keyboard: [[
@@ -976,6 +1000,18 @@ async function resendChannelDraftWithNextPreview(env, user, chatId, threadId, dr
     });
     return;
   }
+
+  await recordPhotoFeedback(env, {
+    kind: "channel",
+    action: "rejected",
+    sectionId: draft.kind || "event",
+    itemId: draft.itemId || draft.id,
+    title: draft.title || "",
+    draftId: draft.id,
+    photoUrl: currentPhotoUrl,
+    user,
+    reason: "manager_requested_new_preview"
+  });
 
   const updatedDraft = await updateDraftFields(env, draft.id, {
     manualPhotoUrl: nextPhotoUrl,
@@ -4582,6 +4618,16 @@ async function handleCatalogCardReviewCallback(env, user, chatId, action, draftI
   }
 
   if (action === "reject") {
+    await recordPhotoFeedback(env, {
+      kind: "catalog",
+      action: "rejected",
+      sectionId: draft.sectionId,
+      itemId: draft.itemId,
+      title: draft.title || "",
+      draftId,
+      photoUrl: draft.previewImageUrl || firstPatchPhotoUrl(draft.patch),
+      user
+    });
     draft.status = "rejected";
     draft.reviewedAt = now;
     draft.reviewedBy = user?.username || String(user?.id || "");
@@ -4595,6 +4641,17 @@ async function handleCatalogCardReviewCallback(env, user, chatId, action, draftI
     });
     return;
   }
+
+  await recordPhotoFeedback(env, {
+    kind: "catalog",
+    action: "approved",
+    sectionId: draft.sectionId,
+    itemId: draft.itemId,
+    title: draft.title || "",
+    draftId,
+    photoUrl: draft.previewImageUrl || firstPatchPhotoUrl(draft.patch),
+    user
+  });
 
   const result = await saveCatalogCardOverride(env, draft.body, user);
   draft.status = "approved";
@@ -4641,6 +4698,17 @@ async function resendCatalogCardDraftWithNextPreview(env, user, chatId, threadId
 
   const now = new Date().toISOString();
   const previousPhotoUrl = draft.previewImageUrl || firstPatchPhotoUrl(draft.patch);
+  await recordPhotoFeedback(env, {
+    kind: "catalog",
+    action: "rejected",
+    sectionId: draft.sectionId,
+    itemId: draft.itemId,
+    title: draft.title || "",
+    draftId: draft.id,
+    photoUrl: previousPhotoUrl,
+    user,
+    reason: "manager_requested_new_preview"
+  });
   draft.previewImageUrl = nextPhotoUrl;
   draft.patch = {
     ...(draft.patch || {}),
@@ -4775,6 +4843,49 @@ function normalizeUrlForDedupe(value) {
   } catch {
     return trim(value || "", 1000).replace(/\/+$/u, "").toLowerCase();
   }
+}
+
+async function recordPhotoFeedback(env, feedback) {
+  const photoUrl = feedback?.photoUrl || "";
+  const urlKey = normalizeUrlForDedupe(photoUrl);
+  if (!urlKey) return;
+
+  const action = feedback.action === "approved" ? "approved" : "rejected";
+  const itemKey = buildPhotoLearningItemKey(feedback);
+  const store = await getJson(env, "photo:learning", {
+    version: 1,
+    updatedAt: null,
+    approved: {},
+    rejected: {},
+    notes: {}
+  });
+  const bucket = store[action] && typeof store[action] === "object" ? store[action] : {};
+  const entries = Array.isArray(bucket[itemKey]) ? bucket[itemKey] : [];
+  const now = new Date().toISOString();
+  const entry = {
+    url: photoUrl,
+    urlKey,
+    kind: feedback.kind || "",
+    sectionId: feedback.sectionId || "",
+    itemId: feedback.itemId || "",
+    title: feedback.title || "",
+    draftId: feedback.draftId || "",
+    reason: feedback.reason || action,
+    reviewedBy: feedback.user?.username || String(feedback.user?.id || ""),
+    reviewedAt: now
+  };
+
+  bucket[itemKey] = [entry, ...entries.filter((item) => item?.urlKey !== urlKey && normalizeUrlForDedupe(item?.url || "") !== urlKey)].slice(0, 25);
+  store[action] = bucket;
+  store.updatedAt = now;
+  store.version = 1;
+  await putJson(env, "photo:learning", store);
+}
+
+function buildPhotoLearningItemKey(feedback) {
+  const sectionId = String(feedback?.sectionId || feedback?.kind || "item").trim() || "item";
+  const itemId = String(feedback?.itemId || feedback?.draftId || feedback?.title || "unknown").trim() || "unknown";
+  return `${sectionId}:${itemId}`;
 }
 
 function normalizeImageProxyUrlForDedupe(url) {

@@ -35,6 +35,28 @@ export async function writeRemoteJson(key, value) {
   ]);
 }
 
+export async function readRemoteJson(key, fallback = null) {
+  try {
+    const { stdout } = await runWrangler([
+      "kv",
+      "key",
+      "get",
+      key,
+      "--binding",
+      "KAZAN_KV",
+      "--remote",
+      "--preview",
+      "false",
+      "--config",
+      WRANGLER_CONFIG,
+      ...await resolveEnvFileArgs()
+    ]);
+    return stdout ? JSON.parse(stdout) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function resolveEnvFileArgs() {
   try {
     await fs.access(WRANGLER_ENV_FILE);

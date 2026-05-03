@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-03T00:00:00.000Z",
+  "styleGuide": {
+    "preferred": [
+      "clean photo without text overlays",
+      "no third-party branding or ticket service labels",
+      "clear subject, face, venue, dish, route, or atmosphere",
+      "landscape or wide image works best for cards and Telegram posts",
+      "official venue, artist, restaurant, tourism, or trusted media images first",
+      "real photo is preferred over generated artwork"
+    ],
+    "rejected": [
+      "watermark",
+      "logo",
+      "ticket button or price badge",
+      "poster with lots of text",
+      "cropped face or main object",
+      "generic AI image when a real source photo exists",
+      "same preview reused for unrelated cards"
+    ]
+  },
+  "blockedDomains": [
+    "avatars.mds.yandex.net/get-afishanew"
+  ],
+  "trustedDomains": [
+    "visit-tatarstan.com",
+    "kzn.ru",
+    "kazan-kremlin.ru",
+    "ponominalu.ru",
+    "commons.wikimedia.org",
+    "upload.wikimedia.org"
+  ],
+  "approved": {},
+  "rejected": {},
+  "notes": {}
+}
