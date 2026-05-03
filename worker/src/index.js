@@ -4768,12 +4768,23 @@ function normalizeReviewPhotoCandidates(value, fallbackUrl = "") {
 
 function normalizeUrlForDedupe(value) {
   try {
-    const url = new URL(String(value || "").trim());
+    const url = normalizeImageProxyUrlForDedupe(new URL(String(value || "").trim()));
     url.hash = "";
     url.searchParams.sort();
     return url.toString().replace(/\/+$/u, "").toLowerCase();
   } catch {
     return trim(value || "", 1000).replace(/\/+$/u, "").toLowerCase();
+  }
+}
+
+function normalizeImageProxyUrlForDedupe(url) {
+  const proxiedUrl = url.searchParams.get("url");
+  if (!proxiedUrl || !/\/api\/image\/?$/iu.test(url.pathname)) return url;
+
+  try {
+    return new URL(proxiedUrl);
+  } catch {
+    return url;
   }
 }
 
